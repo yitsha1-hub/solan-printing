@@ -2,7 +2,7 @@
   "name": "סולן הדפסות",
   "short_name": "סולן",
   "description": "ניהול הזמנות, מלאי וכרטיסי עבודה",
-  "start_url": "./krtis-avoda.html",
+  "start_url": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#1a1a4e",
