@@ -1,0 +1,26 @@
+{
+  "name": "סולן הדפסות",
+  "short_name": "סולן",
+  "description": "ניהול הזמנות, מלאי וכרטיסי עבודה",
+  "start_url": "./krtis-avoda.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a1a4e",
+  "theme_color": "#1a1a4e",
+  "lang": "he",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
