@@ -4391,9 +4391,9 @@ function _calcMachineTime(machine, sheets) {
 }
 function _fmtHours(h) {
   if (h == null) return '—';
-  if (h < 1) return Math.round(h * 60) + ' דק'';
+  if (h < 1) return Math.round(h * 60) + " דק'";
   const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
-  return hh + 'ש'' + (mm ? ' ' + mm + 'ד'':'');
+  return hh + "ש'" + (mm ? ' ' + mm + "ד'" : '');
 }
 function renderMachineQueue() {
   const el = document.getElementById('queue-content');
@@ -4568,7 +4568,7 @@ function renderCards() {
   const el=document.getElementById('cards-container');
   let displayCards=cards;
   if(currentUser&&!currentUser.isAdmin){var wcp=(currentUser.permissions||{}).workCards;if(wcp==='none'){el.innerHTML='<div class="empty-state"><div class="icon">🔒</div><p>אין הרשאה לצפות בכרטיסי עבודה</p></div>';return;}if(wcp==='own')displayCards=cards.filter(function(x){return !x.createdBy||x.createdBy===currentUser.id;});}
-  if(!displayCards.length){el.innerHTML='<div style="text-align:center;padding:60px 20px;color:#9ca3af"><div style="font-size:3rem;margin-bottom:16px">📋</div><div style="font-size:1.1rem;font-weight:700;color:#374151;margin-bottom:8px">אין כרטיסי עבודה עדיין</div><div style="font-size:.88rem;margin-bottom:20px">לחץ על <strong>➕ כרטיס חדש</strong> כדי ליצור את הכרטיס הראשון</div><button class="btn btn-primary" onclick="switchTab(\'new\')">➕ צור כרטיס חדש</button></div>'';return;}
+  if(!displayCards.length){el.innerHTML='<div style="text-align:center;padding:60px 20px;color:#9ca3af"><div style="font-size:3rem;margin-bottom:16px">📋</div><div style="font-size:1.1rem;font-weight:700;color:#374151;margin-bottom:8px">אין כרטיסי עבודה עדיין</div><div style="font-size:.88rem;margin-bottom:20px">לחץ על <strong>➕ כרטיס חדש</strong> כדי ליצור את הכרטיס הראשון</div><button class="btn btn-primary" onclick="switchTab(\'new\')">➕ צור כרטיס חדש</button></div>';return;}
   el.innerHTML=displayCards.map(c=>`
     <div class="job-card">
       <div class="jc-header">
