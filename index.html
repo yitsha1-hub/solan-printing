@@ -2375,36 +2375,51 @@ function quickCard(newspaperId, pages) {
   openRunsModal(n, pages);
 }
 
+// נייר ברירת מחדל לפי שם עיתון
+const NEWSPAPER_DEFAULT_PAPERS = {
+  'דירה בשקל': ['כרומו מבריק 130 גרם 70*100', 'כרומו מבריק 105 גרם 70*100']
+};
+
 function openRunsModal(n, pages) {
   document.getElementById('runs-modal-title').textContent = n.name + ' — ' + pages + ' עמודים';
 
   const copies = parseInt(n.copies)||0;
   const paperForThis = _paperForPages(n, pages);
-  const detail = [
-    paperForThis, n.size,
-    copies ? copies.toLocaleString()+' עותקים' : ''
-  ].filter(Boolean).join(' · ');
+  const defaultPapers = NEWSPAPER_DEFAULT_PAPERS[n.name] || [];
+  const hasDefaultPapers = defaultPapers.length > 0;
 
   let bodyHTML = `<div class="runs-modal-paper">
     <div class="runs-modal-paper-name">${n.name}</div>
-    <div class="runs-modal-paper-detail">${detail}</div>
+    <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:.78rem;color:var(--gray)">${[paperForThis, n.size].filter(Boolean).join(' · ')}</span>
+      <label style="font-size:.82rem;font-weight:700;color:var(--press);display:flex;align-items:center;gap:4px">
+        כמות:
+        <input type="number" id="runs-copies-input" value="${copies||''}" min="1"
+          style="width:90px;font-size:.88rem;font-family:Heebo,sans-serif;padding:3px 7px;
+            border:1.5px solid var(--line);border-radius:5px;font-weight:700"
+          onchange="_updateRunsCopies(this.value)">
+      </label>
+    </div>
   </div>`;
 
   if (currentRuns.length) {
     bodyHTML += `<div style="text-align:left;margin-bottom:8px">
       <button type="button" class="btn btn-sm btn-tpl" id="toggle-run-paper"
         onclick="toggleRunPaperInputs()"
-        style="font-size:.78rem">🗂️ שנה נייר לריצות</button>
+        style="font-size:.78rem${hasDefaultPapers ? ';background:#dbeafe' : ''}">🗂️ שנה נייר לריצות</button>
     </div>`;
-    bodyHTML += currentRuns.map((r,i) => `
+    bodyHTML += currentRuns.map((r,i) => {
+      const defPaper = defaultPapers[i] || paperForThis || '';
+      return `
       <div class="runs-modal-row">
         <div class="run-info" style="flex:1">
           <div class="run-num">ריצה ${r.num}</div>
           <div class="run-detail">${r.pages} עמ' · ${r.pageRange} · ${r.folds}</div>
-          <input type="text" id="run-paper-${r.num}" value="${paperForThis||''}"
+          <input type="text" id="run-paper-${r.num}" value="${defPaper}"
             placeholder="נייר לריצה זו"
-            style="display:none;font-size:.78rem;padding:3px 7px;border:1.5px solid var(--line);
-              border-radius:5px;font-family:Heebo,sans-serif;width:100%;margin-top:4px;box-sizing:border-box">
+            style="display:${hasDefaultPapers ? 'block' : 'none'};font-size:.78rem;padding:3px 7px;
+              border:1.5px solid var(--line);border-radius:5px;font-family:Heebo,sans-serif;
+              width:100%;margin-top:4px;box-sizing:border-box">
         </div>
         <div class="run-copies-badge">${r.copies.toLocaleString()} יח'</div>
         <select class="run-mach-sel" data-run="${r.num}"
@@ -2414,7 +2429,8 @@ function openRunsModal(n, pages) {
           <option value="מכונה 8 צבעים">מכונה 8 צבעים</option>
           <option value="פורמט גדול">פורמט גדול</option>
         </select>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   } else {
     bodyHTML += `<div style="padding:20px;color:var(--gray);text-align:center">
       לא ניתן לחשב ריצות — בדוק גודל נייר בהגדרות העיתון</div>`;
@@ -2422,6 +2438,53 @@ function openRunsModal(n, pages) {
 
   document.getElementById('runs-modal-body').innerHTML = bodyHTML;
   document.getElementById('runs-modal').classList.add('open');
+}
+
+function _updateRunsCopies(val) {
+  const newCopies = parseInt(val)||0;
+  if (!newCopies) return;
+  const pending = window._pendingCard;
+  if (!pending) return;
+  const pages = pending.pages;
+  const n = pending.n;
+  const size = (n.size||'').toLowerCase();
+  let fs = 0;
+  if (/70[\s×x*]?100|16[.,]5[\s×x*]?24/.test(size)) fs=32;
+  else if (/64[\s×x*]?90|a4|240[\s×x*]?330|330[\s×x*]?240/.test(size)) fs=16;
+  if (!fs) return;
+  // שמור בחירות מכונה קיימות
+  const prevMach = {}, prevPaper = {};
+  currentRuns.forEach(r => { prevMach[r.num] = r.machine; });
+  document.querySelectorAll('[id^="run-paper-"]').forEach(inp => {
+    const num = inp.id.replace('run-paper-','');
+    prevPaper[num] = inp.value;
+  });
+  currentRuns = buildRuns(pages, newCopies, fs);
+  currentRuns.forEach(r => { if (prevMach[r.num]) r.machine = prevMach[r.num]; });
+  // עדכן תגי כמות
+  currentRuns.forEach(r => {
+    const badge = document.querySelector('.run-copies-badge:nth-of-type(' + r.num + ')');
+    // עדכן ישירות את ה-run-copies-badge
+  });
+  // פשוט פתח מחדש
+  const paperInputsVisible = (()=>{
+    const inp = document.querySelector('[id^="run-paper-"]');
+    return inp && inp.style.display !== 'none';
+  })();
+  openRunsModal(n, pages);
+  // שחזר כמות בשדה
+  const ci = document.getElementById('runs-copies-input');
+  if (ci) ci.value = newCopies;
+  // שחזר נייר
+  if (paperInputsVisible) {
+    document.querySelectorAll('[id^="run-paper-"]').forEach(inp => {
+      const num = inp.id.replace('run-paper-','');
+      if (prevPaper[num]) inp.value = prevPaper[num];
+      inp.style.display = 'block';
+    });
+    const btn = document.getElementById('toggle-run-paper');
+    if (btn) btn.style.background = '#dbeafe';
+  }
 }
 
 function closeRunsModal() {
@@ -2456,7 +2519,7 @@ function confirmRunsAndSave() {
     type:         n.type||'עיתון',
     orderDate:    new Date().toISOString().split('T')[0],
     deliveryDate: '',
-    copies:       n.copies,
+    copies:       (document.getElementById('runs-copies-input') && document.getElementById('runs-copies-input').value) ? document.getElementById('runs-copies-input').value : n.copies,
     pages:        pages,
     color:        n.color,
     size:         n.size,
