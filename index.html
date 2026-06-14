@@ -1553,6 +1553,7 @@ function changeUserPin(uid) {
 }
 
 let inventory      = JSON.parse(localStorage.getItem('solanInventory')      || '[]');
+let documentPrices = JSON.parse(localStorage.getItem('solanDocumentPrices') || '{}');
 let inventoryPress = JSON.parse(localStorage.getItem('solanInventoryPress') || '[]');
 let invoiceLogs    = JSON.parse(localStorage.getItem('solanInvoiceLogs')    || '[]');
 let quotes         = JSON.parse(localStorage.getItem('solanQuotes')         || '[]');
@@ -1596,6 +1597,7 @@ function persist() {
   // Always write to localStorage (works offline too)
   localStorage.setItem('solanHistory',             JSON.stringify(historyDB));
   localStorage.setItem('solanInventory',           JSON.stringify(inventory));
+  localStorage.setItem('solanDocumentPrices',      JSON.stringify(documentPrices));
   localStorage.setItem('solanInventoryHistory',    JSON.stringify(inventoryHistory));
   localStorage.setItem('solanInventoryPress',      JSON.stringify(inventoryPress));
   localStorage.setItem('solanInventoryDeductions', JSON.stringify(inventoryDeductions));
@@ -2335,6 +2337,14 @@ function openPagePicker(newspaperId) {
   document.body.insertAdjacentHTML('beforeend', html);
 }
 
+function toggleRunPaperInputs() {
+  var inputs = document.querySelectorAll('[id^="run-paper-"]');
+  var btn = document.getElementById('toggle-run-paper');
+  var show = inputs.length && inputs[0].style.display === 'none';
+  inputs.forEach(function(inp){ inp.style.display = show ? 'block' : 'none'; });
+  if (btn) btn.style.background = show ? '#dbeafe' : '';
+}
+
 function closePP() {
   const el = document.getElementById('page-picker-modal');
   if (el) el.remove();
@@ -2368,8 +2378,9 @@ function openRunsModal(n, pages) {
   document.getElementById('runs-modal-title').textContent = n.name + ' — ' + pages + ' עמודים';
 
   const copies = parseInt(n.copies)||0;
+  const paperForThis = _paperForPages(n, pages);
   const detail = [
-    n.paper, n.size,
+    paperForThis, n.size,
     copies ? copies.toLocaleString()+' עותקים' : ''
   ].filter(Boolean).join(' · ');
 
@@ -2379,11 +2390,20 @@ function openRunsModal(n, pages) {
   </div>`;
 
   if (currentRuns.length) {
+    bodyHTML += `<div style="text-align:left;margin-bottom:8px">
+      <button type="button" class="btn btn-sm btn-tpl" id="toggle-run-paper"
+        onclick="toggleRunPaperInputs()"
+        style="font-size:.78rem">🗂️ שנה נייר לריצות</button>
+    </div>`;
     bodyHTML += currentRuns.map((r,i) => `
       <div class="runs-modal-row">
-        <div class="run-info">
+        <div class="run-info" style="flex:1">
           <div class="run-num">ריצה ${r.num}</div>
           <div class="run-detail">${r.pages} עמ' · ${r.pageRange} · ${r.folds}</div>
+          <input type="text" id="run-paper-${r.num}" value="${paperForThis||''}"
+            placeholder="נייר לריצה זו"
+            style="display:none;font-size:.78rem;padding:3px 7px;border:1.5px solid var(--line);
+              border-radius:5px;font-family:Heebo,sans-serif;width:100%;margin-top:4px;box-sizing:border-box">
         </div>
         <div class="run-copies-badge">${r.copies.toLocaleString()} יח'</div>
         <select class="run-mach-sel" data-run="${r.num}"
@@ -2418,7 +2438,8 @@ function confirmRunsAndSave() {
   document.getElementById('f-name').value   = n.name||'';
   document.getElementById('f-type').value   = n.type||'עיתון';
   document.getElementById('f-size').value   = n.size||'';
-  document.getElementById('f-paper').value  = n.paper||'';
+  const _paperUsed = _paperForPages(n, pages);
+  document.getElementById('f-paper').value  = _paperUsed;
   document.getElementById('f-copies').value = n.copies||'';
   document.getElementById('f-pages').value  = pages;
   document.getElementById('f-notes').value  = n.notes||'';
@@ -2438,11 +2459,16 @@ function confirmRunsAndSave() {
     pages:        pages,
     color:        n.color,
     size:         n.size,
-    paper:        n.paper,
+    paper:        _paperUsed,
     notes:        n.notes||'',
     status:       'pending',
     createdAt:    new Date().toLocaleDateString('he-IL'),
-    runs:         currentRuns.map(r=>({...r}))
+    runs:         currentRuns.map(function(r) {
+      var inp = document.getElementById('run-paper-' + r.num);
+      var runPaper = inp && inp.style.display !== 'none' && inp.value.trim()
+        ? inp.value.trim() : _paperUsed;
+      return Object.assign({}, r, { paper: runPaper, color: n.color });
+    })
   };
   var _warns = validateCard(card);
   if (_warns.length > 0) {
@@ -2462,6 +2488,11 @@ function confirmRunsAndSave() {
   clearForm();
   showPrintModal(card);
   window._pendingDeduct = card;
+}
+
+// ── נייר לפי ריצות ───────────────────────────────────────────────────────
+function _paperForPages(n, pages) {
+  return n.paper || '';
 }
 
 // ========== NEWSPAPER MANAGEMENT ==========
@@ -2561,6 +2592,8 @@ function renderPaperMgmt() {
             <span><strong>עותקים:</strong> ${n.copies?parseInt(n.copies).toLocaleString():'—'}</span>
             <span><strong>צבע:</strong> ${n.color||'—'}</span>
           </div>
+          ${(n.paperRules&&n.paperRules.length)?'<div style="padding:4px 16px 0;font-size:.75rem;color:var(--press)"><strong>📄 כללי נייר:</strong> '+n.paperRules.map(function(r,i,a){return(i===a.length-1&&a.length>1?'מעל '+(a[i-1].upTo||'?')+' עמ\'':'עד '+(r.upTo||'?')+' עמ\'')+' ← '+r.paper;}).join(' | ')+'</div>':''}
+          ${(n.runs&&n.runs.length)?'<div style="padding:4px 16px 0;font-size:.75rem;color:var(--press)"><strong>🖨️ ריצות:</strong> '+n.runs.map(function(r){return r.name+': '+r.paper;}).join(' | ')+'</div>':''}
           <div style="padding:8px 16px 10px;border-top:1px solid var(--line)">
             <div style="font-size:.72rem;font-weight:700;color:var(--gold);margin-bottom:5px">אפשרויות עמודים</div>
             <div class="pmi-pages">
@@ -2695,19 +2728,19 @@ function showPreviewModal(card) {
 function buildPrintCard(c) {
   const runsRows=(c.runs||[]).map(r=>`
     <tr>
-      <td style="padding:7px 10px;border-bottom:1px solid #eee"><strong>ריצה ${r.num}</strong></td>
-      <td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center">${r.pages ? r.pages+' עמ\'' : '—'}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center;font-size:.8rem">${r.pageRange||'—'}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center;font-weight:700">${r.copies?parseInt(r.copies).toLocaleString():'—'}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center">${r.folds||'—'}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center;font-weight:700">${r.machine||'—'}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #ddd"><strong>ריצה ${r.num}</strong></td>
+      <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center">${r.pages ? r.pages+' עמ\'' : '—'}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-size:.8rem">${r.pageRange||'—'}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-weight:700">${r.copies?parseInt(r.copies).toLocaleString():'—'}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center">${r.folds||'—'}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-weight:700">${r.machine||'—'}</td>
     </tr>`).join('');
 
   const fields = [
     ['שם העבודה', c.name||''],
     ['סוג עבודה', c.type||''],
     ['תאריך הזמנה', c.orderDate||''],
-    ['מועד אספקה', `<strong style="color:${c.deliveryDate?'#c62828':'#aaa'}">${c.deliveryDate||'לא הוגדר'}</strong>`],
+    ['מועד אספקה', `<strong>${c.deliveryDate||'לא הוגדר'}</strong>`],
     ['מס\' עותקים', c.copies ? '<strong style="font-size:1rem">'+parseInt(c.copies).toLocaleString()+'</strong>' : ''],
     ['מס\' עמודים', c.pages||''],
     ['גודל סופי', c.size||''],
@@ -2717,42 +2750,40 @@ function buildPrintCard(c) {
   ];
 
   const fieldRows = fields.map(([lbl,val]) => val ? `
-    <div style="display:flex;border-bottom:1px solid #f0edf8;padding:6px 0">
-      <div style="width:130px;font-size:.78rem;font-weight:700;color:#5c2d91;flex-shrink:0">${lbl}</div>
-      <div style="font-size:.88rem;color:#222">${val}</div>
+    <div style="display:flex;border-bottom:1px solid #eee;padding:6px 0">
+      <div style="width:130px;font-size:.78rem;font-weight:700;color:#333;flex-shrink:0">${lbl}</div>
+      <div style="font-size:.88rem;color:#111">${val}</div>
     </div>` : '').join('');
 
-  return `<div style="font-family:'Heebo',Arial,sans-serif;direction:rtl;max-width:720px;margin:0 auto;background:white;color:#222">
-    ${_solanDocHeader()}
+  return `<div style="font-family:'Heebo',Arial,sans-serif;direction:rtl;max-width:720px;margin:0 auto;background:white;color:#111">
     <!-- כותרת כרטיס -->
-    <div style="padding:12px 28px 6px;display:flex;justify-content:space-between;align-items:baseline">
-      <div style="font-size:1.35rem;font-weight:900;color:#e84c1e">כרטיס עבודה</div>
-      <div style="font-size:.78rem;color:#888">נוצר: ${c.createdAt} &nbsp;|&nbsp; מס' עבודה: ${c.id}</div>
+    <div style="padding:14px 28px 10px;display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #111">
+      <div style="font-size:1.35rem;font-weight:900;color:#111">כרטיס עבודה</div>
+      <div style="font-size:.78rem;color:#555">נוצר: ${c.createdAt} &nbsp;|&nbsp; מס' עבודה: ${c.id}</div>
     </div>
     <!-- שדות -->
     <div style="padding:4px 28px 16px">${fieldRows}</div>
     ${(c.runs&&c.runs.length)?`
     <!-- ריצות -->
-    <div style="margin:0 28px 6px;font-size:.85rem;font-weight:800;color:#1a1a4e;padding:6px 0;border-top:2px solid #1a1a4e">📋 פירוט ריצות הדפסה</div>
+    <div style="margin:0 28px 6px;font-size:.85rem;font-weight:800;color:#111;padding:6px 0;border-top:2px solid #111">פירוט ריצות הדפסה</div>
     <div style="padding:0 28px 16px">
       <table style="width:100%;border-collapse:collapse">
         <thead>
-          <tr style="background:#1a1a4e">
-            <th style="padding:8px 10px;color:#f5c400;text-align:right;font-size:.78rem">ריצה</th>
-            <th style="padding:8px 10px;color:#f5c400;text-align:center;font-size:.78rem">עמודים</th>
-            <th style="padding:8px 10px;color:#f5c400;text-align:center;font-size:.78rem">טווח</th>
-            <th style="padding:8px 10px;color:#f5c400;text-align:center;font-size:.78rem">כמות להדפסה</th>
-            <th style="padding:8px 10px;color:#f5c400;text-align:center;font-size:.78rem">קיפולים</th>
-            <th style="padding:8px 10px;color:#f5c400;text-align:center;font-size:.78rem">מכונה</th>
+          <tr style="background:#111">
+            <th style="padding:8px 10px;color:#fff;text-align:right;font-size:.78rem">ריצה</th>
+            <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">עמודים</th>
+            <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">טווח</th>
+            <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">כמות להדפסה</th>
+            <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">קיפולים</th>
+            <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">מכונה</th>
           </tr>
         </thead>
         <tbody>${runsRows}</tbody>
       </table>
     </div>`:''}
     <!-- פוטר -->
-    <div style="border-top:1px solid #ccc;padding:8px 28px;font-size:.72rem;color:#888;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px">
-      <span>מסמך ממוחשב — סולן הדפסות בע"מ</span>
-      <span>${SOLAN_INFO.address} | טל. ${SOLAN_INFO.tel}</span>
+    <div style="border-top:1px solid #ccc;padding:8px 28px;font-size:.72rem;color:#777;text-align:center">
+      סולן הדפסות בע"מ
     </div>
   </div>`;
 }
@@ -3660,7 +3691,8 @@ function loadInventoryXlsb(input) {
       const dataStart = headerRow >= 0 ? headerRow + 1 : 1;
 
       // בנה מפת מחירים מהמלאי הקיים — לשמירת מחירים בין ייבואים
-      var priceMap = {};
+      // בנה priceMap מהמלאי הקיים + מ-documentPrices
+      var priceMap = Object.assign({}, documentPrices);
       inventory.forEach(function(it) {
         (it.invoices||[]).forEach(function(inv_) {
           if (inv_.price) {
@@ -3689,9 +3721,14 @@ function loadInventoryXlsb(input) {
           const totalPrice = typeof raw === 'number' ? raw : (parseFloat(String(raw||'0').replace(/,/g,''))||0);
           if (totalPrice > 0 && qty > 0) price = totalPrice / qty;
         }
-        // אם אין מחיר בקובץ — חפש במפת המחירים הקיימת
+        // אם אין מחיר בקובץ — חפש במאגר המחירים הקבוע
         if (!price) {
           price = (inv && priceMap['inv:' + inv]) || (orderNum && priceMap['ord:' + orderNum]) || 0;
+        }
+        // שמור מחיר ל-documentPrices לפי מספר מסמך (זיכרון קבוע)
+        if (price) {
+          if (inv)      documentPrices['inv:' + inv]      = price;
+          if (orderNum) documentPrices['ord:' + orderNum] = price;
         }
 
         let item = inventory.find(it => it.name === name);
@@ -3711,8 +3748,8 @@ function loadInventoryXlsb(input) {
         var prevPrice = ex ? (ex.price || 0) : 0;
         if (ex) {
           ex.qty = qty;
-          // שמור מחיר קיים — עדכן רק אם עדיין אין מחיר
-          if (price && !ex.price) ex.price = price;
+          // עדכן מחיר תמיד מהקובץ (הקובץ הוא מקור האמת)
+          if (price) ex.price = price;
         } else {
           item.invoices.push({ date, inv, orderNum, qty, price: price || 0 });
         }
