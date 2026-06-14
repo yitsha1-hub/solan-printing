@@ -2726,7 +2726,9 @@ function showPreviewModal(card) {
 
 // ========== PRINT ==========
 function buildPrintCard(c) {
-  const runsRows=(c.runs||[]).map(r=>`
+  const _runs = c.runs||[];
+  const _hasPaper = _runs.some(r => r.paper && r.paper.trim());
+  const runsRows=_runs.map(r=>`
     <tr>
       <td style="padding:7px 10px;border-bottom:1px solid #ddd"><strong>ריצה ${r.num}</strong></td>
       <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center">${r.pages ? r.pages+' עמ\'' : '—'}</td>
@@ -2734,6 +2736,7 @@ function buildPrintCard(c) {
       <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-weight:700">${r.copies?parseInt(r.copies).toLocaleString():'—'}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center">${r.folds||'—'}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-weight:700">${r.machine||'—'}</td>
+      ${_hasPaper ? `<td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-size:.8rem">${r.paper||'—'}</td>` : ''}
     </tr>`).join('');
 
   const fields = [
@@ -2776,6 +2779,7 @@ function buildPrintCard(c) {
             <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">כמות להדפסה</th>
             <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">קיפולים</th>
             <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">מכונה</th>
+            ${_hasPaper ? '<th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">סוג נייר</th>' : ''}
           </tr>
         </thead>
         <tbody>${runsRows}</tbody>
