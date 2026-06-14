@@ -590,6 +590,15 @@ window._fbInit = () => true;
 </header>
 
 <div class="app-layout">
+<div style="padding:6px 12px;background:#f8f9ff;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center">
+  <input id="global-search-input" type="search" placeholder="🔍 חיפוש — לקוח, עבודה, גודל נייר..."
+    style="flex:1;padding:7px 12px;border:1.5px solid var(--line);border-radius:8px;font-family:Heebo,sans-serif;font-size:.88rem;outline:none;direction:rtl"
+    oninput="renderGlobalSearch(this.value)" onfocus="document.getElementById('global-search-results').style.display=''" 
+    onblur="setTimeout(()=>document.getElementById('global-search-results').style.display='none',200)">
+  <div id="global-search-results" style="display:none;position:absolute;top:100px;right:12px;left:12px;z-index:8888;
+    background:white;border:1.5px solid var(--line);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.12);
+    max-height:340px;overflow-y:auto" id="global-search-results"></div>
+</div>
 <div class="tabs">
   <div class="tab active" onclick="switchTab('week')"  id="tab-week">📅 יומן שבועי</div>
   <div class="tab"        onclick="switchTab('new')"   id="tab-new">➕ כרטיס חדש</div>
@@ -598,9 +607,15 @@ window._fbInit = () => true;
   <div class="tab"        onclick="switchTab('inventory')" id="tab-inventory">📦 מלאי</div>
   <div class="tab"        onclick="switchTab('quotes')"    id="tab-quotes">💰 הצעות מחיר</div>
   <div class="tab"        onclick="switchTab('orders')"   id="tab-orders">🛒 הזמנות</div>
+  <div class="tab"        onclick="switchTab('queue')"    id="tab-queue">🏭 תור מכונות</div>
 </div>
 
 <div class="main">
+
+<!-- ===== MACHINE QUEUE VIEW ===== -->
+<div id="view-queue" style="display:none">
+  <div id="queue-content"></div>
+</div>
 
 <!-- ===== WEEKLY VIEW ===== -->
 <div id="view-week">
@@ -1274,6 +1289,14 @@ window._fbInit = () => true;
         </div>
       </div>
     </div>
+    <div style="padding:0 20px 14px;border-top:1px solid var(--line);margin-top:4px">
+      <div style="font-size:.78rem;font-weight:800;color:#6b7280;margin-bottom:8px;margin-top:12px">💾 גיבוי ושחזור נתונים</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-tpl" onclick="exportBackup()" style="flex:1;font-size:.83rem">📤 ייצוא גיבוי</button>
+        <button class="btn btn-clear" onclick="document.getElementById('backup-import-input').click()" style="flex:1;font-size:.83rem">📥 ייבוא גיבוי</button>
+        <input type="file" id="backup-import-input" accept=".json" style="display:none" onchange="importBackup(this)">
+      </div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-clear" onclick="closeSettings()">ביטול</button>
       <button class="btn btn-primary" onclick="saveSettings()">💾 שמור</button>
@@ -1752,16 +1775,17 @@ function updateBadge() {
 // ========== TABS ==========
 function switchTab(tab) {
   if(currentUser&&!currentUser.isAdmin){var p=currentUser.permissions||{};if(tab==='inventory'&&p.inventory==='none'){showToast('🔒 אין הרשאה למלאי');return;}if(tab==='quotes'&&p.quotes==='none'){showToast('🔒 אין הרשאה להצעות מחיר');return;}if(tab==='papers'&&p.papers==='none'){showToast('🔒 אין הרשאה לניהול עיתונים');return;}if(tab==='new'&&p.createCard===false){showToast('🔒 אין הרשאה ליצירת כרטיס חדש');return;}if(tab==='week'&&p.weekView===false){showToast('🔒 אין הרשאה ליומן שבועי');return;}}
-  ['week','new','saved','papers','inventory','quotes','orders'].forEach(t => {
+  ['week','new','saved','papers','inventory','quotes','orders','queue'].forEach(t => {
     const v = document.getElementById('view-'+t); if (v) v.style.display = t===tab ? '' : 'none';
     const tb = document.getElementById('tab-'+t); if (tb) tb.classList.toggle('active', t===tab);
   });
   if (tab==='week')      renderWeek();
   if (tab==='saved')     renderCards();
   if (tab==='papers')    { renderPaperMgmt(); renderFlyerMgmt(); }
-  if (tab==='inventory') renderInventory();
+  if (tab==='inventory') { renderInventory(); checkLowInventory(); }
   if (tab==='quotes')    renderQuotesList();
   if (tab==='orders')    renderOrders();
+  if (tab==='queue')     renderMachineQueue();
 }
 
 
@@ -4101,6 +4125,241 @@ function closeDeliveryModal() {
 }
 
 // ========== SAVED CARDS ==========
+
+// ═══════════════════════════════════════════════════════
+// BACKUP / RESTORE
+// ═══════════════════════════════════════════════════════
+function exportBackup() {
+  const KEYS = ['solanCards','solanNewspapers','solanFlyers','solanInventory',
+    'solanInventoryHistory','solanInventoryDeductions','solanOrders','solanQuotes',
+    'solanUsers','solanFlyers','solanManualRuns','solanWeekClearedAt','solanWeekClearedItems'];
+  const data = {};
+  KEYS.forEach(k => { const v = localStorage.getItem(k); if (v) data[k] = JSON.parse(v); });
+  data._exportedAt = new Date().toISOString();
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'solan-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  showToast('✅ גיבוי יוצא בהצלחה');
+}
+function importBackup(input) {
+  const file = input.files[0]; if (!file) return;
+  if (!confirm('ייבוא גיבוי ידרוס את כל הנתונים הקיימים. להמשיך?')) { input.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      Object.keys(data).forEach(k => {
+        if (k !== '_exportedAt') localStorage.setItem(k, JSON.stringify(data[k]));
+      });
+      showToast('✅ גיבוי יובא — מרענן...');
+      setTimeout(() => location.reload(), 1200);
+    } catch(err) { alert('קובץ גיבוי שגוי: ' + err.message); }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+// ═══════════════════════════════════════════════════════
+// GLOBAL SEARCH
+// ═══════════════════════════════════════════════════════
+function renderGlobalSearch(q) {
+  const el = document.getElementById('global-search-results');
+  q = (q||'').trim();
+  if (!q || q.length < 2) { el.innerHTML=''; return; }
+  const lq = q.toLowerCase();
+  function hl(t) {
+    if (!t) return '';
+    return String(t).replace(new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi'),
+      '<mark style="background:#fef08a;padding:0 1px">$1</mark>');
+  }
+  const hits = [];
+  // כרטיסים
+  (cards||[]).forEach(c => {
+    const hay = [c.name,c.customer,c.size,c.paper,c.docNum,c.machine].join(' ').toLowerCase();
+    if (hay.includes(lq)) hits.push({
+      type:'כרטיס', icon:'📋', label: (c.name||c.customer||'ללא שם') + (c.docNum?' #'+c.docNum:''),
+      sub: [c.size,c.paper,c.machine].filter(Boolean).join(' · '),
+      action: `switchTab('saved')`, raw: c.name||''
+    });
+  });
+  // הזמנות
+  (orders||[]).forEach(o => {
+    const hay = [o.customer,o.product,o.area,o.notes].join(' ').toLowerCase();
+    if (hay.includes(lq)) hits.push({
+      type:'הזמנה', icon:'🛒', label: o.customer||'ללא שם',
+      sub: o.product||'', action: `switchTab('orders')`
+    });
+  });
+  // הצעות מחיר
+  (quotes||[]).forEach(qt => {
+    const hay = [qt.customer,qt.jobName,qt.description,qt.docNum].join(' ').toLowerCase();
+    if (hay.includes(lq)) hits.push({
+      type:'הצעת מחיר', icon:'💰', label: (qt.customer||'') + (qt.docNum?' #'+qt.docNum:''),
+      sub: qt.jobName||qt.description||'', action: `switchTab('quotes')`
+    });
+  });
+  if (!hits.length) {
+    el.innerHTML = '<div style="padding:16px;text-align:center;color:#9ca3af;font-size:.88rem">אין תוצאות עבור "'+q+'"</div>';
+    return;
+  }
+  el.innerHTML = hits.slice(0,12).map(h => `
+    <div onclick="${h.action};document.getElementById('global-search-input').value='';document.getElementById('global-search-results').style.display='none'"
+      style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:10px"
+      onmouseover="this.style.background='#f8f9ff'" onmouseout="this.style.background=''">
+      <span style="font-size:1.1rem">${h.icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.88rem;font-weight:700">${hl(h.label)}</div>
+        ${h.sub?`<div style="font-size:.78rem;color:#6b7280">${hl(h.sub)}</div>`:''}
+      </div>
+      <span style="font-size:.72rem;background:#e5e7eb;padding:2px 7px;border-radius:10px;white-space:nowrap">${h.type}</span>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// MACHINE QUEUE
+// ═══════════════════════════════════════════════════════
+function _calcMachineTime(machine, sheets) {
+  if (!sheets || sheets <= 0) return null;
+  if (/4 צבעים/.test(machine)) {
+    // 7000 גיל'/שעה, מדפיסה צד אחד בכל פעם → 2 ריצות
+    // + 17.5 דק' הכנה לכל צד (תחילת עבודה + החלפת לוחות)
+    const printHours = (sheets * 2) / 7000;
+    const setupHours = (17.5 / 60) * 2;
+    return printHours + setupHours;
+  }
+  if (/8 צבעים/.test(machine)) {
+    // מדפיסה שני צדדים → 8500/שעה
+    return sheets / 8500;
+  }
+  if (/פורמט גדול/.test(machine)) {
+    return sheets / 5000; // הערכה
+  }
+  return null;
+}
+function _fmtHours(h) {
+  if (h == null) return '—';
+  if (h < 1) return Math.round(h * 60) + ' דק'';
+  const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
+  return hh + 'ש'' + (mm ? ' ' + mm + 'ד'':'');
+}
+function renderMachineQueue() {
+  const el = document.getElementById('queue-content');
+  const MACHINES = ['מכונה 4 צבעים','מכונה 8 צבעים','פורמט גדול'];
+  const active = (cards||[]).filter(c => c.status !== 'done');
+
+  let html = '<div style="padding:12px 4px">';
+  html += '<div style="font-size:1rem;font-weight:900;margin-bottom:16px;color:#1a1a4e">🏭 תור מכונות — עבודות פתוחות</div>';
+
+  MACHINES.forEach(machine => {
+    // כרטיסים שמשויכים למכונה זו (לפי שדה machine ראשי או לפי runs)
+    const mCards = active.filter(c => {
+      if (c.machine === machine) return true;
+      if (c.runs && c.runs.some(r => r.machine === machine)) return true;
+      return false;
+    });
+
+    let totalHours = 0;
+    let hasUnknown = false;
+
+    const rows = mCards.map(c => {
+      // חישוב גיליונות לפי runs
+      let sheets = 0;
+      const runsForMachine = (c.runs||[]).filter(r => r.machine === machine || (!r.machine && c.machine === machine));
+      runsForMachine.forEach(r => {
+        const s = parseInt(r.sheets||r.papers||0) || 0;
+        sheets += s;
+      });
+      if (!sheets && c.sheets) sheets = parseInt(c.sheets)||0;
+
+      const hrs = _calcMachineTime(machine, sheets);
+      if (hrs != null) totalHours += hrs;
+      else if (mCards.length) hasUnknown = true;
+
+      return { c, sheets, hrs };
+    });
+
+    const colorMap = {'מכונה 4 צבעים':'#dbeafe','מכונה 8 צבעים':'#d1fae5','פורמט גדול':'#fef3c7'};
+    const iconMap  = {'מכונה 4 צבעים':'🔵','מכונה 8 צבעים':'🟢','פורמט גדול':'🟡'};
+
+    html += `<div style="margin-bottom:20px;border-radius:12px;overflow:hidden;border:1.5px solid #e5e7eb">
+      <div style="background:${colorMap[machine]};padding:12px 16px;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-weight:900;font-size:.95rem">${iconMap[machine]} ${machine}</div>
+        <div style="font-size:.85rem;font-weight:700;color:#374151">
+          ${mCards.length} עבודות · סה"כ: <strong>${_fmtHours(totalHours || null)}${hasUnknown?' (+עבודות ללא גיליונות)':''}</strong>
+        </div>
+      </div>`;
+
+    if (!rows.length) {
+      html += '<div style="padding:14px 16px;color:#9ca3af;font-size:.88rem">אין עבודות פתוחות</div>';
+    } else {
+      html += '<table style="width:100%;border-collapse:collapse">';
+      html += '<tr style="background:#f9fafb;font-size:.78rem;color:#6b7280"><th style="padding:8px 12px;text-align:right;font-weight:700">עבודה</th><th style="padding:8px;text-align:center">לקוח</th><th style="padding:8px;text-align:center">גיליונות</th><th style="padding:8px;text-align:center">זמן משוער</th><th style="padding:8px;text-align:center">סטטוס</th></tr>';
+      rows.forEach(({c, sheets, hrs}, idx) => {
+        const statusMap = {pending:'⏳ ממתין',inprogress:'🔄 בדפוס',done:'✅ הושלם'};
+        html += `<tr style="border-top:1px solid #f3f4f6;font-size:.85rem;${idx%2?'background:#fafafa':''}">
+          <td style="padding:9px 12px;font-weight:700">${c.name||c.customer||'ללא שם'}${c.docNum?' <span style="color:#9ca3af;font-size:.75rem">#'+c.docNum+'</span>':''}</td>
+          <td style="padding:9px 8px;text-align:center;color:#374151">${c.customer||'—'}</td>
+          <td style="padding:9px 8px;text-align:center">${sheets||'—'}</td>
+          <td style="padding:9px 8px;text-align:center;font-weight:700;color:${hrs&&hrs>4?'#b91c1c':hrs&&hrs>2?'#d97706':'#166534'}">${_fmtHours(hrs)}</td>
+          <td style="padding:9px 8px;text-align:center;font-size:.78rem">${statusMap[c.status]||'—'}</td>
+        </tr>`;
+      });
+      html += '</table>';
+    }
+    html += '</div>';
+  });
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════
+// DUPLICATE CARD
+// ═══════════════════════════════════════════════════════
+function duplicateCard(id) {
+  const orig = cards.find(c => c.id === id);
+  if (!orig) return;
+  const copy = JSON.parse(JSON.stringify(orig));
+  copy.id = Date.now();
+  copy.status = 'pending';
+  copy.createdAt = new Date().toISOString();
+  copy.orderDate = new Date().toISOString().slice(0,10);
+  copy.name = (orig.name||'') + ' — עותק';
+  cards.push(copy);
+  persist();
+  renderCards();
+  showToast('📋 כרטיס שוכפל');
+}
+
+// ═══════════════════════════════════════════════════════
+// LOW INVENTORY ALERT
+// ═══════════════════════════════════════════════════════
+function checkLowInventory() {
+  const low = (inventory||[]).filter(it => {
+    if (!it.minQty) return false;
+    const qty = (it.invoices&&it.invoices.length)
+      ? it.invoices.reduce((s,inv)=>s+(inv.qty||0),0)
+      : (it.qty||0);
+    return qty < it.minQty;
+  });
+  const existing = document.getElementById('low-inv-banner');
+  if (existing) existing.remove();
+  if (!low.length) return;
+  const banner = document.createElement('div');
+  banner.id = 'low-inv-banner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9990;background:#fef2f2;border-bottom:2px solid #fca5a5;padding:10px 16px;display:flex;align-items:center;gap:10px;font-family:Heebo,sans-serif;direction:rtl';
+  banner.innerHTML = `<span style="font-size:1.1rem">⚠️</span>
+    <span style="font-size:.88rem;font-weight:700;color:#991b1b;flex:1">
+      מלאי נמוך: ${low.map(i=>i.name).join(', ')}
+    </span>
+    <button onclick="switchTab('inventory');document.getElementById('low-inv-banner').remove()"
+      style="background:#991b1b;color:white;border:none;border-radius:6px;padding:5px 12px;font-family:Heebo,sans-serif;cursor:pointer;font-size:.82rem">לצפייה במלאי</button>
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:#991b1b">✕</button>`;
+  document.body.prepend(banner);
+}
+
 function deleteCard(id) {
   if(!confirm('למחוק?')) return;
   cards=cards.filter(c=>c.id!==id); persist(); renderCards();
@@ -4182,6 +4441,7 @@ function renderCards() {
         </select>
         <button class="btn btn-sm btn-gold" onclick="showPrintModal(cards.find(c=>c.id===${c.id}))">🖨️ הדפס</button>
         <button class="btn btn-sm" style="background:#0d6efd;color:white;border-color:#0d6efd" onclick="emailCardDirectToPP(${c.id})">📧 קדם דפוס</button>
+        <button class="btn btn-sm" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0" onclick="duplicateCard(${c.id})">📋 שכפל</button>
         <button class="btn btn-sm btn-danger" onclick="deleteCard(${c.id})">מחק</button>
       </div>
     </div>`).join('');
@@ -6119,6 +6379,7 @@ setInterval(function() {
 updateBadge();
 renderWeek();
 connectFirebase();
+setTimeout(checkLowInventory, 1000);
 // אתחול לוגין
 (function(){
   if(currentUser){applyPermissionsToUI();}
@@ -6473,9 +6734,4 @@ function openAddSiteForm() {
   IDIT_SITES.unshift({name:'',num:'',address:'',notes:'',contacts:[]});
   _iditEditIdx = 0;
   saveIditSites();
-  renderIditList();
-  openSiteEdit(0);
-}
-</script>
-</body>
-</html>
+  renderIditL
