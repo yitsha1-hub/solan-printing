@@ -686,11 +686,19 @@ window._fbInit = () => true;
 
 <!-- ===== NEWSPAPER MANAGEMENT ===== -->
 <div id="view-papers" style="display:none">
+  <!-- עיתונים -->
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
     <h2 style="font-size:1.1rem;font-weight:800;color:var(--press)">📰 רשימת עיתונים</h2>
     <button class="btn btn-primary" onclick="openPaperModal()">+ הוסף עיתון</button>
   </div>
   <div id="paper-mgmt-list" class="paper-mgmt-list"></div>
+
+  <!-- עלונים קבועים -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin:24px 0 16px;">
+    <h2 style="font-size:1.1rem;font-weight:800;color:var(--press)">📄 עלונים קבועים</h2>
+    <button class="btn btn-primary" onclick="openFlyerModal()">+ הוסף עלון</button>
+  </div>
+  <div id="flyer-mgmt-list" class="paper-mgmt-list"></div>
 </div>
 
 <!-- ===== QUOTES ===== -->
@@ -1027,6 +1035,56 @@ window._fbInit = () => true;
   </div>
 </div>
 
+<!-- ===== FLYER MODAL ===== -->
+<div class="modal-overlay" id="flyer-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="flyer-modal-title">📄 הוסף עלון</h3>
+      <button class="modal-close" onclick="closeFlyerModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="mg">
+        <div class="mg-field full">
+          <label>שם העלון</label>
+          <input type="text" id="fm-name" placeholder="עלון שבועי">
+        </div>
+        <div class="mg-field">
+          <label>גודל</label>
+          <select id="fm-size" style="font-family:Heebo,sans-serif;padding:6px 10px;border:1.5px solid var(--line);border-radius:6px;font-size:.88rem">
+            <option value="A3→A4">A3 מקופל ל-A4 (4 לגיליון)</option>
+            <option value="A4→A5">A4 מקופל ל-A5 (4 לגיליון)</option>
+            <option value="אחר">אחר (1 לגיליון)</option>
+          </select>
+        </div>
+        <div class="mg-field">
+          <label>צבע</label>
+          <select id="fm-color" style="font-family:Heebo,sans-serif;padding:6px 10px;border:1.5px solid var(--line);border-radius:6px;font-size:.88rem">
+            <option value="4 צבעים">4 צבעים</option>
+            <option value="שחור לבן">שחור לבן</option>
+            <option value="2 צבעים">2 צבעים</option>
+          </select>
+        </div>
+        <div class="mg-field">
+          <label>סוג נייר</label>
+          <input type="text" id="fm-paper" placeholder="כרומו גלוס 90 גר">
+        </div>
+        <div class="mg-field">
+          <label>כמות עותקים</label>
+          <input type="number" id="fm-copies" placeholder="5000" min="1">
+        </div>
+        <div class="mg-field full">
+          <label>יום בשבוע</label>
+          <div id="flyer-day-btns" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="saveFlyerModal()">💾 שמור</button>
+      <button class="btn btn-clear" onclick="closeFlyerModal()">ביטול</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== NEWSPAPER MODAL ===== -->
 <div class="modal-overlay" id="paper-modal">
   <div class="modal">
@@ -1204,6 +1262,7 @@ let _fbConnected   = false;
 const APP_VERSION  = 20260612001; // מספר גרסה — יעודכן בכל פרסום
 let cards          = JSON.parse(localStorage.getItem('solanCards') || '[]');
 let newspapers= JSON.parse(localStorage.getItem('solanNewspapers')|| '[]');
+let flyers    = JSON.parse(localStorage.getItem('solanFlyers')    || '[]');
 let historyDB = JSON.parse(localStorage.getItem('solanHistory')   || '{}');
 
 // ===================================================================
@@ -1608,6 +1667,7 @@ function persist() {
   localStorage.setItem('solanOrders',            JSON.stringify(orders));
   localStorage.setItem('solanCards',               JSON.stringify(cards));
   localStorage.setItem('solanNewspapers',          JSON.stringify(newspapers));
+  localStorage.setItem('solanFlyers',             JSON.stringify(flyers));
   localStorage.setItem('solanUsers',               JSON.stringify(solanUsers));
   if (apiKey) localStorage.setItem('solanApiKey', apiKey);
   updateBadge();
@@ -1646,7 +1706,7 @@ function switchTab(tab) {
   });
   if (tab==='week')      renderWeek();
   if (tab==='saved')     renderCards();
-  if (tab==='papers')    renderPaperMgmt();
+  if (tab==='papers')    { renderPaperMgmt(); renderFlyerMgmt(); }
   if (tab==='inventory') renderInventory();
   if (tab==='quotes')    renderQuotesList();
   if (tab==='orders')    renderOrders();
@@ -2270,7 +2330,10 @@ function hideFromWeek(id) {
 function renderWeek() {
   const grid = document.getElementById('week-grid');
   grid.innerHTML = DAYS.map(day => {
-    const dayPapers = newspapers.filter(n => n.day===day && !hiddenThisWeek.includes(n.id));
+    const dayPapers  = newspapers.filter(n => n.day===day && !hiddenThisWeek.includes(n.id));
+    const dayFlyers  = flyers.filter(f => f.day===day);
+    const totalItems = dayPapers.length + dayFlyers.length;
+
     const papersHTML = dayPapers.length ? dayPapers.map(n=>`
       <div class="paper-btn">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
@@ -2279,22 +2342,43 @@ function renderWeek() {
             <div class="paper-btn-detail">${n.paper||''} · ${n.copies?parseInt(n.copies).toLocaleString()+' עותקים':''}</div>
           </div>
           <button title="הסר מהיומן השבוע" onclick="hideFromWeek(${n.id})"
-            style="background:none;border:none;cursor:pointer;color:#ccc;font-size:1rem;line-height:1;flex-shrink:0;padding:0" 
+            style="background:none;border:none;cursor:pointer;color:#ccc;font-size:1rem;line-height:1;flex-shrink:0;padding:0"
             onmouseover="this.style.color='#c62828'" onmouseout="this.style.color='#ccc'">✕</button>
         </div>
         <button class="pick-pages-btn" onclick="openPagePicker(${n.id})">
           בחר כמות עמודים השבוע ▼
         </button>
-      </div>`).join('')
-      : '<div class="day-empty">אין עיתונים השבוע</div>';
+      </div>`).join('') : '';
+
+    const flyersHTML = dayFlyers.map(f => {
+      const perSheet = f.perSheet || 1;
+      const sheets   = f.copies ? Math.ceil(parseInt(f.copies)/perSheet) : 0;
+      return `
+      <div class="paper-btn" style="border-right:3px solid #16a34a">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+          <div>
+            <div class="paper-btn-name" style="color:#15803d">📄 ${f.name}</div>
+            <div class="paper-btn-detail">${f.paper||''} · ${f.copies?parseInt(f.copies).toLocaleString()+' עותקים':''}</div>
+            ${perSheet>1&&sheets ? `<div style="font-size:.73rem;color:#16a34a;font-weight:700">${sheets.toLocaleString()} גיליונות (${perSheet} לגיליון)</div>` : ''}
+          </div>
+        </div>
+        <button class="pick-pages-btn" style="background:#dcfce7;color:#15803d;border-color:#86efac"
+          onclick="quickFlyerCard(${f.id})">
+          צור כרטיס עבודה ▶
+        </button>
+      </div>`;
+    }).join('');
+
+    const emptyHTML = !dayPapers.length && !dayFlyers.length
+      ? '<div class="day-empty">אין פריטים השבוע</div>' : '';
 
     return `<div class="day-col">
       <div class="day-header">
         <span class="day-name">יום ${day}</span>
-        ${dayPapers.length?`<span class="day-count">${dayPapers.length}</span>`:''}
+        ${totalItems?`<span class="day-count">${totalItems}</span>`:''}
       </div>
       <div class="day-papers">
-        ${papersHTML}
+        ${papersHTML}${flyersHTML}${emptyHTML}
         <button class="add-paper-btn" onclick="openPaperModalForDay('${day}')">+ הוסף עיתון</button>
       </div>
     </div>`;
@@ -2624,6 +2708,130 @@ function deletePaper(id) {
   newspapers = newspapers.filter(n=>n.id!==id);
   persist(); renderPaperMgmt(); renderWeek();
   showToast('🗑️ עיתון נמחק');
+}
+
+// ========== FLYER MANAGEMENT ==========
+let editingFlyerId = null;
+
+function openFlyerModal(id) {
+  editingFlyerId = id || null;
+  const f = id ? flyers.find(x=>x.id===id) : null;
+  document.getElementById('flyer-modal-title').textContent = f ? '✏️ עריכת עלון' : '📄 הוסף עלון';
+  document.getElementById('fm-name').value    = f ? f.name    : '';
+  document.getElementById('fm-paper').value   = f ? f.paper   : '';
+  document.getElementById('fm-copies').value  = f ? f.copies  : '';
+  document.getElementById('fm-color').value   = f ? (f.color||'4 צבעים') : '4 צבעים';
+  document.getElementById('fm-size').value    = f ? (f.size||'A3→A4') : 'A3→A4';
+  // render day buttons
+  const dayContainer = document.getElementById('flyer-day-btns');
+  dayContainer.innerHTML = DAYS.map(d=>`<button type="button" class="flyer-day-btn size-btn${f&&f.day===d?' active':''}" data-day="${d}"
+    onclick="document.querySelectorAll('.flyer-day-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">${d}</button>`).join('');
+  document.getElementById('flyer-modal').classList.add('open');
+}
+
+function closeFlyerModal() {
+  document.getElementById('flyer-modal').classList.remove('open');
+  editingFlyerId = null;
+}
+
+function saveFlyerModal() {
+  const name   = document.getElementById('fm-name').value.trim();
+  const paper  = document.getElementById('fm-paper').value.trim();
+  const copies = parseInt(document.getElementById('fm-copies').value)||0;
+  const color  = document.getElementById('fm-color').value;
+  const size   = document.getElementById('fm-size').value;
+  const dayBtn = document.querySelector('.flyer-day-btn.active');
+  const day    = dayBtn ? dayBtn.dataset.day : '';
+  if (!name || !day) { showToast('⚠️ חובה: שם ויום'); return; }
+
+  // perSheet by size
+  const perSheet = size==='A3→A4' || size==='A4→A5' ? 4 : 1;
+
+  if (editingFlyerId) {
+    const idx = flyers.findIndex(x=>x.id===editingFlyerId);
+    if (idx!==-1) flyers[idx] = Object.assign(flyers[idx], {name,paper,copies,color,size,day,perSheet});
+  } else {
+    flyers.push({id:Date.now(),name,paper,copies,color,size,day,perSheet});
+  }
+  persist();
+  closeFlyerModal();
+  renderFlyerMgmt();
+  renderWeek();
+  showToast('✅ עלון נשמר');
+}
+
+function deleteFlyer(id) {
+  if (!confirm('למחוק את העלון?')) return;
+  flyers = flyers.filter(x=>x.id!==id);
+  persist();
+  renderFlyerMgmt();
+  renderWeek();
+  showToast('🗑️ עלון נמחק');
+}
+
+function renderFlyerMgmt() {
+  const el = document.getElementById('flyer-mgmt-list');
+  if (!el) return;
+  if (!flyers.length) {
+    el.innerHTML='<div class="empty-state"><div class="icon">📄</div><p>אין עלונים שמורים — הוסף את הראשון!</p></div>';
+    return;
+  }
+  const byDay = {};
+  DAYS.forEach(d=>byDay[d]=[]);
+  flyers.forEach(f=>{ if(byDay[f.day]) byDay[f.day].push(f); });
+  el.innerHTML = DAYS.filter(d=>byDay[d].length).map(d=>`
+    <div style="margin-bottom:6px">
+      <div style="font-size:.8rem;font-weight:800;color:#15803d;padding:6px 0 4px">יום ${d}</div>
+      ${byDay[d].map(f=>{
+        const perSheet = f.perSheet||1;
+        const sheets = f.copies ? Math.ceil(parseInt(f.copies)/perSheet) : 0;
+        return `<div class="paper-mgmt-item" style="border-right:3px solid #16a34a">
+          <div class="pmi-header">
+            <div>
+              <div class="pmi-name">${f.name}</div>
+              <div class="pmi-day">עלון · ${f.day} · ${f.size||''}</div>
+            </div>
+            <div style="display:flex;gap:7px">
+              <button class="btn btn-sm btn-tpl" onclick="openFlyerModal(${f.id})">✏️ ערוך</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteFlyer(${f.id})">מחק</button>
+            </div>
+          </div>
+          <div class="pmi-body">
+            <span><strong>נייר:</strong> ${f.paper||'—'}</span>
+            <span><strong>גודל:</strong> ${f.size||'—'}</span>
+            <span><strong>עותקים:</strong> ${f.copies?parseInt(f.copies).toLocaleString():'—'}</span>
+            ${perSheet>1&&sheets?`<span><strong>גיליונות:</strong> ${sheets.toLocaleString()} (÷${perSheet})</span>`:''}
+            <span><strong>צבע:</strong> ${f.color||'—'}</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`).join('');
+}
+
+function quickFlyerCard(flyerId) {
+  const f = flyers.find(x=>x.id===flyerId);
+  if (!f) return;
+  const card = {
+    id:           Date.now(),
+    name:         f.name,
+    type:         'עלון',
+    orderDate:    new Date().toISOString().split('T')[0],
+    deliveryDate: '',
+    copies:       f.copies,
+    pages:        4,
+    color:        f.color||'4 צבעים',
+    size:         f.size||'',
+    paper:        f.paper||'',
+    notes:        f.perSheet>1 ? (Math.ceil((parseInt(f.copies)||0)/f.perSheet)).toLocaleString()+' גיליונות' : '',
+    status:       'pending',
+    createdAt:    new Date().toLocaleDateString('he-IL'),
+    runs:         []
+  };
+  cards.unshift(card);
+  persist();
+  renderCards();
+  showPrintModal(card);
+  showToast('✅ כרטיס עלון נוצר');
 }
 
 function renderPaperMgmt() {
