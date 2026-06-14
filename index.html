@@ -2161,7 +2161,7 @@ function calcRuns() {
   if (!copies||!pages) { field.style.display='none'; currentRuns=[]; return; }
   let fs=0, lbl='';
   if (/70[\s×x*]?100|100[\s×x*]?70|16[.,]5[\s×x*]?24|24[\s×x*]?16|^a5$/.test(size)) { fs=32; lbl=(/a5/.test(size)?'A5':'70×100') + ' — 32 עמ\' לגיליון'; }
-  else if (/64[\s×x*]?90|90[\s×x*]?64|a4/.test(size)) { fs=16; lbl='64×90/A4 — 16 עמ\' לגיליון'; }
+  else if (/64[\s×x*]?90|90[\s×x*]?64|a4|240[\s×x*]?330|330[\s×x*]?240/.test(size)) { fs=16; lbl='64×90/A4/240×330 — 16 עמ\' לגיליון'; }
   else { field.style.display='none'; currentRuns=[]; return; }
 
   // preserve machine choices
