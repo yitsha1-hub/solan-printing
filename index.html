@@ -4507,10 +4507,6 @@ function renderInventory() {
             ${parseInt(totalInvQty).toLocaleString()}
             <div style="font-size:.66rem;font-weight:400;color:#aaa">גיל'</div>
           </td>
-                    <td rowspan="${invList.length}" style="text-align:center;vertical-align:middle;font-weight:800;color:#2e7d32;font-size:.95rem">
-            ${getAvailableQty(item).toLocaleString()}
-            <div style="font-size:.62rem;font-weight:400;color:#aaa">זמין</div>
-          </td>
           <td rowspan="${invList.length}" style="vertical-align:middle">
             <input class="inv-edit" type="number" value="${totalInvQty}"
               title="ערוך כמות ידנית"
@@ -4525,10 +4521,18 @@ function renderInventory() {
     });
   });
 
+  const totalSheets = inventory.reduce((s, item) => {
+    const invs = item.invoices||[];
+    return s + (invs.length ? invs.reduce((a,inv)=>a+(inv.qty||0),0) : (item.qty||0));
+  }, 0);
   const totalRow = `
     <tfoot><tr style="background:#f5f0e8;font-weight:900;border-top:2px solid #c0b090">
       <td colspan="4" style="padding:10px 14px;color:var(--gray);font-size:.82rem">${inventory.length} סוגי נייר</td>
-      <td colspan="3" style="padding:10px 14px;color:#2e7d32;font-size:1rem">
+      <td colspan="2" style="padding:10px 14px;color:#1a237e;font-size:1rem">
+        ${totalSheets.toLocaleString()}
+        <span style="font-size:.65rem;font-weight:400;color:#aaa;margin-right:6px">סה"כ גיליונות</span>
+      </td>
+      <td style="padding:10px 14px;color:#2e7d32;font-size:1rem">
         ₪${totalVal.toLocaleString(undefined,{maximumFractionDigits:0})}
         <span style="font-size:.65rem;font-weight:400;color:#aaa;margin-right:6px">שווי כולל</span>
       </td>
@@ -4553,7 +4557,6 @@ function renderInventory() {
       <th style="text-align:center;min-width:110px">כמות בחשבונית</th>
       <th style="width:30px"></th>
       <th style="text-align:center;min-width:100px">כמות במלאי</th>
-      <th style="text-align:center;min-width:90px;color:#a5d6a7">זמין</th>
       <th style="min-width:90px">עדכן</th>
       <th></th>
     </tr></thead>
