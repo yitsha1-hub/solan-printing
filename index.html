@@ -3374,8 +3374,10 @@ function confirmDeduct() {
   }
   // חשב מחדש סה"כ מלאי
   item2.qty = (item2.invoices||[]).reduce(function(s,x){ return s+(x.qty||0); }, 0);
+  var _now = new Date();
+  var _timeStr = _now.toLocaleTimeString("he-IL", {hour:"2-digit",minute:"2-digit"});
   inventoryDeductions.push({
-    id: Date.now(), date: date, paperName: item2.name, qty: qty,
+    id: Date.now(), date: date, time: _timeStr, paperName: item2.name, qty: qty,
     invoiceIdx: (_invIdx2 >= 0 ? _invIdx2 : undefined),
     cardId: card.id||null, cardName: card.name||"", note: note
   });
@@ -3622,7 +3624,7 @@ function renderDeductionsList() {
   var rows = sorted.map(function(d){
     var realIdx = inventoryDeductions.indexOf(d);
     return "<tr style='border-bottom:1px solid #eee'>" +
-      "<td style='padding:7px 10px;font-size:.82rem;color:#888'>" + (d.date||"—") + "</td>" +
+      "<td style='padding:7px 10px;font-size:.82rem;color:#888'>" + (d.date||"—") + (d.time ? "<br><span style='font-size:.75rem;color:#aaa'>" + d.time + "</span>" : "") + "</td>" +
       "<td style='padding:7px 10px;font-weight:700'>" + escHtml(d.paperName||"") + "</td>" +
       "<td style='padding:7px 10px;text-align:center;font-weight:700;color:#e53935'>" + parseInt(d.qty||0).toLocaleString() + "</td>" +
       "<td style='padding:7px 10px;font-size:.82rem;color:#555'>" + escHtml(d.cardName||"") + (d.note ? " — " + escHtml(d.note) : "") + "</td>" +
