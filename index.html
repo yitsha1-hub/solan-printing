@@ -351,83 +351,141 @@ textarea.fi{resize:none;min-height:52px;}
 @keyframes undoProgress{from{width:100%}to{width:0%}}
 #inv-print-area{display:none;}
 
-/* ===== MOBILE RESPONSIVE ===== */
-@media(max-width:620px){
-  /* כותרת */
-  header{padding:10px 12px;}
-  header h1{font-size:1rem;}
-  header .btn-sm{padding:5px 9px;font-size:.75rem;}
+/* ══════════════════════════════════════════
+   MOBILE — FULL REDESIGN
+   ══════════════════════════════════════════ */
+@media(max-width:640px){
 
-  /* ניווט */
-  .tabs{padding:0 4px;}
-  .tab{padding:8px 11px;font-size:.78rem;}
+  /* ── כותרת קומפקטית ── */
+  header{padding:8px 12px;gap:6px;}
+  header h1{font-size:.95rem;}
+  header h1 span{display:none;}
+  /* הסתר כפתורי ניהול עיתונים + שם משתמש מהכותרת */
+  header .btn-outline-w[onclick*="papers"]{display:none !important;}
+  header .btn-outline-w[onclick*="settings"] > *,
+  header .btn-outline-w[onclick*="logout"] > *{display:none;}
+  header .btn-outline-w[onclick*="openSettings"]{font-size:1.1rem;padding:6px 10px;min-width:36px;}
+  header .btn-outline-w[onclick*="logoutUser"]{font-size:1.1rem;padding:6px 10px;min-width:36px;}
+  #header-username{display:none;}
+  #fb-status{font-size:.65rem;padding:2px 7px;}
 
-  /* מרכז */
-  .main{padding:10px 8px;}
+  /* ── שורת חיפוש ── */
+  #global-search-input{font-size:16px;padding:8px 12px;}
 
-  /* טופס כרטיס עבודה */
+  /* ── הסתר sidebar/tabs עליונות ── */
+  .tabs{display:none !important;}
+
+  /* ── תוכן ── */
+  .app-layout{flex-direction:column;}
+  .main{padding:10px 8px;padding-bottom:80px;}
+
+  /* ── טופס כרטיס עבודה ── */
   .form-grid{grid-template-columns:1fr !important;}
   .field{border-left:none !important;}
   .field.full{grid-column:1 !important;}
-  input.fi,textarea.fi{font-size:16px !important;}
+  input.fi,textarea.fi{font-size:16px !important;padding:11px 10px;}
   .color-opts{flex-direction:column;align-items:flex-start;}
   .form-actions{flex-direction:column;gap:8px;}
   .form-actions-right{width:100%;justify-content:stretch;}
-  .form-actions-right .btn{flex:1;}
-  .form-actions .btn{width:100%;padding:12px;font-size:.95rem;}
+  .form-actions-right .btn,.form-actions .btn{width:100%;padding:13px;font-size:.95rem;}
 
-  /* כרטיסים שמורים */
+  /* ── כרטיסים שמורים ── */
   .jc-meta{grid-template-columns:1fr 1fr !important;}
   .jc-actions{flex-wrap:wrap;gap:6px;}
-  .jc-actions .btn-sm{flex:1;min-width:0;text-align:center;padding:8px 4px;font-size:.78rem;}
+  .jc-actions .btn-sm{flex:1 1 calc(50% - 6px);text-align:center;padding:10px 4px;font-size:.8rem;min-height:42px;}
 
-  /* מודאלים — מגיעים מלמטה */
+  /* ── יומן שבועי — גלילה אופקית ── */
+  .week-grid{grid-template-columns:repeat(7,80vw);display:grid;
+    gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;
+    -webkit-overflow-scrolling:touch;padding-bottom:6px;}
+  .week-grid > *{scroll-snap-align:start;}
+
+  /* ── מודאלים — עולים מלמטה ── */
   .modal-overlay{padding:0;align-items:flex-end;}
   .modal{max-height:92vh;border-radius:18px 18px 0 0;max-width:100vw !important;}
   .modal-box{max-height:92vh;border-radius:18px 18px 0 0;max-width:100vw !important;}
   .modal-header{border-radius:18px 18px 0 0;}
-  .modal-body{overflow-y:auto;}
+  .modal-body{overflow-y:auto;-webkit-overflow-scrolling:touch;}
   .modal-footer{flex-direction:column;}
-  .modal-footer .btn{width:100%;padding:12px;}
-
-  /* שדות מודאל */
+  .modal-footer .btn{width:100%;padding:13px;font-size:.95rem;}
   .mg{grid-template-columns:1fr !important;}
   .mg-field.full{grid-column:1 !important;}
   .mg-field input,.mg-field select,.mg-field textarea{font-size:16px;padding:11px 10px;}
-
-  /* מודאל הדפסה */
   .print-modal-overlay{padding:0;align-items:flex-end;}
   .print-modal{border-radius:18px 18px 0 0;max-width:100vw;}
   .print-modal-bar{border-radius:18px 18px 0 0;}
   .pma{flex-wrap:wrap;gap:6px;}
-  .pma .btn{flex:1;min-width:0;font-size:.78rem;padding:8px 5px;}
+  .pma .btn{flex:1;min-width:0;font-size:.78rem;padding:10px 5px;}
 
-  /* טבלאות — גלילה אופקית */
-  .inv-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  /* ── מלאי ── */
   #inventory-table-wrap{display:none !important;}
+  .inv-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .inv-subtab{padding:8px 10px;font-size:.8rem;}
+  .inv-summary{grid-template-columns:1fr 1fr !important;}
+  .inv-summary-card{padding:10px 12px;}
+
+  /* ── ריצות ── */
   .runs-table{font-size:.75rem;}
   .runs-table th,.runs-table td{padding:5px 7px;}
-
-  /* כפתורים כלליים */
-  .btn{min-height:40px;}
-
-  /* אינבנטורי */
-  .inv-subtab{padding:6px 9px;font-size:.76rem;}
-  .inv-summary{grid-template-columns:1fr 1fr !important;}
-
-  /* ריצות */
   .runs-modal-row{flex-direction:column;align-items:flex-start;}
   .run-mach-sel{width:100%;min-width:0;}
 
-  /* הצעות מחיר */
+  /* ── כפתורים כלליים ── */
+  .btn{min-height:44px;}
+  .btn-sm{min-height:38px;}
+
+  /* ── הצעות מחיר ── */
   #view-quotes > div:first-child{flex-direction:column;align-items:flex-start;}
   #view-quotes > div:first-child > div{width:100%;}
   #view-quotes > div:first-child > div .btn{flex:1;}
+
+  /* ── AI Chat ── */
+  #ai-chat-panel{width:calc(100vw - 24px);left:12px;}
+  #ai-chat-fab{bottom:80px;left:16px;}
+  #undo-toast{width:calc(100vw - 32px);white-space:normal;text-align:center;flex-direction:column;gap:8px;bottom:80px;}
+  #low-inv-banner{top:auto;bottom:70px;border-top:2px solid #fca5a5;border-bottom:none;}
 }
-@media(max-width:400px){
-  .tab{padding:7px 8px;font-size:.73rem;}
-  .jc-meta{grid-template-columns:1fr !important;}
+
+/* ══════════════════════════════════════════
+   BOTTOM NAV BAR
+   ══════════════════════════════════════════ */
+#mobile-bottom-nav{
+  display:none;
+  position:fixed;bottom:0;left:0;right:0;z-index:5000;
+  background:#1a1a2e;border-top:1px solid rgba(255,255,255,.12);
+  flex-direction:row;align-items:stretch;
+  padding-bottom:env(safe-area-inset-bottom, 0px);
+  box-shadow:0 -2px 16px rgba(0,0,0,.25);
 }
+.mob-nav-btn{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:8px 4px 6px;cursor:pointer;
+  color:rgba(255,255,255,.5);font-size:.62rem;font-weight:700;
+  border:none;background:none;font-family:Heebo,sans-serif;
+  transition:color .15s;gap:2px;min-height:56px;
+}
+.mob-nav-btn .mob-nav-icon{font-size:1.35rem;line-height:1;}
+.mob-nav-btn.active{color:var(--gold);}
+.mob-nav-btn:active{background:rgba(255,255,255,.07);}
+
+/* ── "עוד" panel ── */
+#mob-more-panel{
+  display:none;position:fixed;bottom:56px;left:0;right:0;z-index:4999;
+  background:#1a1a2e;border-top:1px solid rgba(255,255,255,.15);
+  padding:6px 0;
+}
+#mob-more-panel.open{display:block;}
+.mob-more-item{
+  display:flex;align-items:center;gap:12px;padding:13px 20px;
+  color:rgba(255,255,255,.8);font-size:.9rem;font-weight:600;cursor:pointer;
+}
+.mob-more-item:active{background:rgba(255,255,255,.07);}
+.mob-more-item .mi-icon{font-size:1.2rem;width:28px;text-align:center;}
+
+@media(max-width:640px){
+  #mobile-bottom-nav{display:flex;}
+}
+
 /* ── Mobile touch improvements ── */
 @media(max-width:620px){
   /* כפתורי פעולה — גדולים יותר לגעת */
@@ -1833,6 +1891,8 @@ function addHistory(key, val) {
 function updateBadge() {
   const b = document.getElementById('count-badge');
   b.textContent = cards.length ? '('+cards.length+')' : '';
+  const mb = document.getElementById('mob-badge');
+  if (mb) mb.textContent = cards.length ? cards.length : '';
 }
 
 // ========== TABS ==========
@@ -3499,6 +3559,32 @@ function doPrint() {
     @media print{body{padding:0;} @page{margin:5mm;}}
   </style></head><body>${content}
   <script>window.onload=()=>{window.print()}<\/script>
+
+<!-- ── Bottom Nav (mobile) ── -->
+<nav id="mobile-bottom-nav">
+  <button class="mob-nav-btn active" id="mobnav-week"      onclick="mobNav('week')">
+    <span class="mob-nav-icon">📅</span>יומן
+  </button>
+  <button class="mob-nav-btn"        id="mobnav-new"       onclick="mobNav('new')">
+    <span class="mob-nav-icon">➕</span>חדש
+  </button>
+  <button class="mob-nav-btn"        id="mobnav-saved"     onclick="mobNav('saved')">
+    <span class="mob-nav-icon">📋</span>כרטיסים<span id="mob-badge" style="font-size:.55rem;background:var(--gold);color:#1a1a2e;border-radius:8px;padding:0 4px;margin-right:2px"></span>
+  </button>
+  <button class="mob-nav-btn"        id="mobnav-inventory" onclick="mobNav('inventory')">
+    <span class="mob-nav-icon">📦</span>מלאי
+  </button>
+  <button class="mob-nav-btn"        id="mobnav-more"      onclick="toggleMobMore()">
+    <span class="mob-nav-icon">☰</span>עוד
+  </button>
+</nav>
+
+<div id="mob-more-panel">
+  <div class="mob-more-item" onclick="mobNav('papers');toggleMobMore()">  <span class="mi-icon">📰</span>עיתונים ועלונים</div>
+  <div class="mob-more-item" onclick="mobNav('quotes');toggleMobMore()">  <span class="mi-icon">💰</span>הצעות מחיר</div>
+  <div class="mob-more-item" onclick="mobNav('orders');toggleMobMore()">  <span class="mi-icon">🛒</span>הזמנות</div>
+  <div class="mob-more-item" onclick="mobNav('queue');toggleMobMore()">   <span class="mi-icon">🏭</span>תור מכונות</div>
+</div>
 
 <!-- AI Chat Assistant -->
 <button id="ai-chat-fab" onclick="toggleAiChat()" title="עוזר AI">🤖</button>
@@ -6532,6 +6618,38 @@ setInterval(function() {
   }
 }, 60 * 1000);
 
+// ── Mobile bottom nav ──
+function mobNav(tab) {
+  switchTab(tab);
+  // update active state
+  const mainTabs = ['week','new','saved','inventory'];
+  document.querySelectorAll('.mob-nav-btn').forEach(b => b.classList.remove('active'));
+  const mainId = 'mobnav-' + (mainTabs.includes(tab) ? tab : 'more');
+  const el = document.getElementById(mainId);
+  if (el) el.classList.add('active');
+  // update badge
+  const mb = document.getElementById('mob-badge');
+  if (mb) mb.textContent = cards.length ? cards.length : '';
+  // close more panel if open
+  const mp = document.getElementById('mob-more-panel');
+  if (mp && mainTabs.includes(tab)) mp.classList.remove('open');
+}
+function toggleMobMore() {
+  const mp = document.getElementById('mob-more-panel');
+  if (mp) mp.classList.toggle('open');
+  // close on outside click
+  if (mp && mp.classList.contains('open')) {
+    setTimeout(() => {
+      document.addEventListener('click', function _close(e) {
+        if (!mp.contains(e.target) && !e.target.closest('#mobnav-more')) {
+          mp.classList.remove('open');
+        }
+        document.removeEventListener('click', _close);
+      });
+    }, 10);
+  }
+}
+
 // ========== KEYBOARD SHORTCUTS ==========
 document.addEventListener('keydown', function(e) {
   // Ctrl+K — חיפוש
@@ -6854,5 +6972,4 @@ function _renderContacts(contacts, siteIdx) {
         'oninput="IDIT_SITES[' + siteIdx + '].contacts[' + ci + '].name=this.value" style="' + _inp() + '">' +
       '<input value="' + _esc(c.role) + '" placeholder="תפקיד" ' +
         'oninput="IDIT_SITES[' + siteIdx + '].contacts[' + ci + '].role=this.value" style="' + _inp() + '">' +
-      '<input value="' + _esc(c.phone) + '" placeholder="טלפון" dir="ltr" ' +
-     
+      '<input value="' + _esc(c.phon
