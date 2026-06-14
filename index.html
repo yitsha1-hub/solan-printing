@@ -559,6 +559,10 @@ window._fbInit = () => true;
 
 <!-- ===== WEEKLY VIEW ===== -->
 <div id="view-week">
+  <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+    <button class="btn btn-sm btn-clear" onclick="clearWeekDoneMarks()"
+      style="font-size:.82rem;border:1.5px solid #ccc">🔄 נקה סימוני שבוע</button>
+  </div>
   <div class="week-grid" id="week-grid"></div>
 </div>
 
@@ -2320,6 +2324,8 @@ function getEffectiveRuns() {
 // ========== WEEKLY VIEW ==========
 // עיתונים שהוסתרו השבוע (לא נמחקו לצמיתות)
 let hiddenThisWeek = JSON.parse(sessionStorage.getItem('hiddenThisWeek') || '[]');
+let weekClearedAt    = parseInt(localStorage.getItem('solanWeekClearedAt') || '0');
+let weekClearedItems = JSON.parse(localStorage.getItem('solanWeekClearedItems') || '{}');
 
 function hideFromWeek(id) {
   hiddenThisWeek = [...new Set([...hiddenThisWeek, id])];
@@ -2335,13 +2341,34 @@ function _thisWeekRange() {
   return { sun, sat };
 }
 
+function _itemClearedSince(name) {
+  return Math.max(weekClearedAt || 0, weekClearedItems[name] || 0);
+}
+
 function _cardDoneThisWeek(name) {
   const { sun, sat } = _thisWeekRange();
+  const clearedSince = _itemClearedSince(name);
   return cards.some(c => {
     if (c.name !== name) return false;
     const d = new Date(c.orderDate);
-    return d >= sun && d <= sat;
+    if (!(d >= sun && d <= sat)) return false;
+    return !clearedSince || (c.id && c.id > clearedSince);
   });
+}
+
+function clearSingleWeekMark(name) {
+  weekClearedItems[name] = Date.now();
+  localStorage.setItem('solanWeekClearedItems', JSON.stringify(weekClearedItems));
+  renderWeek();
+}
+
+function clearWeekDoneMarks() {
+  weekClearedAt = Date.now();
+  weekClearedItems = {};
+  localStorage.setItem('solanWeekClearedAt', weekClearedAt);
+  localStorage.setItem('solanWeekClearedItems', JSON.stringify(weekClearedItems));
+  renderWeek();
+  showToast('🔄 סימוני השבוע נוקו');
 }
 
 function renderWeek() {
@@ -2360,9 +2387,13 @@ function renderWeek() {
             <div class="paper-btn-name" style="${done ? 'color:#15803d' : ''}">${done ? '✅ ' : ''}${n.name}</div>
             <div class="paper-btn-detail">${n.paper||''} · ${n.copies?parseInt(n.copies).toLocaleString()+' עותקים':''}</div>
           </div>
-          <button title="הסר מהיומן השבוע" onclick="hideFromWeek(${n.id})"
-            style="background:none;border:none;cursor:pointer;color:#ccc;font-size:1rem;line-height:1;flex-shrink:0;padding:0"
+          <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">
+            ${done ? `<button title="נקה סימון" onclick="clearSingleWeekMark('${n.name.replace(/'/g,"\\'")}")"
+              style="background:none;border:none;cursor:pointer;font-size:.75rem;color:#16a34a;padding:0;line-height:1">✕✅</button>` : ''}
+            <button title="הסר מהיומן השבוע" onclick="hideFromWeek(${n.id})"
+            style="background:none;border:none;cursor:pointer;color:#ccc;font-size:1rem;line-height:1;padding:0"
             onmouseover="this.style.color='#c62828'" onmouseout="this.style.color='#ccc'">✕</button>
+          </div>
         </div>
         <button class="pick-pages-btn" style="${done ? 'background:#dcfce7;color:#15803d;border-color:#86efac' : ''}"
           onclick="openPagePicker(${n.id})">
@@ -2380,6 +2411,8 @@ function renderWeek() {
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
           <div>
             <div class="paper-btn-name" style="color:#15803d">📄 ${done ? '✅ ' : ''}${f.name}</div>
+            ${done ? `<button title="נקה סימון" onclick="clearSingleWeekMark('${f.name.replace(/'/g,"\\'")}")"
+              style="background:none;border:none;cursor:pointer;font-size:.75rem;color:#16a34a;padding:0;margin-top:3px;line-height:1">✕✅</button>` : ''}
             <div class="paper-btn-detail">${f.paper||''} · ${f.copies?parseInt(f.copies).toLocaleString()+' עותקים':''}</div>
             ${perSheet>1&&sheets ? `<div style="font-size:.73rem;color:#16a34a;font-weight:700">${sheets.toLocaleString()} גיליונות (${perSheet} לגיליון)</div>` : ''}
           </div>
