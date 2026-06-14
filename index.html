@@ -3662,6 +3662,40 @@ function statusLabel(s) {
   if(s==='done')       return '<span class="status-badge status-done">✓ הושלם</span>';
   return '';
 }
+function editCardCopies(id) {
+  var c = cards.find(function(x){ return x.id===id; });
+  if (!c) return;
+  var cur = c.copies||'';
+  var val = window.prompt('כמות עותקים חדשה לעבודה "'+c.name+'":', cur);
+  if (val===null) return;
+  val = val.trim();
+  if (!val || isNaN(parseInt(val))) { showToast('⚠️ כמות לא תקינה'); return; }
+  c.copies = parseInt(val);
+  // עדכן גם ריצות אם יש
+  if (c.runs && c.runs.length) {
+    var size = (c.size||'').toLowerCase();
+    var fs = 0;
+    if (/70[\s×x*]?100|16[.,]5[\s×x*]?24/.test(size)) fs=32;
+    else if (/64[\s×x*]?90|a4|240[\s×x*]?330|330[\s×x*]?240/.test(size)) fs=16;
+    if (fs) {
+      var newRuns = buildRuns(c.pages, c.copies, fs);
+      c.runs = newRuns.map(function(r, i) {
+        var old = c.runs[i]||{};
+        return Object.assign({}, r, { machine: old.machine||'', paper: old.paper||'', color: c.color });
+      });
+    } else {
+      // עדכן כמות יחסית בכל ריצה
+      var ratio = c.copies / (parseInt(cur)||1);
+      c.runs = c.runs.map(function(r) {
+        return Object.assign({}, r, { copies: Math.round(r.copies*ratio) });
+      });
+    }
+  }
+  persist();
+  renderCards();
+  showToast('✅ כמות עודכנה ל-'+c.copies.toLocaleString());
+}
+
 function renderCards() {
   const el=document.getElementById('cards-container');
   let displayCards=cards;
@@ -3679,7 +3713,7 @@ function renderCards() {
       <div class="jc-meta">
         <div class="jc-field"><div class="jcf-label">תאריך הזמנה</div><div class="jcf-val">${c.orderDate||'—'}</div></div>
         <div class="jc-field"><div class="jcf-label">מועד אספקה</div><div class="jcf-val">${c.deliveryDate||'—'}</div></div>
-        <div class="jc-field"><div class="jcf-label">עותקים / עמודים</div><div class="jcf-val">${c.copies||'—'} / ${c.pages||'—'}</div></div>
+        <div class="jc-field"><div class="jcf-label">עותקים / עמודים</div><div class="jcf-val" style="display:flex;align-items:center;gap:6px">${c.copies||'—'} / ${c.pages||'—'} <button onclick="editCardCopies(${c.id})" title="עדכן כמות" style="background:none;border:none;cursor:pointer;font-size:.85rem;padding:0;color:var(--gray)">✏️</button></div></div>
         <div class="jc-field"><div class="jcf-label">גודל</div><div class="jcf-val">${c.size||'—'}</div></div>
         <div class="jc-field"><div class="jcf-label">נייר</div><div class="jcf-val">${c.paper||'—'}</div></div>
         <div class="jc-field"><div class="jcf-label">צבע</div><div class="jcf-val">${c.color||'—'}</div></div>
