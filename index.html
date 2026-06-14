@@ -331,6 +331,24 @@ textarea.fi{resize:none;min-height:52px;}
   background:var(--press);color:white;padding:10px 20px;border-radius:8px;font-weight:600;
   z-index:999;transition:transform .3s ease;box-shadow:0 4px 16px rgba(0,0,0,.3);}
 .toast.show{transform:translateX(-50%) translateY(0);}
+/* Undo Toast */
+#undo-toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(120px);
+  background:#1f2937;color:#fff;padding:10px 16px;border-radius:10px;
+  z-index:10000;transition:transform .3s cubic-bezier(.34,1.56,.64,1);
+  display:flex;align-items:center;gap:12px;font-size:.9rem;font-weight:600;
+  box-shadow:0 6px 24px rgba(0,0,0,.3);white-space:nowrap;
+}
+#undo-toast.show{transform:translateX(-50%) translateY(0);}
+#undo-toast button{
+  background:#f59e0b;color:#1f2937;border:none;border-radius:6px;
+  padding:4px 12px;font-family:Heebo,sans-serif;font-weight:800;cursor:pointer;font-size:.85rem;
+}
+#undo-toast .undo-progress{
+  position:absolute;bottom:0;right:0;height:3px;background:#f59e0b;
+  border-radius:0 0 10px 10px;animation:undoProgress 5s linear forwards;
+}
+@keyframes undoProgress{from{width:100%}to{width:0%}}
 #inv-print-area{display:none;}
 
 /* ===== MOBILE RESPONSIVE ===== */
@@ -408,6 +426,27 @@ textarea.fi{resize:none;min-height:52px;}
 @media(max-width:400px){
   .tab{padding:7px 8px;font-size:.73rem;}
   .jc-meta{grid-template-columns:1fr !important;}
+}
+/* ── Mobile touch improvements ── */
+@media(max-width:620px){
+  /* כפתורי פעולה — גדולים יותר לגעת */
+  .btn-sm{min-height:38px;padding:8px 12px;font-size:.82rem;}
+  .jc-actions{gap:5px;flex-wrap:wrap;}
+  .jc-actions .btn-sm{flex:1 1 calc(50% - 5px);max-width:calc(50% - 5px);}
+  /* כרטיס עבודה */
+  .jc-card{padding:12px;}
+  .jc-title{font-size:.95rem;}
+  /* חיפוש */
+  #global-search-input{font-size:16px;}
+  /* תור מכונות — טבלה גוללת */
+  #queue-content table{font-size:.78rem;}
+  #queue-content table th,#queue-content table td{padding:6px 8px;}
+  /* AI chat — כל הרוחב במובייל */
+  #ai-chat-panel{width:calc(100vw - 32px);}
+  /* FAB — קצת יותר גדול */
+  #ai-chat-fab{width:56px;height:56px;font-size:1.6rem;}
+  /* undo toast */
+  #undo-toast{width:calc(100vw - 32px);white-space:normal;text-align:center;flex-direction:column;gap:8px;}
 }
 
 @media print{
@@ -1307,6 +1346,7 @@ window._fbInit = () => true;
 </div>
 
 <div class="toast" id="toast"></div>
+<div id="undo-toast"></div>
 
 <div id="update-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;
   background:linear-gradient(90deg,#1a1a4e,#f59e0b);color:white;padding:12px 14px;
@@ -1714,6 +1754,26 @@ const AC_SEEDS = {
 };
 
 // ========== TOAST ==========
+// ── Undo Toast System ──
+let _undoTimer = null;
+function showUndoToast(label, undoFn) {
+  const el = document.getElementById('undo-toast');
+  if (!el) return;
+  clearTimeout(_undoTimer);
+  el.innerHTML = '<span>🗑️ ' + label + '</span><button onclick="_doUndo()">↩️ בטל</button><div class="undo-progress"></div>';
+  el.classList.add('show');
+  window._doUndo = function() {
+    clearTimeout(_undoTimer);
+    el.classList.remove('show');
+    undoFn();
+    showToast('↩️ הפעולה בוטלה');
+  };
+  _undoTimer = setTimeout(function() {
+    el.classList.remove('show');
+    window._doUndo = null;
+  }, 5000);
+}
+
 function showToast(msg, duration) {
   duration = duration || 3000;
   var t = document.getElementById("solanToast");
@@ -1860,7 +1920,9 @@ function renderOrders() {
   if (urgBadge) urgBadge.textContent = '🔴 דחופות' + (urgentCount ? ' (' + urgentCount + ')' : '');
 
   if (!filtered.length) {
-    list.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af">אין הזמנות' + (_ordersFilter!=='all'||_ordersAreaFilter!=='all' ? ' בסינון זה' : '') + '</div>';
+    list.innerHTML = (_ordersFilter==='all'&&_ordersAreaFilter==='all')
+    ? '<div style="text-align:center;padding:60px 20px"><div style="font-size:3rem;margin-bottom:12px">🛒</div><div style="font-size:1.05rem;font-weight:700;color:#374151;margin-bottom:6px">אין הזמנות עדיין</div><div style="font-size:.85rem;color:#9ca3af">הזמנות מלקוחות יופיעו כאן</div></div>'
+    : '<div style="text-align:center;padding:40px;color:#9ca3af">אין הזמנות' + (_ordersFilter!=='all'||_ordersAreaFilter!=='all' ? ' בסינון זה' : '') + '</div>';
     return;
   }
 
@@ -2034,9 +2096,14 @@ function markOrderDone(id) {
 }
 
 function deleteOrder(id) {
-  if (!confirm('למחוק הזמנה זו?')) return;
+  const item = orders.find(o=>o.id===id);
+  if (!item) return;
+  const snap = [...orders];
   orders = orders.filter(function(x) { return x.id !== id; });
   persist(); renderOrders();
+  showUndoToast('הזמנה של "' + (item.customer||'לקוח') + '" נמחקה', function() {
+    orders = snap; persist(); renderOrders();
+  });
 }
 
 function convertOrderToCard(id) {
@@ -2348,9 +2415,10 @@ function addManualRun() {
 }
 
 function removeManualRun(id) {
-  if (!confirm('למחוק ריצה זו?')) return;
+  const snap = [...manualRuns];
   manualRuns = manualRuns.filter(r=>r.id!==id);
   renderManualRuns();
+  showUndoToast('ריצה נמחקה', function() { manualRuns = snap; renderManualRuns(); });
 }
 
 function renderManualRuns() {
@@ -2892,10 +2960,14 @@ function savePaper() {
 }
 
 function deletePaper(id) {
-  if (!confirm('למחוק עיתון זה?')) return;
+  const item = newspapers.find(n=>n.id===id);
+  if (!item) return;
+  const snap = [...newspapers];
   newspapers = newspapers.filter(n=>n.id!==id);
   persist(); renderPaperMgmt(); renderWeek();
-  showToast('🗑️ עיתון נמחק');
+  showUndoToast('עיתון "' + (item.name||'') + '" נמחק', function() {
+    newspapers = snap; persist(); renderPaperMgmt(); renderWeek();
+  });
 }
 
 // ========== FLYER MANAGEMENT ==========
@@ -2949,12 +3021,14 @@ function saveFlyerModal() {
 }
 
 function deleteFlyer(id) {
-  if (!confirm('למחוק את העלון?')) return;
+  const item = flyers.find(x=>x.id===id);
+  if (!item) return;
+  const snap = [...flyers];
   flyers = flyers.filter(x=>x.id!==id);
-  persist();
-  renderFlyerMgmt();
-  renderWeek();
-  showToast('🗑️ עלון נמחק');
+  persist(); renderFlyerMgmt(); renderWeek();
+  showUndoToast('עלון "' + (item.name||'') + '" נמחק', function() {
+    flyers = snap; persist(); renderFlyerMgmt(); renderWeek();
+  });
 }
 
 function renderFlyerMgmt() {
@@ -4438,8 +4512,14 @@ function checkLowInventory() {
 }
 
 function deleteCard(id) {
-  if(!confirm('למחוק?')) return;
-  cards=cards.filter(c=>c.id!==id); persist(); renderCards();
+  const item = cards.find(c=>c.id===id);
+  if (!item) return;
+  const snap = [...cards];
+  cards = cards.filter(c=>c.id!==id);
+  persist(); renderCards();
+  showUndoToast('כרטיס "' + (item.name||item.customer||'ללא שם') + '" נמחק', function() {
+    cards = snap; persist(); renderCards();
+  });
 }
 function setStatus(id,s) {
   const c=cards.find(c=>c.id===id); if(c){c.status=s;persist();renderCards();}
@@ -4488,7 +4568,7 @@ function renderCards() {
   const el=document.getElementById('cards-container');
   let displayCards=cards;
   if(currentUser&&!currentUser.isAdmin){var wcp=(currentUser.permissions||{}).workCards;if(wcp==='none'){el.innerHTML='<div class="empty-state"><div class="icon">🔒</div><p>אין הרשאה לצפות בכרטיסי עבודה</p></div>';return;}if(wcp==='own')displayCards=cards.filter(function(x){return !x.createdBy||x.createdBy===currentUser.id;});}
-  if(!displayCards.length){el.innerHTML='<div class="empty-state"><div class="icon">📄</div><p>אין כרטיסים שמורים</p></div>';return;}
+  if(!displayCards.length){el.innerHTML='<div style="text-align:center;padding:60px 20px;color:#9ca3af"><div style="font-size:3rem;margin-bottom:16px">📋</div><div style="font-size:1.1rem;font-weight:700;color:#374151;margin-bottom:8px">אין כרטיסי עבודה עדיין</div><div style="font-size:.88rem;margin-bottom:20px">לחץ על <strong>➕ כרטיס חדש</strong> כדי ליצור את הכרטיס הראשון</div><button class="btn btn-primary" onclick="switchTab(\'new\')">➕ צור כרטיס חדש</button></div>'';return;}
   el.innerHTML=displayCards.map(c=>`
     <div class="job-card">
       <div class="jc-header">
@@ -5521,13 +5601,12 @@ function _solanLogoB64() {
 }
 
 function nextQuoteNum(type) {
-  const prefix = type === 'order' ? 'HZ' : 'HP';
-  const existing = quotes.filter(q => q.type === type).map(q => {
-    const m = (q.docNum||'').match(/(\d+)$/);
+  const existing = quotes.map(q => {
+    const m = (q.docNum||'').match(/^(\d+)$/);
     return m ? parseInt(m[1]) : 0;
   });
-  const next = existing.length ? Math.max(...existing) + 1 : 1;
-  return prefix + String(next).padStart(5, '0');
+  const next = existing.length ? Math.max(999, ...existing) + 1 : 1000;
+  return String(next);
 }
 
 let _quoteEditId = null;
@@ -6283,7 +6362,7 @@ function downloadUpdate() {
 function setupFBListeners() {
   if (window._fbPollInterval) clearInterval(window._fbPollInterval);
   _fbPollAll();
-  window._fbPollInterval = setInterval(_fbPollAll, 30 * 1000);
+  window._fbPollInterval = setInterval(_fbPollAll, 15 * 1000);
 }
 
 async function _fbPollAll() {
@@ -6451,6 +6530,34 @@ setInterval(function() {
     el.textContent = '🟢 מחובר · לפני ' + diffMin + ' דק\'';
   }
 }, 60 * 1000);
+
+// ========== KEYBOARD SHORTCUTS ==========
+document.addEventListener('keydown', function(e) {
+  // Ctrl+K — חיפוש
+  if (e.ctrlKey && e.key === 'k') {
+    e.preventDefault();
+    const inp = document.getElementById('global-search-input');
+    if (inp) { inp.focus(); inp.select(); }
+    return;
+  }
+  // Ctrl+N — כרטיס חדש
+  if (e.ctrlKey && e.key === 'n') {
+    e.preventDefault();
+    switchTab('new');
+    return;
+  }
+  // Escape — סגירת מודל פתוח
+  if (e.key === 'Escape') {
+    const open = document.querySelector('.modal-overlay.open,.modal-overlay[style*="flex"]');
+    if (open) {
+      open.classList.remove('open');
+      open.style.display = '';
+    }
+    // close undo toast
+    const ut = document.getElementById('undo-toast');
+    if (ut && ut.classList.contains('show')) { if (window._doUndo) window._doUndo(); }
+  }
+});
 
 // ========== INIT ==========
 updateBadge();
@@ -6747,69 +6854,4 @@ function _renderContacts(contacts, siteIdx) {
       '<input value="' + _esc(c.role) + '" placeholder="תפקיד" ' +
         'oninput="IDIT_SITES[' + siteIdx + '].contacts[' + ci + '].role=this.value" style="' + _inp() + '">' +
       '<input value="' + _esc(c.phone) + '" placeholder="טלפון" dir="ltr" ' +
-        'oninput="IDIT_SITES[' + siteIdx + '].contacts[' + ci + '].phone=this.value" style="' + _inp() + '">' +
-      '<button onclick="removeContact(' + siteIdx + ',' + ci + ')" ' +
-        'style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:6px;padding:5px 8px;cursor:pointer;font-size:.85rem">✕</button>' +
-      '</div>';
-  }).join('');
-}
-
-function openSiteEdit(idx) {
-  _iditEditIdx = idx;
-  renderIditList();
-  var s = IDIT_SITES[idx];
-  document.getElementById('idit-edit-pane').innerHTML =
-    '<div style="display:flex;flex-direction:column;gap:11px">' +
-    '<div><label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:3px">שם האתר</label>' +
-    '<input id="ie-name" value="' + _esc(s.name) + '" style="' + _inp() + '"></div>' +
-    '<div><label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:3px">מספר אתר</label>' +
-    '<input id="ie-num" value="' + _esc(s.num) + '" style="' + _inp() + '"></div>' +
-    '<div><label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:3px">כתובת</label>' +
-    '<input id="ie-addr" value="' + _esc(s.address) + '" style="' + _inp() + '"></div>' +
-    '<div><label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:3px">הערות כניסה</label>' +
-    '<textarea id="ie-notes" rows="2" style="' + _inp() + 'resize:vertical">' + _esc(s.notes) + '</textarea></div>' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">' +
-    '<strong style="font-size:.88rem">👥 אנשי קשר</strong>' +
-    '<button onclick="addContact(' + idx + ')" style="background:#047857;color:white;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:.82rem">+ הוסף</button></div>' +
-    '<div id="ie-contacts">' + _renderContacts(s.contacts, idx) + '</div>' +
-    '<div style="display:flex;gap:8px;margin-top:4px;padding-top:10px;border-top:1px solid #f3f4f6">' +
-    '<button onclick="saveSiteEdit(' + idx + ')" style="flex:1;background:#1a1a4e;color:white;border:none;border-radius:8px;padding:9px;cursor:pointer;font-weight:700;font-size:.9rem">💾 שמור שינויים</button>' +
-    '<button onclick="deleteSite(' + idx + ')" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:8px;padding:9px 14px;cursor:pointer" title="מחק אתר">🗑️</button>' +
-    '</div></div>';
-}
-
-function addContact(siteIdx) {
-  IDIT_SITES[siteIdx].contacts.push({name:'',role:'',phone:''});
-  document.getElementById('ie-contacts').innerHTML = _renderContacts(IDIT_SITES[siteIdx].contacts, siteIdx);
-}
-
-function removeContact(siteIdx, ci) {
-  IDIT_SITES[siteIdx].contacts.splice(ci,1);
-  document.getElementById('ie-contacts').innerHTML = _renderContacts(IDIT_SITES[siteIdx].contacts, siteIdx);
-}
-
-function saveSiteEdit(idx) {
-  IDIT_SITES[idx].name    = (document.getElementById('ie-name').value||'').trim();
-  IDIT_SITES[idx].num     = (document.getElementById('ie-num').value||'').trim();
-  IDIT_SITES[idx].address = (document.getElementById('ie-addr').value||'').trim();
-  IDIT_SITES[idx].notes   = (document.getElementById('ie-notes').value||'').trim();
-  saveIditSites();
-  renderIditList();
-  showToast('✅ האתר נשמר');
-}
-
-function deleteSite(idx) {
-  if (!confirm('למחוק את האתר "' + IDIT_SITES[idx].name + '"?')) return;
-  IDIT_SITES.splice(idx,1);
-  _iditEditIdx = null;
-  saveIditSites();
-  renderIditList();
-  document.getElementById('idit-edit-pane').innerHTML =
-    '<div style="color:#9ca3af;text-align:center;margin-top:60px;font-size:.9rem">בחר אתר מהרשימה לעריכה</div>';
-}
-
-function openAddSiteForm() {
-  IDIT_SITES.unshift({name:'',num:'',address:'',notes:'',contacts:[]});
-  _iditEditIdx = 0;
-  saveIditSites();
-  renderIditL
+     
