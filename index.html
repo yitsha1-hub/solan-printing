@@ -1291,11 +1291,13 @@ window._fbInit = () => true;
     </div>
     <div style="padding:0 20px 14px;border-top:1px solid var(--line);margin-top:4px">
       <div style="font-size:.78rem;font-weight:800;color:#6b7280;margin-bottom:8px;margin-top:12px">💾 גיבוי ושחזור נתונים</div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
         <button class="btn btn-tpl" onclick="exportBackup()" style="flex:1;font-size:.83rem">📤 ייצוא גיבוי</button>
         <button class="btn btn-clear" onclick="document.getElementById('backup-import-input').click()" style="flex:1;font-size:.83rem">📥 ייבוא גיבוי</button>
         <input type="file" id="backup-import-input" accept=".json" style="display:none" onchange="importBackup(this)">
       </div>
+      <button class="btn btn-clear" onclick="openSnapshotRestore()" style="width:100%;font-size:.83rem">🕐 שחזר מתמונת מצב שמורה</button>
+      <div id="snapshot-restore-panel" style="display:none;margin-top:8px"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-clear" onclick="closeSettings()">ביטול</button>
@@ -4129,20 +4131,95 @@ function closeDeliveryModal() {
 // ═══════════════════════════════════════════════════════
 // BACKUP / RESTORE
 // ═══════════════════════════════════════════════════════
-function exportBackup() {
-  const KEYS = ['solanCards','solanNewspapers','solanFlyers','solanInventory',
-    'solanInventoryHistory','solanInventoryDeductions','solanOrders','solanQuotes',
-    'solanUsers','solanFlyers','solanManualRuns','solanWeekClearedAt','solanWeekClearedItems'];
+const _BACKUP_KEYS = ['solanCards','solanNewspapers','solanFlyers','solanInventory',
+  'solanInventoryHistory','solanInventoryDeductions','solanOrders','solanQuotes',
+  'solanUsers','solanManualRuns','solanWeekClearedAt','solanWeekClearedItems'];
+
+function _collectBackupData() {
   const data = {};
-  KEYS.forEach(k => { const v = localStorage.getItem(k); if (v) data[k] = JSON.parse(v); });
+  _BACKUP_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v) data[k] = JSON.parse(v); });
   data._exportedAt = new Date().toISOString();
+  return data;
+}
+
+function exportBackup() {
+  const data = _collectBackupData();
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'solan-backup-' + new Date().toISOString().slice(0,10) + '.json';
   a.click();
+  localStorage.setItem('solanLastBackupDate', new Date().toISOString().slice(0,10));
   showToast('✅ גיבוי יוצא בהצלחה');
 }
+
+// ── גיבוי בדפדפן — שומר 3 תמונות מצב אחרונות ──
+function _saveInternalSnapshot() {
+  const data = _collectBackupData();
+  const json = JSON.stringify(data);
+  const today = new Date().toISOString().slice(0,10);
+  let snaps = [];
+  try { snaps = JSON.parse(localStorage.getItem('solanSnapshots') || '[]'); } catch(e) {}
+  // מסיר ישן מאותו יום אם יש
+  snaps = snaps.filter(s => s.date !== today);
+  snaps.unshift({ date: today, ts: Date.now(), data: json });
+  snaps = snaps.slice(0, 3); // שומר 3 ימים אחרונים
+  try { localStorage.setItem('solanSnapshots', JSON.stringify(snaps)); } catch(e) {}
+}
+
+// ── גיבוי אוטומטי יומי ──
+function autoBackup() {
+  const today = new Date().toISOString().slice(0,10);
+  const lastFile = localStorage.getItem('solanLastBackupDate') || '';
+  // שמור תמונת מצב פנימית תמיד
+  _saveInternalSnapshot();
+  // הורד קובץ חיצוני פעם אחת ביום
+  if (lastFile !== today) {
+    const data = _collectBackupData();
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'solan-backup-' + today + '.json';
+    a.click();
+    localStorage.setItem('solanLastBackupDate', today);
+    setTimeout(() => showToast('💾 גיבוי יומי אוטומטי הורד'), 1500);
+  }
+}
+function openSnapshotRestore() {
+  const panel = document.getElementById('snapshot-restore-panel');
+  let snaps = [];
+  try { snaps = JSON.parse(localStorage.getItem('solanSnapshots') || '[]'); } catch(e) {}
+  if (!snaps.length) {
+    panel.style.display = 'block';
+    panel.innerHTML = '<div style="font-size:.82rem;color:#9ca3af;padding:6px 0">אין תמונות מצב שמורות עדיין</div>';
+    return;
+  }
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  panel.innerHTML = snaps.map((s, i) => {
+    const d = new Date(s.ts);
+    const label = s.date + ' ' + d.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f3f4f6">
+      <span style="font-size:.83rem">📸 ${label}</span>
+      <button class="btn btn-sm btn-tpl" onclick="restoreSnapshot(${i})" style="font-size:.78rem">שחזר</button>
+    </div>`;
+  }).join('');
+}
+function restoreSnapshot(idx) {
+  let snaps = [];
+  try { snaps = JSON.parse(localStorage.getItem('solanSnapshots') || '[]'); } catch(e) {}
+  const snap = snaps[idx];
+  if (!snap) return;
+  if (!confirm('לשחזר מתמונת מצב מ-' + snap.date + '? הנתונים הנוכחיים יוחלפו.')) return;
+  try {
+    const data = JSON.parse(snap.data);
+    Object.keys(data).forEach(k => {
+      if (k !== '_exportedAt') localStorage.setItem(k, JSON.stringify(data[k]));
+    });
+    showToast('✅ שוחזר מתמונת מצב — מרענן...');
+    setTimeout(() => location.reload(), 1200);
+  } catch(e) { alert('שגיאה בשחזור: ' + e.message); }
+}
+
 function importBackup(input) {
   const file = input.files[0]; if (!file) return;
   if (!confirm('ייבוא גיבוי ידרוס את כל הנתונים הקיימים. להמשיך?')) { input.value=''; return; }
@@ -6380,6 +6457,7 @@ updateBadge();
 renderWeek();
 connectFirebase();
 setTimeout(checkLowInventory, 1000);
+setTimeout(autoBackup, 2000);
 // אתחול לוגין
 (function(){
   if(currentUser){applyPermissionsToUI();}
