@@ -11,6 +11,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>סולן הדפסות בע"מ</title>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://alcdn.msauth.net/browser/2.39.0/js/msal-browser.min.js"></script>
 <style>
 :root{
   --press:#2d3561;--gold:#c9a84c;--gold-light:#e8d5a3;
@@ -847,7 +848,8 @@ window._fbInit = () => true;
     <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--line)">
       <span style="font-weight:700;color:var(--press)" id="qpm-title">תצוגה מקדימה</span>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-primary" onclick="downloadAndEmailQuoteDoc()" id="qpm-dl-btn" style="font-size:.82rem">⬇️📧 הורד ושלח במייל</button>
+        <button class="btn btn-primary" onclick="downloadQuoteDocOnly()" id="qpm-dl-btn" style="font-size:.82rem">⬇️ הורד PDF</button>
+        <button class="btn btn-tpl" onclick="emailQuoteDocOnly()" id="qpm-email-btn" style="font-size:.82rem;background:#0d6efd;color:white;border-color:#0d6efd">📧 שלח במייל</button>
         <button class="btn btn-tpl" onclick="printQuoteDoc()" style="font-size:.82rem">🖨️ הדפס</button>
         <button class="modal-close" style="color:#555;font-size:1.3rem" onclick="document.getElementById('quote-print-modal').classList.remove('open')">✕</button>
       </div>
@@ -5257,6 +5259,60 @@ function downloadAndEmailQuoteDoc_pdfOnly(qid, onDone) {
   if (onDone) onDone();
 }
 
+function downloadAndEmailQuoteDoc() { EmailQuoteDoc(); }
+
+function _getQuoteFromBtn() {
+  const btn = document.getElementById('qpm-dl-btn');
+  return quotes.find(x => String(x.id) === String(btn?.dataset?.qid));
+}
+
+function downloadQuoteDocOnly() {
+  const btn = document.getElementById('qpm-dl-btn');
+  const q = _getQuoteFromBtn();
+  if (!q) { alert('לא נמצאה הצעת מחיר'); return; }
+  const typeHeb = q.type === 'order' ? 'הזמנה' : 'הצעת מחיר';
+
+  if (!window.html2canvas || !window.jspdf) {
+    window.print(); return;
+  }
+
+  const origText = btn.innerHTML;
+  btn.innerHTML = '⏳ מכין...'; btn.disabled = true;
+
+  const bodyEl = document.getElementById('quote-print-body');
+  html2canvas(bodyEl, { scale: 2, useCORS: true, backgroundColor: '#fff' }).then(canvas => {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const imgW = 210, pageH = 297;
+    const imgH = (canvas.height * imgW) / canvas.width;
+    const data = canvas.toDataURL('image/jpeg', 0.92);
+    let y = 0;
+    while (y < imgH) {
+      if (y > 0) pdf.addPage();
+      pdf.addImage(data, 'JPEG', 0, -y, imgW, imgH);
+      y += pageH;
+    }
+    pdf.save(typeHeb + '-' + (q.docNum||'') + '.pdf');
+    showToast('✅ PDF הורד בהצלחה');
+  }).catch(() => { showToast('⚠️ שגיאה ביצירת PDF'); })
+    .finally(() => { btn.innerHTML = origText; btn.disabled = false; });
+}
+
+function emailQuoteDocOnly() {
+  const q = _getQuoteFromBtn();
+  if (!q) { alert('לא נמצאה הצעת מחיר'); return; }
+  const typeHeb  = q.type === 'order' ? 'הזמנה' : 'הצעת מחיר';
+  const toEmail  = q.customerEmail || '';
+  const subject  = encodeURIComponent(typeHeb + ' מספר ' + (q.docNum||'') + ' — ' + SOLAN_INFO.name);
+  const mailBody = encodeURIComponent('שלום ' + (q.customer||'') + ',
+
+מצורפת ' + typeHeb + ' מספר ' + (q.docNum||'') + '.
+
+בברכה,
+' + SOLAN_INFO.name);
+  location.href = 'mailto:' + toEmail + '?subject=' + subject + '&body=' + mailBody;
+}
+
 
 function saveAndPreviewQuote() {
   const q = _buildQuoteObj();
@@ -5406,6 +5462,7 @@ function showQuotePreview(id) {
   const emailBtn = document.getElementById('qpm-email-btn');
   if (emailBtn) emailBtn.dataset.qid = id;
   const dlBtn = document.getElementById('qpm-dl-btn'); if (dlBtn) dlBtn.dataset.qid = id;
+  const emailBtn2 = document.getElementById('qpm-email-btn'); if (emailBtn2) emailBtn2.dataset.qid = id;
   document.getElementById('quote-print-modal').classList.add('open');
 }
 
@@ -5432,7 +5489,7 @@ function downloadAndEmailQuoteDoc() {
     }
     return null;
   })();
-  const q = quotes.find(x => x.id === (btn?.dataset?.qid));
+  const q = quotes.find(x => String(x.id) === String(btn?.dataset?.qid));
   if (!q) { alert('לא נמצאה הצעת מחיר'); return; }
 
   const typeHeb  = q.type === 'order' ? 'הזמנה' : 'הצעת מחיר';
