@@ -1401,6 +1401,7 @@ window._fbInit = () => true;
       <h3>🖨️ כרטיס עבודה</h3>
       <div class="pma">
         <button class="btn btn-gold" onclick="doPrint()">🖨️ הדפס</button>
+        <button class="btn" style="background:#555;color:white;border-color:#555" onclick="doPrintBlankRuns()">🖊️ הדפס — מלא ריצות ידנית</button>
         <button class="btn" style="background:#0d6efd;color:white;border-color:#0d6efd" onclick="emailCardToPP()">📧 שלח לקדם דפוס</button>
         <button class="btn btn-primary" id="print-modal-save-btn" onclick="saveFromPreview()" style="display:none">💾 שמור כרטיס</button>
         <button class="btn btn-outline-w" onclick="closePrintModal()">סגור</button>
@@ -3546,6 +3547,103 @@ function buildPrintCard(c) {
   </div>`;
 }
 
+// ── הדפסה עם ריצות ריקות למילוי ידני ──────────────────────────────────────
+function buildPrintCardBlankRuns(c) {
+  const fields = [
+    ['שם העבודה', c.name||''],
+    ['סוג עבודה', c.type||''],
+    ['תאריך הזמנה', c.orderDate||''],
+    ['מועד אספקה', `<strong>${c.deliveryDate||'לא הוגדר'}</strong>`],
+    ['מס\' עותקים', c.copies ? '<strong style="font-size:1rem">'+parseInt(c.copies).toLocaleString()+'</strong>' : ''],
+    ['מס\' עמודים', c.pages||''],
+    ['גודל סופי', c.size||''],
+    ['סוג נייר', c.paper||''],
+    ['צבע', c.color||''],
+    ['הערות', c.notes||''],
+  ];
+
+  const fieldRows = fields.map(([lbl,val]) => val ? `
+    <div style="display:flex;border-bottom:1px solid #eee;padding:6px 0">
+      <div style="width:130px;font-size:.78rem;font-weight:700;color:#333;flex-shrink:0">${lbl}</div>
+      <div style="font-size:.88rem;color:#111">${val}</div>
+    </div>` : '').join('');
+
+  // מספר שורות ריצות: לפי מה שהוזן או מינימום 4
+  const numRows = Math.max((c.runs && c.runs.length) || 0, 4);
+  const blankCell = `<td style="padding:9px 10px;border-bottom:1px solid #ddd;border-left:1px dotted #ccc">
+    <div style="border-bottom:1.5px solid #aaa;min-width:60px;height:18px"></div></td>`;
+  const blankRows = Array.from({length: numRows}, (_, i) => `
+    <tr>
+      <td style="padding:9px 10px;border-bottom:1px solid #ddd;font-weight:700;color:#444">ריצה ${i+1}</td>
+      ${blankCell}${blankCell}${blankCell}${blankCell}${blankCell}${blankCell}
+    </tr>`).join('');
+
+  return `<div style="font-family:'Heebo',Arial,sans-serif;direction:rtl;max-width:720px;margin:0 auto;background:white;color:#111">
+    <div style="padding:14px 28px 10px;display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #111">
+      <div style="font-size:1.35rem;font-weight:900;color:#111">כרטיס עבודה</div>
+      <div style="font-size:.78rem;color:#555">נוצר: ${c.createdAt} &nbsp;|&nbsp; מס' עבודה: ${c.id}</div>
+    </div>
+    <div style="padding:4px 28px 16px">${fieldRows}</div>
+    <div style="margin:0 28px 6px;font-size:.85rem;font-weight:800;color:#111;padding:6px 0;border-top:2px solid #111">פירוט ריצות הדפסה — מילוי ידני</div>
+    <div style="padding:0 28px 16px">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#111">
+            <th style="padding:8px 10px;color:#fff;text-align:right;font-size:.78rem;width:70px">ריצה</th>
+            <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">עמודים</th>
+            <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">טווח</th>
+            <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">כמות</th>
+            <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">קיפולים</th>
+            <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">מכונה</th>
+            <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">סוג נייר</th>
+          </tr>
+        </thead>
+        <tbody>${blankRows}</tbody>
+      </table>
+    </div>
+    <div style="border-top:1px solid #ccc;padding:8px 28px;font-size:.72rem;color:#777;text-align:center">
+      סולן הדפסות בע"מ
+    </div>
+  </div>`;
+}
+
+function doPrintBlankRuns() {
+  // מצא את הכרטיס הנוכחי בתצוגה
+  var wrap = document.getElementById('print-card-content');
+  var match = wrap ? wrap.innerText.match(/מס' עבודה[^0-9]*([0-9]+)/) : null;
+  var c = null;
+  if (match) c = cards.find(function(x){ return String(x.id) === match[1]; });
+  if (!c) c = window._previewCard;
+  if (!c) { showToast('לא נמצא כרטיס להדפסה'); return; }
+
+  var content = buildPrintCardBlankRuns(c);
+  var w = window.open('','_blank','width=860,height=1100');
+  w.document.write(`<html dir="rtl"><head><meta charset="UTF-8">
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;900&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box;}
+    html,body{margin:0;padding:0;width:100%;background:white;font-family:'Heebo',sans-serif;direction:rtl;}
+    #_wrap > div{max-width:none !important;width:100% !important;margin:0 !important;}
+    @media print{
+      @page{size:A4 portrait;margin:10mm;}
+      html,body{margin:0;padding:0;}
+    }
+  </style></head><body>
+  <div id="_wrap">${content}</div>
+  <script>
+    window.addEventListener('load', function() {
+      var wrap = document.getElementById('_wrap');
+      var A4w = Math.round(190 * 3.7795);
+      var A4h = Math.round(277 * 3.7795);
+      var scale = Math.min(A4w / wrap.offsetWidth, (A4h * 0.9) / wrap.offsetHeight);
+      if (scale > 1.05) document.body.style.zoom = scale;
+      setTimeout(function(){ window.print(); }, 700);
+    });
+  <\/script>
+</body></html>`);
+  w.document.close();
+}
+
 const PP_EMAIL = 'solan2@solanprinting.co.il';
 
 function _cardToEmailText(c) {
@@ -5407,16 +5505,38 @@ function validateCard(card) {
   var warns = [];
   var copies = parseInt(card.copies) || 0;
   var pages  = parseInt(card.pages)  || 0;
-  if (!card.paper || !card.paper.trim()) warns.push({ code: 'no_paper', msg: 'סוג נייר לא הוזן', sev: 'error' });
-  if (copies === 0) warns.push({ code: 'zero_copies', msg: 'כמות עותקים היא 0', sev: 'error' });
-  if (copies > 500000) warns.push({ code: 'high_copies', msg: 'כמות עותקים גבוהה במיוחד: ' + copies.toLocaleString(), sev: 'warn' });
-  if (!card.deliveryDate) warns.push({ code: 'no_delivery', msg: 'תאריך אספקה חסר', sev: 'warn' });
-  if (pages > 0 && pages % 4 !== 0) warns.push({ code: 'pages_odd', msg: 'מספר עמודים (' + pages + ') אינו כפולה של 4', sev: 'warn' });
-  // בדוק ריצות
+
+  // ── שגיאות חמורות (חובה לתקן) ──────────────────────────────
+  if (!card.paper || !card.paper.trim())
+    warns.push({ code: 'no_paper',    msg: 'סוג נייר לא הוזן',      sev: 'error' });
+  if (copies === 0)
+    warns.push({ code: 'zero_copies', msg: 'כמות עותקים היא 0',      sev: 'error' });
+
+  // ── אזהרות (אפשר להמשיך אבל כדאי לתקן) ──────────────────────
+  if (!card.type || !card.type.trim())
+    warns.push({ code: 'no_type',     msg: 'סוג עבודה לא הוזן',      sev: 'warn' });
+  if (!card.size || !card.size.trim())
+    warns.push({ code: 'no_size',     msg: 'גודל סופי לא הוזן',      sev: 'warn' });
+  if (pages === 0)
+    warns.push({ code: 'no_pages',    msg: 'מספר עמודים לא הוזן',    sev: 'warn' });
+  if (!card.color || !card.color.trim())
+    warns.push({ code: 'no_color',    msg: 'צבע הדפסה לא נבחר',      sev: 'warn' });
+  if (!card.machine || !card.machine.trim())
+    warns.push({ code: 'no_machine',  msg: 'מכונה לא נבחרה',         sev: 'warn' });
+  if (!card.deliveryDate)
+    warns.push({ code: 'no_delivery', msg: 'תאריך אספקה חסר',        sev: 'warn' });
+
+  // ── בדיקות עקביות ────────────────────────────────────────────
+  if (copies > 500000)
+    warns.push({ code: 'high_copies', msg: 'כמות עותקים גבוהה במיוחד: ' + copies.toLocaleString(), sev: 'warn' });
+  if (pages > 0 && pages % 4 !== 0)
+    warns.push({ code: 'pages_odd',   msg: 'מספר עמודים (' + pages + ') אינו כפולה של 4', sev: 'warn' });
+
+  // ── בדוק ריצות ───────────────────────────────────────────────
   if (card.runs && card.runs.length) {
     card.runs.forEach(function(r, i) {
       var rCopies = parseInt(r.copies) || 0;
-      if (rCopies === 0) warns.push({ code: 'run_zero', msg: 'ריצה ' + (i+1) + ': כמות 0', sev: 'warn' });
+      if (rCopies === 0)    warns.push({ code: 'run_zero', msg: 'ריצה ' + (i+1) + ': כמות 0',                         sev: 'warn' });
       if (rCopies > 500000) warns.push({ code: 'run_high', msg: 'ריצה ' + (i+1) + ': כמות גבוהה ' + rCopies.toLocaleString(), sev: 'warn' });
     });
   }
