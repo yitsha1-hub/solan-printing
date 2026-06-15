@@ -5273,6 +5273,63 @@ function openWorkItemEdit(cardId) {
   setTimeout(function(){ var el=document.getElementById('we-name'); if(el){el.focus();el.select();} }, 60);
 }
 
+function printWorkList(machine) {
+  _syncWorkOrder();
+  var order = _workOrder[machine] || [];
+  var cardMap = {};
+  (cards||[]).forEach(function(c){ cardMap[c.id] = c; });
+  var rows = order.map(function(id){ return cardMap[id]; }).filter(Boolean);
+
+  var today = new Date();
+  var dateStr = today.toLocaleDateString('he-IL', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+  var rowsHtml = rows.map(function(c, idx) {
+    var notesHtml = c.notes ? '<div style="font-size:.82rem;color:#555;margin-top:3px;white-space:pre-wrap">' + escHtml(c.notes) + '</div>' : '';
+    return '<tr style="' + (idx%2 ? 'background:#f8f8f8' : '') + ';border-bottom:1px solid #ddd">'
+      + '<td style="padding:10px 8px;font-weight:900;color:#1a1a4e;font-size:.9rem;width:28px;text-align:center;vertical-align:top">' + (idx+1) + '</td>'
+      + '<td style="padding:10px 8px;vertical-align:top">'
+      +   '<div style="font-weight:800;font-size:.95rem;color:#111">' + escHtml(c.name||'ללא שם') + (c.docNum ? ' <span style="font-size:.75rem;color:#999">#'+escHtml(String(c.docNum))+'</span>' : '') + '</div>'
+      +   (c.paper ? '<div style="font-size:.82rem;color:#374151;margin-top:2px">🗒️ <strong>נייר:</strong> ' + escHtml(c.paper) + '</div>' : '')
+      +   (c.size  ? '<div style="font-size:.82rem;color:#374151;margin-top:2px">📐 <strong>גודל:</strong> '  + escHtml(c.size)  + '</div>' : '')
+      +   notesHtml
+      + '</td>'
+      + '</tr>';
+  }).join('');
+
+  var html = '<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="utf-8">'
+    + '<title>רשימת עבודות — ' + escHtml(machine) + '</title>'
+    + '<style>'
+    + 'body{font-family:Heebo,Arial,sans-serif;direction:rtl;margin:0;padding:0;color:#111}'
+    + 'table{width:100%;border-collapse:collapse}'
+    + '@media print{body{margin:0}@page{margin:15mm 12mm}}'
+    + '</style></head><body>'
+    + '<div style="padding:18px 22px 10px;border-bottom:2.5px solid #111;display:flex;justify-content:space-between;align-items:baseline">'
+    +   '<div>'
+    +     '<div style="font-size:1.3rem;font-weight:900">רשימת עבודות</div>'
+    +     '<div style="font-size:1rem;font-weight:700;color:#2d3561;margin-top:2px">' + escHtml(machine) + '</div>'
+    +   '</div>'
+    +   '<div style="text-align:left;font-size:.78rem;color:#555">'
+    +     '<div>' + escHtml(dateStr) + '</div>'
+    +     '<div style="margin-top:2px">' + rows.length + ' עבודות בתור</div>'
+    +   '</div>'
+    + '</div>'
+    + '<table style="margin-top:4px">'
+    + '<thead><tr style="background:#1a1a4e;color:white">'
+    + '<th style="padding:8px;width:28px;text-align:center;font-size:.8rem">#</th>'
+    + '<th style="padding:8px;text-align:right;font-size:.8rem">פרטי עבודה</th>'
+    + '</tr></thead>'
+    + '<tbody>' + rowsHtml + '</tbody>'
+    + '</table>'
+    + (rows.length===0 ? '<div style="text-align:center;padding:40px;color:#999">אין עבודות בתור</div>' : '')
+    + '<div style="border-top:1px solid #ccc;padding:8px 22px;font-size:.7rem;color:#888;text-align:center;margin-top:8px">סולן הדפסות בע"מ</div>'
+    + '</body></html>';
+
+  var w = window.open('', '_blank', 'width=700,height=900');
+  if (!w) { showToast('אפשר חלונות קופצים בדפדפן'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  w.onload = function(){ w.focus(); w.print(); };
+}
+
 function renderWorkList() {
   _syncWorkOrder();
   var el = document.getElementById('worklist-content');
@@ -5290,11 +5347,17 @@ function renderWorkList() {
     var cardMap = {};
     (cards||[]).forEach(function(c){ cardMap[c.id] = c; });
     var rows = order.map(function(id){ return cardMap[id]; }).filter(Boolean);
+    var machineSafeHdr = machine.replace(/'/g, "\\'");
 
     html += '<div style="border-radius:13px;overflow:hidden;border:1.5px solid #e5e7eb">'
       + '<div style="background:' + colorMap[machine] + ';padding:12px 16px;display:flex;justify-content:space-between;align-items:center">'
       + '<div style="font-weight:900;font-size:.95rem">' + iconMap[machine] + ' ' + escHtml(machine) + '</div>'
-      + '<div style="font-size:.82rem;color:#374151;font-weight:700">' + rows.length + ' עבודות</div>'
+      + '<div style="display:flex;align-items:center;gap:10px">'
+      + '<span style="font-size:.82rem;color:#374151;font-weight:700">' + rows.length + ' עבודות</span>'
+      + '<button onclick="printWorkList(\'' + machineSafeHdr + '\')" '
+      + 'style="background:#2d3561;color:white;border:none;border-radius:7px;padding:5px 13px;font-family:Heebo,sans-serif;font-size:.78rem;font-weight:700;cursor:pointer">'
+      + '🖨️ הדפס רשימה</button>'
+      + '</div>'
       + '</div>';
 
     if (!rows.length) {
