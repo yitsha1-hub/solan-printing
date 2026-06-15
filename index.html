@@ -2988,6 +2988,21 @@ function openPagePicker(newspaperId) {
               ✍️ ללא עמודים — אמלא ידנית
             </button>
           </div>
+          <!-- הזנה ידנית -->
+          <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+            <div style="font-size:.78rem;font-weight:700;color:#888;margin-bottom:7px">מספר עמודים אחר (לא מופיע ברשימה)</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input id="pp-custom-pages" type="number" min="1" step="1"
+                placeholder="הזן מספר..."
+                style="flex:1;padding:9px 12px;border:2px solid #c0ccf0;border-radius:8px;font-family:Heebo,sans-serif;font-size:1rem;font-weight:700;color:var(--press);text-align:center;outline:none"
+                onfocus="this.style.borderColor='var(--press)'" onblur="this.style.borderColor='#c0ccf0'"
+                onkeydown="if(event.key==='Enter'){var v=parseInt(this.value);if(v>0){closePP();quickCard(${n.id},v);}}" >
+              <button onclick="var v=parseInt(document.getElementById('pp-custom-pages').value);if(v>0){closePP();quickCard(${n.id},v);}else{document.getElementById('pp-custom-pages').focus();}"
+                style="padding:9px 18px;background:var(--press);color:white;border:none;border-radius:8px;font-family:Heebo,sans-serif;font-size:.9rem;font-weight:800;cursor:pointer;white-space:nowrap">
+                אישור ▶
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>`;
