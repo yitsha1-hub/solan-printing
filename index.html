@@ -3915,7 +3915,10 @@ function buildPrintCard(c) {
   const _sheetsLabel = _hasRuns ? 'מס\' גיליונות' : 'מס\' עותקים';
   const _sheetsVal   = _hasRuns
     ? _runs.map(function(r,i){ return (i>0?'<div style="border-top:1px solid #e0e0e0;margin:4px 0"></div>':'')+
-        '<div style="font-size:1.2rem;font-weight:900;line-height:1.9">ריצה '+r.num+' — '+(parseInt(r.copies)||0).toLocaleString()+'</div>'; }).join('')
+        '<div style="font-size:1.2rem;font-weight:900;line-height:1.9;display:flex;align-items:center;gap:10px">'+
+          'ריצה '+r.num+' — '+(parseInt(r.copies)||0).toLocaleString()+
+          (r.tumble?' <span style="font-size:.82rem;font-weight:700;color:#1d4ed8;background:#eff6ff;border:1.5px solid #93c5fd;border-radius:5px;padding:1px 7px;white-space:nowrap">🔄 מתהפך</span>':'')+
+        '</div>'; }).join('')
     : (_copiesNum ? '<strong style="font-size:1.35rem;font-weight:900">'+_copiesNum.toLocaleString()+'</strong>' : '');
 
   // הערות: אם יש ריצות — מוסיפים שורת "מספר עותקים"
@@ -3955,7 +3958,7 @@ function buildPrintCard(c) {
 
   const hasRuns = c.runs && c.runs.length && !(c.size && c.size.includes('פלייסמנטים'));
   const runsSection = hasRuns ? `
-    <div style="margin:0 32px 4px;font-size:1rem;font-weight:800;color:#111;padding:8px 0;border-top:2.5px solid #111">פירוט ריצות הדפסה</div>
+    <div style="margin:0 32px 4px;font-size:1rem;font-weight:800;color:#111;padding:8px 0">פירוט ריצות הדפסה</div>
     <div style="padding:0 32px 16px">
       <table style="width:100%;border-collapse:collapse">
         <thead>
