@@ -3855,18 +3855,38 @@ function buildPrintCard(c) {
       ${_hasPaper ? `<td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-size:.8rem">${r.paper||'—'}</td>` : ''}
     </tr>`).join('');
 
+  // חישוב גיליונות ועותקים לכרטיסים עם ריצות
+  const _hasRuns = _runs.length > 0;
+  const _totalSheets = _hasRuns
+    ? _runs.reduce(function(s,r){ return s + (parseInt(r.copies)||0); }, 0)
+    : null;
+  const _copiesNum = parseInt(c.copies)||0;
+
+  // שדה "מס' גיליונות" / "מס' עותקים"
+  const _sheetsLabel = _hasRuns ? 'מס\' גיליונות' : 'מס\' עותקים';
+  const _sheetsVal   = _hasRuns
+    ? (_totalSheets ? '<strong style="font-size:1.35rem;font-weight:900">'+_totalSheets.toLocaleString()+'</strong>' : '')
+    : (_copiesNum   ? '<strong style="font-size:1.35rem;font-weight:900">'+_copiesNum.toLocaleString()+'</strong>' : '');
+
+  // הערות: אם יש ריצות — מוסיפים שורת "מספר עותקים"
+  const _copiesLine = (_hasRuns && _copiesNum)
+    ? (_copiesNum.toLocaleString() + ' עותקים')
+    : '';
+  const _notesVal = [c.notes||'', _copiesLine ? 'מספר עותקים: <strong>'+_copiesLine+'</strong>' : '']
+    .filter(Boolean).join('<br>');
+
   const fields = [
     ['שם העבודה', c.name||''],
     ['סוג עבודה', c.type||''],
     ['תאריך הזמנה', c.orderDate||''],
     ['מועד אספקה', `<strong>${c.deliveryDate||'לא הוגדר'}</strong>`],
-    ['מס\' עותקים', c.copies ? '<strong style="font-size:1rem">'+parseInt(c.copies).toLocaleString()+'</strong>' : ''],
-    ['מס\' עמודים', c.pages||''],
+    [_sheetsLabel, _sheetsVal],
+    ['מס\' עמודים', c.pages ? '<strong style="font-size:1.35rem;font-weight:900">'+c.pages+'</strong>' : ''],
     ['גודל סופי', c.size||''],
     ['סוג נייר', c.paper||''],
     ['מכונה', c.machine||''],
     ['צבע', c.color||''],
-    ['הערות', c.notes||''],
+    ['הערות', _notesVal],
   ];
 
   const fieldRows = fields.map(([lbl,val]) => val ? `
@@ -3916,8 +3936,8 @@ function buildPrintCardBlankRuns(c) {
     ['סוג עבודה', c.type||''],
     ['תאריך הזמנה', c.orderDate||''],
     ['מועד אספקה', `<strong>${c.deliveryDate||'לא הוגדר'}</strong>`],
-    ['מס\' עותקים', c.copies ? '<strong style="font-size:1rem">'+parseInt(c.copies).toLocaleString()+'</strong>' : ''],
-    ['מס\' עמודים', c.pages||''],
+    ['מס\' עותקים', c.copies ? '<strong style="font-size:1.35rem;font-weight:900">'+parseInt(c.copies).toLocaleString()+'</strong>' : ''],
+    ['מס\' עמודים', c.pages ? '<strong style="font-size:1.35rem;font-weight:900">'+c.pages+'</strong>' : ''],
     ['גודל סופי', c.size||''],
     ['סוג נייר', c.paper||''],
     ['מכונה', c.machine||''],
