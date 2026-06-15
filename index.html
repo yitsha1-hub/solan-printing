@@ -845,8 +845,23 @@ window._fbInit = () => true;
             <button type="button" class="size-btn" onclick="pickSize('פוסטר גיליון')">פוסטר גיליון</button>
             <button type="button" class="size-btn" onclick="pickSize('פוסטר חצי גיליון')">פוסטר ½ גיליון</button>
             <button type="button" class="size-btn" onclick="pickSize('A3 קיפול ל-A4')">A3 קיפול ל-A4</button>
-            <button type="button" class="size-btn" onclick="pickSize('פלייסמנטים')">פלייסמנטים</button>
+            <button type="button" class="size-btn" id="size-btn-placement" onclick="togglePlacementPicker()">🗂️ פלייסמנטים ▾</button>
             <button type="button" class="size-btn" id="size-btn-printer" onclick="togglePrinterPaperPicker()">🖨️ נייר מדפסת ▾</button>
+          </div>
+          <!-- Placement picker -->
+          <div id="placement-picker" style="display:none;margin-top:6px;padding:10px 14px;background:#fdf6e3;border-radius:8px;border:1.5px solid #f0c040;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-size:.76rem;font-weight:700;color:#7c5a00;white-space:nowrap">כמה בגיליון?</span>
+              <button type="button" class="size-btn" id="pl-btn-5" onclick="setPlacementPerSheet(5)" style="font-size:.88rem">5 בגיליון</button>
+              <button type="button" class="size-btn" id="pl-btn-8" onclick="setPlacementPerSheet(8)" style="font-size:.88rem">8 בגיליון</button>
+            </div>
+          </div>
+          <!-- Placement details field (מפרט) -->
+          <div id="placement-details-wrap" style="display:none;margin-top:6px">
+            <label style="font-size:.78rem;font-weight:700;color:#7c5a00;display:block;margin-bottom:4px">מפרט פלייסמנטים</label>
+            <textarea id="f-placement-details" class="fi" rows="2"
+              placeholder="לדוגמא: 3 עידית · 2 שיבא גדול · 1 שיבא קטן"
+              style="width:100%;resize:vertical;font-size:.88rem"></textarea>
           </div>
           <div id="printer-paper-picker" style="display:none;margin-top:6px;padding:10px 14px;background:#f0f4ff;border-radius:8px;border:1.5px solid #c0ccf0;display:none;flex-direction:column;gap:8px">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -877,7 +892,7 @@ window._fbInit = () => true;
         <label>סוג נייר</label>
         <div class="ac-wrap">
           <input class="fi" type="text" id="f-paper" placeholder='כרומו מט 80 גר...' autocomplete="off"
-            oninput="acInput(this,'ac-paper',acSugg('f-paper',this.value))" onfocus="acInput(this,'ac-paper',acSugg('f-paper',this.value))" onblur="acDelay('ac-paper')">
+            oninput="acInput(this,'ac-paper',acSugg('f-paper',this.value));checkPlacementPaperLive()" onfocus="acInput(this,'ac-paper',acSugg('f-paper',this.value))" onblur="acDelay('ac-paper');checkPlacementPaperLive()">
           <div class="ac-list" id="ac-paper"></div>
         </div>
       </div>
@@ -2473,10 +2488,34 @@ function acDelay(listId) {
 // ========== SIZE BUTTONS ==========
 function pickSize(val) {
   document.getElementById('f-size').value = val;
-  // סגור picker נייר מדפסת אם פתוח
   var pp = document.getElementById('printer-paper-picker');
   if (pp) pp.style.display = 'none';
+  var plp = document.getElementById('placement-picker');
+  if (plp) plp.style.display = 'none';
+  var pdw = document.getElementById('placement-details-wrap');
+  if (pdw) pdw.style.display = val.startsWith('פלייסמנטים') ? '' : 'none';
   syncSizeBtns(val);
+  calcRuns();
+}
+function togglePlacementPicker() {
+  var pp = document.getElementById('placement-picker');
+  if (!pp) return;
+  var open = pp.style.display === 'flex';
+  pp.style.display = open ? 'none' : 'flex';
+  var prp = document.getElementById('printer-paper-picker');
+  if (prp) prp.style.display = 'none';
+}
+function setPlacementPerSheet(n) {
+  var paperMap = {5: 'נ/ע 70 גרם 70*88', 8: 'נ/ע 70 גרם 70*100'};
+  var sizeVal = 'פלייסמנטים — ' + n + ' בגיליון';
+  document.getElementById('f-size').value = sizeVal;
+  document.getElementById('f-paper').value = paperMap[n] || '';
+  document.getElementById('pl-btn-5').classList.toggle('active', n === 5);
+  document.getElementById('pl-btn-8').classList.toggle('active', n === 8);
+  document.getElementById('placement-picker').style.display = 'none';
+  var pdw = document.getElementById('placement-details-wrap');
+  if (pdw) { pdw.style.display = ''; document.getElementById('f-placement-details').focus(); }
+  syncSizeBtns(sizeVal);
   calcRuns();
 }
 var _ppSheet = 0, _ppGram = '';
@@ -2519,12 +2558,38 @@ function clearPrinterPaper() {
   document.getElementById('f-paper').focus();
   document.getElementById('printer-paper-picker').style.display = 'none';
 }
+function checkPlacementPaperLive() {
+  var sizeVal = (document.getElementById('f-size')||{value:''}).value || '';
+  var paperVal = (document.getElementById('f-paper')||{value:''}).value || '';
+  var hint = document.getElementById('placement-paper-hint');
+  if (!sizeVal.includes('פלייסמנטים')) { if (hint) hint.remove(); return; }
+  var plMatch = sizeVal.match(/(\d+)\s*בגיליון/);
+  var plN = plMatch ? parseInt(plMatch[1]) : 0;
+  var plExpected = {5:'70*88', 8:'70*100'};
+  var plReverse  = {'70*88':5, '70*100':8};
+  var msg = '';
+  if (plN && plExpected[plN] && paperVal && !paperVal.includes(plExpected[plN]))
+    msg = '⚠️ ' + plN + ' בגיליון → נייר נדרש: ' + plExpected[plN];
+  for (var sz in plReverse)
+    if (paperVal.includes(sz) && plN && plN !== plReverse[sz])
+      msg = '⚠️ נייר ' + sz + ' → ' + plReverse[sz] + ' בגיליון (הוזן ' + plN + ')';
+  if (!hint) {
+    hint = document.createElement('div');
+    hint.id = 'placement-paper-hint';
+    hint.style.cssText = 'font-size:.78rem;font-weight:700;color:#c2410c;margin-top:4px;padding:4px 8px;background:#fff7ed;border-radius:5px;border:1px solid #fdba74';
+    var paperWrap = document.getElementById('f-paper');
+    if (paperWrap) paperWrap.parentNode.parentNode.appendChild(hint);
+  }
+  hint.textContent = msg;
+  hint.style.display = msg ? '' : 'none';
+}
 function syncSizeBtns(val) {
   document.querySelectorAll('#view-new .size-btn').forEach(b =>
     b.classList.toggle('active', b.textContent.trim()===val.trim()));
-  // סנכרן כפתור נייר מדפסת
   var pb = document.getElementById('size-btn-printer');
   if (pb) pb.classList.toggle('active', val.startsWith('נייר מדפסת'));
+  var plb = document.getElementById('size-btn-placement');
+  if (plb) plb.classList.toggle('active', val.startsWith('פלייסמנטים'));
 }
 function pmPickSize(val) {
   document.getElementById('pm-size').value = val;
@@ -2914,6 +2979,14 @@ function openPagePicker(newspaperId) {
                 onmouseout="this.style.background='var(--tpl-bg)';this.style.color='var(--press)'">
                 ${p}<br><span style="font-size:.7rem;font-weight:500">עמודים</span>
               </button>`).join('')}
+            <button onclick="closePP();quickCard(${n.id},0)"
+              style="padding:12px 6px;border:2px dashed #f97316;border-radius:8px;background:#fff7ed;
+                color:#c2410c;font-family:Heebo,sans-serif;font-size:.82rem;font-weight:800;cursor:pointer;
+                transition:all .15s;grid-column:1/-1"
+              onmouseover="this.style.background='#f97316';this.style.color='white'"
+              onmouseout="this.style.background='#fff7ed';this.style.color='#c2410c'">
+              ✍️ ללא עמודים — אמלא ידנית
+            </button>
           </div>
         </div>
       </div>
@@ -3428,13 +3501,16 @@ function selectPaperDay(day) {
 
 // ========== FORM ==========
 function clearForm() {
-  ['f-name','f-type','f-order-date','f-delivery-date','f-copies','f-pages','f-size','f-paper','f-notes','f-machine']
+  ['f-name','f-type','f-order-date','f-delivery-date','f-copies','f-pages','f-size','f-paper','f-notes','f-machine','f-placement-details']
     .forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
   document.querySelectorAll('input[name="color"]').forEach(r=>r.checked=false);
   document.querySelectorAll('#view-new .size-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('runs-field').style.display='none';
   document.getElementById('runs-output').innerHTML='';
   document.getElementById('form-title').textContent='יצירת כרטיס עבודה חדש';
+  var _pdw=document.getElementById('placement-details-wrap'); if(_pdw)_pdw.style.display='none';
+  var _plp=document.getElementById('placement-picker'); if(_plp)_plp.style.display='none';
+  var _prp=document.getElementById('printer-paper-picker'); if(_prp)_prp.style.display='none';
   currentRuns=[];
   manualRuns=[];
   renderManualRuns();
@@ -3465,6 +3541,7 @@ function saveCard() {
     size:         document.getElementById('f-size').value.trim(),
     paper:        document.getElementById('f-paper').value.trim(),
     notes:        document.getElementById('f-notes').value.trim(),
+    placementDetails: (document.getElementById('f-placement-details')||{value:''}).value.trim(),
     machine:      document.getElementById('f-machine').value,
     status:       'pending',
     createdAt:    new Date().toLocaleDateString('he-IL'),
@@ -3505,6 +3582,7 @@ function buildTempCard() {
     size:         document.getElementById('f-size').value.trim(),
     paper:        document.getElementById('f-paper').value.trim(),
     notes:        document.getElementById('f-notes').value.trim(),
+    placementDetails: (document.getElementById('f-placement-details')||{value:''}).value.trim(),
     machine:      document.getElementById('f-machine').value,
     createdAt:    new Date().toLocaleDateString('he-IL'),
     runs:         getEffectiveRuns()
@@ -3589,7 +3667,7 @@ function buildPrintCard(c) {
       <div style="font-size:.78rem;color:#555">נוצר: ${c.createdAt} &nbsp;|&nbsp; מס' עבודה: ${c.id}</div>
     </div>
     <!-- שדות -->
-    <div style="padding:4px 28px 16px">${fieldRows}</div>
+    <div style="padding:4px 28px 16px">${fieldRows}${c.placementDetails?`<div style="display:flex;border-bottom:2px solid #111;padding:8px 0"><div style="width:130px;font-size:.78rem;font-weight:700;color:#333;flex-shrink:0">מפרט פלייסמנטים</div><div style="font-size:.95rem;font-weight:800;color:#111;white-space:pre-wrap">${c.placementDetails}</div></div>`:''}</div>
     ${(c.runs&&c.runs.length)?`
     <!-- ריצות -->
     <div style="margin:0 28px 6px;font-size:.85rem;font-weight:800;color:#111;padding:6px 0;border-top:2px solid #111">פירוט ריצות הדפסה</div>
@@ -3677,7 +3755,6 @@ function buildPrintCardBlankRuns(c) {
 }
 
 function doPrintBlankRuns() {
-  // מצא את הכרטיס הנוכחי בתצוגה
   var wrap = document.getElementById('print-card-content');
   var match = wrap ? wrap.innerText.match(/מס' עבודה[^0-9]*([0-9]+)/) : null;
   var c = null;
@@ -3685,32 +3762,64 @@ function doPrintBlankRuns() {
   if (!c) c = window._previewCard;
   if (!c) { showToast('לא נמצא כרטיס להדפסה'); return; }
 
-  var content = buildPrintCardBlankRuns(c);
-  var w = window.open('','_blank','width=860,height=1100');
-  w.document.write(`<html dir="rtl"><head><meta charset="UTF-8">
-  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;900&display=swap" rel="stylesheet">
-  <style>
-    *{box-sizing:border-box;}
-    html,body{margin:0;padding:0;width:100%;background:white;font-family:'Heebo',sans-serif;direction:rtl;}
-    #_wrap > div{max-width:none !important;width:100% !important;margin:0 !important;}
-    @media print{
-      @page{size:A4 portrait;margin:10mm;}
-      html,body{margin:0;padding:0;}
-    }
-  </style></head><body>
-  <div id="_wrap">${content}</div>
-  <script>
-    window.addEventListener('load', function() {
-      var wrap = document.getElementById('_wrap');
-      var A4w = Math.round(190 * 3.7795);
-      var A4h = Math.round(277 * 3.7795);
-      var scale = Math.min(A4w / wrap.offsetWidth, (A4h * 0.9) / wrap.offsetHeight);
-      if (scale > 1.05) document.body.style.zoom = scale;
-      setTimeout(function(){ window.print(); }, 700);
-    });
-  <\/script>
-</body></html>`);
-  w.document.close();
+  // שאל אם לכלול סוג נייר
+  var modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10001;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML = `
+    <div style="background:white;border-radius:12px;padding:24px 28px;max-width:360px;width:100%;text-align:right;font-family:Heebo,sans-serif;direction:rtl">
+      <div style="font-size:1rem;font-weight:800;margin-bottom:6px;color:#2d3561">🖊️ הדפסה למילוי ידני</div>
+      <div style="font-size:.85rem;color:#555;margin-bottom:18px">ריצות ומספר עמודים יישארו ריקים למילוי בעט.<br>מה לעשות עם <strong>סוג נייר</strong>?</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button id="_br-keep" style="padding:11px 16px;border:2px solid #2d3561;border-radius:8px;background:#f0f4ff;color:#2d3561;font-family:Heebo,sans-serif;font-size:.92rem;font-weight:700;cursor:pointer;text-align:right">
+          📄 כלול סוג נייר בכרטיס
+        </button>
+        <button id="_br-blank" style="padding:11px 16px;border:2px solid #c0ccf0;border-radius:8px;background:white;color:#555;font-family:Heebo,sans-serif;font-size:.92rem;font-weight:700;cursor:pointer;text-align:right">
+          ✍️ השאר גם נייר ריק למילוי ידני
+        </button>
+        <button id="_br-cancel" style="padding:7px;border:none;background:none;color:#aaa;font-family:Heebo,sans-serif;font-size:.82rem;cursor:pointer">ביטול</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  function doOpen(keepPaper) {
+    document.body.removeChild(modal);
+    var cardCopy = Object.assign({}, c);
+    if (!keepPaper) cardCopy = Object.assign({}, c, {paper: ''});
+    var content = buildPrintCardBlankRuns(cardCopy);
+    var w = window.open('','_blank','width=860,height=1100');
+    w.document.write(`<html dir="rtl"><head><meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+      *{box-sizing:border-box;}
+      html,body{margin:0;padding:0;width:100%;height:100%;background:white;font-family:'Heebo',sans-serif;direction:rtl;}
+      #_wrap{min-height:100vh;display:flex;flex-direction:column;}
+      #_wrap > div{max-width:none !important;width:100% !important;margin:0 !important;flex:1;display:flex;flex-direction:column;}
+      #_wrap > div > div:nth-child(2){flex:1 !important;}
+      #_wrap > div > div:last-child{margin-top:auto !important;}
+      @media print{
+        @page{size:A4 portrait;margin:10mm;}
+        html,body{margin:0;padding:0;height:100%;}
+        #_wrap{min-height:calc(297mm - 20mm);}
+      }
+    </style></head><body>
+    <div id="_wrap">${content}</div>
+    <script>
+      window.addEventListener('load', function() {
+        var wrap = document.getElementById('_wrap');
+        var A4w = Math.round(190 * 3.7795);
+        var A4h = Math.round(277 * 3.7795);
+        var scale = Math.min(A4w / wrap.offsetWidth, A4h / wrap.offsetHeight);
+        if (scale > 1.02) document.body.style.zoom = scale;
+        setTimeout(function(){ window.print(); }, 700);
+      });
+    <\/script>
+    </body></html>`);
+    w.document.close();
+  }
+
+  document.getElementById('_br-keep').onclick   = function(){ doOpen(true);  };
+  document.getElementById('_br-blank').onclick  = function(){ doOpen(false); };
+  document.getElementById('_br-cancel').onclick = function(){ document.body.removeChild(modal); };
 }
 
 const PP_EMAIL = 'solan2@solanprinting.co.il';
@@ -3869,42 +3978,42 @@ function doPrint() {
   <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;900&display=swap" rel="stylesheet">
   <style>
     *{box-sizing:border-box;}
-    html,body{margin:0;padding:0;width:100%;background:white;font-family:'Heebo',sans-serif;direction:rtl;}
-    #_wrap{padding:0;}
-    /* override inline max-width so card fills the page */
-    #_wrap > div{max-width:none !important;width:100% !important;margin:0 !important;}
-    /* field rows — bigger spacing */
-    #_wrap > div > div > div{padding:10px 0 !important;}
-    #_wrap > div > div > div > div:first-child{width:145px !important;font-size:.9rem !important;}
-    #_wrap > div > div > div > div:last-child{font-size:1.05rem !important;}
-    /* header */
-    #_wrap > div > div:first-child{padding:18px 32px 14px !important;}
-    #_wrap > div > div:first-child > div:first-child{font-size:1.6rem !important;}
-    /* runs table */
+    html,body{margin:0;padding:0;width:100%;height:100%;background:white;font-family:'Heebo',sans-serif;direction:rtl;}
+    /* הכרטיס ימלא את כל הדף בגובה */
+    #_wrap{padding:0;min-height:100vh;display:flex;flex-direction:column;}
+    #_wrap > div{max-width:none !important;width:100% !important;margin:0 !important;
+      flex:1;display:flex;flex-direction:column;}
+    /* שדות — ריווח גדול יותר */
+    #_wrap > div > div > div{padding:11px 0 !important;}
+    #_wrap > div > div > div > div:first-child{width:145px !important;font-size:.92rem !important;}
+    #_wrap > div > div > div > div:last-child{font-size:1.08rem !important;}
+    /* כותרת */
+    #_wrap > div > div:first-child{padding:20px 32px 16px !important;}
+    #_wrap > div > div:first-child > div:first-child{font-size:1.65rem !important;}
+    /* גוש שדות — יתרחב למלא מקום */
+    #_wrap > div > div:nth-child(2){flex:1 !important;}
+    /* טבלת ריצות */
     #_wrap table{width:100% !important;}
-    #_wrap table th{padding:10px 12px !important;font-size:.88rem !important;}
-    #_wrap table td{padding:10px 12px !important;font-size:.95rem !important;}
-    /* footer */
-    #_wrap > div > div:last-child{padding:10px 32px !important;font-size:.8rem !important;}
+    #_wrap table th{padding:11px 12px !important;font-size:.9rem !important;}
+    #_wrap table td{padding:11px 12px !important;font-size:.97rem !important;}
+    /* פוטר — תמיד בתחתית */
+    #_wrap > div > div:last-child{padding:12px 32px !important;font-size:.82rem !important;margin-top:auto !important;}
     @media print{
       @page{size:A4 portrait;margin:10mm;}
-      html,body{margin:0;padding:0;}
-      #_wrap{padding:0;}
+      html,body{margin:0;padding:0;height:100%;}
+      #_wrap{min-height:calc(297mm - 20mm);padding:0;}
     }
   </style></head><body>
   <div id="_wrap">${content}</div>
   <script>
     window.addEventListener('load', function() {
       var wrap = document.getElementById('_wrap');
-      // A4 printable area at 96dpi: 190mm wide × 277mm tall → px
       var A4w = Math.round(190 * 3.7795);
       var A4h = Math.round(277 * 3.7795);
       var cw = wrap.offsetWidth, ch = wrap.offsetHeight;
-      // Scale to fill 90% of A4 height (width already ~fills)
-      var scale = Math.min(A4w / cw, (A4h * 0.9) / ch);
-      if (scale > 1.05) {
-        document.body.style.zoom = scale;
-      }
+      // Zoom רק לרוחב (גובה ממלא בflex)
+      var scale = Math.min(A4w / cw, A4h / ch);
+      if (scale > 1.02) document.body.style.zoom = scale;
       setTimeout(function(){ window.print(); }, 700);
     });
   <\/script>
@@ -5603,6 +5712,30 @@ function validateCard(card) {
   if (pages > 0 && pages % 4 !== 0)
     warns.push({ code: 'pages_odd',   msg: 'מספר עמודים (' + pages + ') אינו כפולה של 4', sev: 'warn' });
 
+  // ── בדיקת פלייסמנטים — התאמת נייר לכמות בגיליון ──────────────
+  if (card.size && card.size.includes('פלייסמנטים')) {
+    var plMatch = (card.size||'').match(/(\d+)\s*בגיליון/);
+    var plN = plMatch ? parseInt(plMatch[1]) : 0;
+    var plPaper = (card.paper||'').trim();
+    // טבלת ציפייה: X בגיליון → גודל נייר נדרש
+    var plExpected = { 5: '70*88', 8: '70*100' };
+    var plReverse  = { '70*88': 5, '70*100': 8 };
+    if (plN && plExpected[plN] && plPaper && !plPaper.includes(plExpected[plN])) {
+      warns.push({ code: 'placement_paper_mismatch', sev: 'warn',
+        msg: '⚠️ בדוק נייר לפלייסמנטים: ' + plN + ' בגיליון דורש נייר ' + plExpected[plN] +
+             ', הוזן: ' + plPaper });
+    }
+    // גם מהכיוון ההפוך — נייר מוכר אבל כמות לא מתאימה
+    for (var sz in plReverse) {
+      if (plPaper.includes(sz) && plN && plN !== plReverse[sz]) {
+        warns.push({ code: 'placement_count_mismatch', sev: 'warn',
+          msg: '⚠️ בדוק כמות פלייסמנטים: נייר ' + sz + ' מתאים ל-' + plReverse[sz] +
+               ' בגיליון, הוזן: ' + plN + ' בגיליון' });
+        break;
+      }
+    }
+  }
+
   // ── בדוק ריצות ───────────────────────────────────────────────
   if (card.runs && card.runs.length) {
     card.runs.forEach(function(r, i) {
@@ -7178,140 +7311,4 @@ setTimeout(autoBackup, 2000);
              style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:.93rem;box-sizing:border-box">
     </div>
     <div style="display:flex;flex:1;overflow:hidden;min-height:400px">
-      <div id="idit-list-pane" style="width:220px;min-width:160px;border-left:1px solid #e5e7eb;overflow-y:auto;flex-shrink:0"></div>
-      <div id="idit-edit-pane" style="flex:1;overflow-y:auto;padding:16px">
-        <div style="color:#9ca3af;text-align:center;margin-top:60px;font-size:.9rem">בחר אתר מהרשימה לעריכה</div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script>
-/* ===== נתוני אתרי עידית ===== */
-var IDIT_SITES = (function(){
-  var stored = localStorage.getItem('iditSites');
-  if (stored) { try { return JSON.parse(stored); } catch(e){} }
-  return [{"name": "מכתשים 37 רמת חובב", "num": "37(33700)", "address": "שד דקל  רמת חובב", "notes": "לא נדרש  אישור כניסה מיוחד", "contacts": [{"name": "משה להב", "role": "מנהל אתר", "phone": "054-4401898"}, {"name": "ורדית", "role": "פקידה", "phone": "08-6560861"}]}, {"name": "מכתשים באר שבע", "num": "36(33600)", "address": "רח סעדיה מלל  3ב\"ש צפון", "notes": "לא נדרש  אישור כניסה מיוחד", "contacts": [{"name": "שמוליק", "role": "מנהל אתר", "phone": "054-5231285"}, {"name": "", "role": "משרד", "phone": "073-2156794"}]}, {"name": "דימונה", "num": "29(22900)", "address": "קמג דימונה", "notes": "נדרש למלא טפסים אישור כניסה לדימונה ולברר מול כרמית שמות נהגים מאושרי כניסה", "contacts": [{"name": "תומר", "role": "מנהל", "phone": "050-6244526"}, {"name": "יגאל", "role": "מחסנאי", "phone": "052-8452669"}, {"name": "כרמית", "role": "פקידה", "phone": "08-6567060"}, {"name": "כרמית", "role": "נייד", "phone": "053-9290011"}, {"name": "פקס", "role": "", "phone": "08-6568344"}]}, {"name": "אלביט", "num": "22(22222)", "address": "רח המחשב 2 נתניה", "notes": "לא נדרש  אישור כניסה מיוחד", "contacts": [{"name": "", "role": "משרד", "phone": "09-8357362"}, {"name": "אופיר דלאל", "role": "מנהל אתר", "phone": "054-3277915"}, {"name": "מאיה", "role": "פקידה", "phone": "054-3228987"}]}, {"name": "רוה\"מ איירפוט סיטי", "num": "45-44500", "address": "איירפורט סיטי", "notes": "אין כניסת ספקים - תיאום מול מנהל האתר", "contacts": [{"name": "ישראל", "role": "מנהל אתר", "phone": "055-6611373"}, {"name": "דובי", "role": "נהג", "phone": "050-6316690"}]}, {"name": "רפאל - מכון דוד (קריות)", "num": "48-44800", "address": "מול איזור תעשייה ביאליק כביש חיפה - עכו", "notes": "נדרש אישור כניסה ומילוי טפסים שאלון רמה 6 רפאל + תיאום מול שלי", "contacts": [{"name": "רועי דהאן", "role": "מנהל אתר", "phone": "050-2037029"}, {"name": "עליזה", "role": "פקידה", "phone": "050-2037764"}, {"name": "מירית", "role": "", "phone": "502037037"}, {"name": "חן", "role": "מנהל אתר", "phone": "052-690-0450"}, {"name": "משה", "role": "מנהל מחסן - לליווים ובדיקת ספקים", "phone": "054-5897712"}, {"name": "נטלי", "role": "פקידה", "phone": "050-7829349"}]}, {"name": "פוד קורד  רפאל מכון דויד", "num": "98600", "address": "", "notes": "", "contacts": [{"name": "משה", "role": "מחסנאי", "phone": "054-5897712"}, {"name": "נטלי", "role": "פקידה", "phone": "050-7829349"}]}, {"name": "רפאל - מכון לשם", "num": "49-44900", "address": "כביש 784 מול הישוב רקפת", "notes": "", "contacts": [{"name": "אייל", "role": "מנהל אתר", "phone": "052-2545154"}, {"name": "חמי", "role": "מנהל בתי קפה", "phone": ""}, {"name": "אוריאל", "role": "מחסנאי - לאישור הגעה, ליווי ובדיקת סחורות", "phone": "054-8632458"}, {"name": "נטלי", "role": "פקידה", "phone": "050-7829349"}, {"name": "חנניה", "role": "מנהל אתר", "phone": "054-3228966"}]}, {"name": "רפאל -הגבעה", "num": "50-45000", "address": "", "notes": "", "contacts": [{"name": "משה גבריאלוב", "role": "מנהל אתר", "phone": "054-3277917"}]}, {"name": "רפאל - פלמחים", "num": "51-45100", "address": "בסיס פלמחים", "notes": "נדרש אישור כניסה  + מילוי טפסים שאלון רמה 6 רפאל", "contacts": [{"name": "חנניה", "role": "מנהל אתר", "phone": "054-3228966"}, {"name": "משה גבריאלוב", "role": "מנהל אתר", "phone": "054-3277917"}]}, {"name": "כ\"ד מתקן חיפה", "num": "53-45300", "address": "לוחמי הגטאות 7 חיפה", "notes": "אישור כניסה -  להעביר לאישור שם נהג + ת.ז", "contacts": [{"name": "תמי", "role": "מנהלת אתר", "phone": "052-3888040"}]}, {"name": "מתקן  כ\"ד רמת  השרון", "num": "54-45400", "address": "תעשייה צבאית  רמת השרון", "notes": "אישור כניסה -  להעביר לאישור שם נהג + ת.ז", "contacts": [{"name": "ליזה", "role": "מנהלת אתר", "phone": "050-5580300"}]}, {"name": "כ\"ד אשקלון", "num": "52-45200", "address": "ליד משטרת אשקלון", "notes": "אישור כניסה -  להעביר לאישור שם נהג + ת.ז", "contacts": [{"name": "גולן", "role": "מנהל אתר", "phone": "050-9449271"}]}, {"name": "נגב", "num": "82-48200", "address": "", "notes": "", "contacts": [{"name": "גולן", "role": "מנהל אתר", "phone": "050-9449271"}]}, {"name": "נגבה", "num": "61-46100", "address": "", "notes": "אישור כניסה -  להעביר לאישור שם נהג + ת.ז", "contacts": [{"name": "דורון", "role": "מנהל אתר", "phone": "052-8967016"}, {"name": "משרד", "role": "", "phone": "076-802-4061"}, {"name": "שי", "role": "שף", "phone": "054-3228983"}]}, {"name": "רפאל- חג'ג'", "num": "60(46000)", "address": "", "notes": "", "contacts": [{"name": "ענת", "role": "מנהלת אתר", "phone": "054-3228941"}]}, {"name": "תדיראן", "num": "34-33400", "address": "שד' יצחק רבין 34 קרית עקרון.", "notes": "לא נדרש אישור כניסה", "contacts": [{"name": "יסמין", "role": "מנהלת אתר", "phone": "050-6373417"}]}, {"name": "ירושלים", "num": "71-47100", "address": "הרוזמרין, ירושלים", "notes": "אישור כניסה -  להעביר לאישור שם נהג + ת.ז", "contacts": [{"name": "ירמי", "role": "מנהל אתר", "phone": "054-4555171"}, {"name": "מיטל", "role": "פקידה", "phone": "054-8019725"}]}, {"name": "כ\"ד בית ליד", "num": "75-47500", "address": "מחנה 21, בית ליד", "notes": "אישור כניסה -  להעביר לאישור שם נהג + ת.ז", "contacts": [{"name": "אורי", "role": "מחסנאי", "phone": "055-8821955"}, {"name": "", "role": "", "phone": "09-8946884"}, {"name": "אריאל", "role": "", "phone": "054-3277931"}]}, {"name": "כ\"ד תל אביב", "num": "85-48500", "address": "רח בן ישי, ליד מכללת רידמן ת\"א", "notes": "אישור כניסה -  להעביר לאישור שם נהג + ת.ז", "contacts": [{"name": "דודו", "role": "מנהל אתר", "phone": "054-3228915"}, {"name": "קאסיי", "role": "מחסנאי", "phone": "054-9285882"}, {"name": "אתי", "role": "פקידה", "phone": "054-3726209"}]}, {"name": "כ\"ד קיבוץ", "num": "38-33800", "address": "המכון המטראולוגי ראשון לציון", "notes": "אישור כניסה -  להעביר לאישור שם נהג + ת.ז", "contacts": [{"name": "לירן", "role": "מנהל אתר", "phone": "052-8728174"}, {"name": "תמר", "role": "פקידה", "phone": "0504-403060"}, {"name": "אבי מיכאלוב", "role": "מנהל אתר", "phone": "053-3033238"}, {"name": "", "role": "יוליה פקידה", "phone": "050-9959722"}]}, {"name": "כלמוביל", "num": "31(43100)", "address": "העמל 20 פארק תעשיות ראש העין", "notes": "לא נדרש אישור כניסה", "contacts": [{"name": "אנדריי", "role": "מנהל אתר", "phone": "0544-250015"}]}, {"name": "גילת", "num": "25(42500)", "address": "יגיע כפיים 21 פתח תקווה", "notes": "לא נדרש  אישור כניסה מיוחד", "contacts": [{"name": "מיכאל", "role": "מנהל אתר", "phone": "054-8132979"}]}, {"name": "אינטל ירושלים", "num": "26(42600)", "address": "המרפא  9 הר החוצבים ירושלים", "notes": "לא נדרש  אישור כניסה מיוחד", "contacts": [{"name": "קובי", "role": "מנהל אתר", "phone": "054-3228945"}, {"name": "שירלי", "role": "פקידה", "phone": "054-4620913"}]}, {"name": "אינטל ירושלים - מטבחונים", "num": "27(42700)", "address": "המרפא  9 הר החוצבים ירושלים", "notes": "לא נדרש  אישור כניסה מיוחד", "contacts": [{"name": "קובי", "role": "מנהל אתר", "phone": "054-3228945"}, {"name": "אבי", "role": "מנהל חדר אוכל", "phone": "052-662-7223"}]}, {"name": "אגן אדמה אשדוד", "num": "24(42400)", "address": "האשלג 5, אשדוד", "notes": "לא נדרש  אישור כניסה מיוחד - יש צורך לעבור הדרכה בפעם הראשונה שמגיעים", "contacts": [{"name": "יניב", "role": "מנהל אתר", "phone": "503502207"}]}, {"name": "אינטל פ\"ת", "num": "23(42300(", "address": "החרוצים 7 פ\"ת", "notes": "לא נדרש  אישור כניסה מיוחד", "contacts": [{"name": "יוסי בן דוד", "role": "מנהל אתר", "phone": "050-7176611"}]}, {"name": "אינטל פ\"ת מטבחונים", "num": "28(42800)", "address": "החרוצים 7 פ\"ת", "notes": "לא נדרש  אישור כניסה מיוחד", "contacts": [{"name": "יוסי בן דוד", "role": "מנהל אתר", "phone": "050-7176611"}, {"name": "יוסי בן דוד", "role": "יוסי נייד נוסף", "phone": "052-8973764"}, {"name": "גיל סידלסקי", "role": "מחסנאי", "phone": "054-9252208"}]}];
-})();
-
-/* ===== חיפוש אתר בטופס הזמנה ===== */
-function _siteDropdownHide() {
-  var d = document.getElementById('site-dropdown');
-  if (d) d.style.display = 'none';
-}
-
-function siteSearch(val) {
-  var dd = document.getElementById('site-dropdown');
-  if (!val || val.length < 1) { dd.style.display = 'none'; return; }
-  var q = val.trim().toLowerCase();
-  var hits = IDIT_SITES.filter(function(s) {
-    return s.num.toLowerCase().indexOf(q) !== -1 ||
-           s.name.indexOf(q) !== -1 ||
-           s.num.replace(/[^\d]/g,'').indexOf(q.replace(/[^\d]/g,'')) !== -1;
-  });
-  if (!hits.length) { dd.style.display = 'none'; return; }
-  dd.innerHTML = '';
-  hits.forEach(function(s) {
-    var div = document.createElement('div');
-    div.className = 'site-dd-item';
-    div.innerHTML = '<span style="color:#1a1a4e;font-weight:700">' + s.num + '</span> — ' + s.name;
-    div.addEventListener('click', (function(num){ return function(){ _selectSite(num); }; })(s.num));
-    dd.appendChild(div);
-  });
-  dd.style.display = '';
-}
-
-function _selectSite(num) {
-  var s = IDIT_SITES.find(function(x) { return x.num === num; });
-  if (!s) return;
-  document.getElementById('ord-site-num').value = s.num + ' · ' + s.name;
-  if (s.address) document.getElementById('ord-address').value = s.address;
-  if (s.notes)   document.getElementById('ord-notes').value   = s.notes;
-  var contacts = s.contacts.filter(function(c) { return c.name || c.phone; });
-  var panel = document.getElementById('site-info-panel');
-  panel.innerHTML = '<strong style="color:#1a1a4e">\u{1F4CD} ' + s.name + '</strong>' +
-    (contacts.length ? '<div style="margin-top:5px;line-height:1.7">' +
-      contacts.map(function(c) {
-        var line = '';
-        if (c.name) line += '<b>' + c.name + '</b>';
-        if (c.role) line += ' <span style="color:#6b7280;font-size:.8rem">(' + c.role + ')</span>';
-        if (c.phone) line += ' <a href="tel:' + c.phone + '" style="color:#1d4ed8;text-decoration:none">' + c.phone + '</a>';
-        return '<div>' + line + '</div>';
-      }).join('') + '</div>' : '');
-  panel.style.display = '';
-  document.getElementById('site-dropdown').style.display = 'none';
-}
-
-function _toggleSiteField(val) {
-  var wrapper = document.getElementById('site-field-wrapper');
-  if (!wrapper) return;
-  if (val && val.indexOf('עידית') !== -1) {
-    wrapper.style.display = '';
-  } else {
-    wrapper.style.display = 'none';
-    clearSiteField();
-  }
-}
-
-function clearSiteField() {
-  var el = document.getElementById('ord-site-num');
-  if (el) el.value = '';
-  var panel = document.getElementById('site-info-panel');
-  if (panel) panel.style.display = 'none';
-  var dd = document.getElementById('site-dropdown');
-  if (dd) dd.style.display = 'none';
-}
-
-document.addEventListener('click', function(e) {
-  if (!e.target.closest || (!e.target.closest('#ord-site-num') && !e.target.closest('#site-dropdown')))
-    _siteDropdownHide();
-});
-
-/* ===== ניהול אתרי עידית ===== */
-var _iditEditIdx = null;
-
-function saveIditSites() {
-  localStorage.setItem('iditSites', JSON.stringify(IDIT_SITES));
-}
-
-function openIditManager() {
-  _iditEditIdx = null;
-  document.getElementById('idit-manager-modal').style.display = 'flex';
-  document.getElementById('idit-search').value = '';
-  renderIditList();
-  document.getElementById('idit-edit-pane').innerHTML =
-    '<div style="color:#9ca3af;text-align:center;margin-top:60px;font-size:.9rem">בחר אתר מהרשימה לעריכה</div>';
-}
-
-function closeIditManager() {
-  document.getElementById('idit-manager-modal').style.display = 'none';
-}
-
-function renderIditList() {
-  var q = (document.getElementById('idit-search').value || '').trim().toLowerCase();
-  var pane = document.getElementById('idit-list-pane');
-  pane.innerHTML = IDIT_SITES
-    .map(function(s, i) { return {s:s, i:i}; })
-    .filter(function(o) { return !q || o.s.name.indexOf(q) !== -1 || o.s.num.toLowerCase().indexOf(q) !== -1; })
-    .map(function(o) {
-      var active = _iditEditIdx === o.i;
-      return '<div onclick="openSiteEdit(' + o.i + ')" style="padding:9px 12px;cursor:pointer;border-bottom:1px solid #f3f4f6;font-size:.85rem;' +
-        (active ? 'background:#eff6ff;border-right:3px solid #1a1a4e;' : 'border-right:3px solid transparent;') + '">' +
-        '<div style="color:#111;font-weight:' + (active?'700':'400') + '">' + o.s.name + '</div>' +
-        '<div style="color:#9ca3af;font-size:.75rem">' + o.s.num + '</div></div>';
-    }).join('');
-}
-
-function _esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
-function _inp()  { return 'width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:.9rem;box-sizing:border-box;font-family:inherit;'; }
-
-function _renderContacts(contacts, siteIdx) {
-  if (!contacts || !contacts.length)
-    return '<div style="color:#9ca3af;font-size:.83rem;padding:4px 0">אין אנשי קשר</div>';
-  return contacts.map(function(c, ci) {
-    return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:5px;margin-bottom:6px;align-items:center">' +
-      '<input value="' + _esc(c.name) + '" placeholder="שם" ' +
-        'oninput="IDIT_SITES[' + siteIdx + '].contacts[' + ci + '].name=this.value" style="' + _inp() + '">' +
-      '<input value="' + _esc(c.role) + '" placeholder="תפקיד" ' +
-        'oninput="IDIT_SITES[' + siteIdx + '].contacts[' + ci + '].role=this.value" style="' + _inp() + '">' +
-      '<input value="' + _esc(c.phon
+      <div id="idit-list-pane" style="width:220px;min-width:160px;borde
