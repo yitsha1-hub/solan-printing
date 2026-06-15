@@ -3907,7 +3907,7 @@ function buildPrintCard(c) {
       <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center">${r.pages ? r.pages+' עמ\'' : '—'}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-size:.8rem">${r.pageRange||'—'}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-weight:700">${r.copies?parseInt(r.copies).toLocaleString():'—'}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center">${r.folds||'—'}${r.tumble?' <span style="color:#1d4ed8;font-weight:700;font-size:.75rem"> · 🔄מתהפך</span>':''}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center">${r.folds||'—'}${(r.tumble&&parseInt(r.folds||'0')>=3)?' <span style="color:#1d4ed8;font-weight:600;font-size:.65rem"> · מתהפך</span>':''}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-weight:700">${r.machine||'—'}</td>
       ${_hasPaper ? `<td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-size:.8rem">${r.paper||'—'}</td>` : ''}
     </tr>`).join('');
@@ -3925,7 +3925,7 @@ function buildPrintCard(c) {
     ? _runs.map(function(r,i){ return (i>0?'<div style="border-top:1px solid #e0e0e0;margin:4px 0"></div>':'')+
         '<div style="font-size:1.2rem;font-weight:900;line-height:1.9;display:flex;align-items:center;gap:10px">'+
           'ריצה '+r.num+' — '+(parseInt(r.copies)||0).toLocaleString()+
-          (r.tumble?' <span style="font-size:.82rem;font-weight:700;color:#1d4ed8;background:#eff6ff;border:1.5px solid #93c5fd;border-radius:5px;padding:1px 7px;white-space:nowrap">🔄 מתהפך</span>':'')+
+          ((r.tumble&&parseInt(r.folds||'0')>=3)?' <span style="font-size:.7rem;font-weight:700;color:#1d4ed8;background:#eff6ff;border:1.5px solid #93c5fd;border-radius:5px;padding:1px 6px;white-space:nowrap">מתהפך</span>':'')+
         '</div>'; }).join('')
     : (_copiesNum ? '<strong style="font-size:1.35rem;font-weight:900">'+_copiesNum.toLocaleString()+'</strong>' : '');
 
