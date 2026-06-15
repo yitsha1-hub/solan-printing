@@ -2807,10 +2807,10 @@ function _recalcPageRanges() {
     var fEnd    = front + half - 1;
     var bStart  = back  - half + 1;
     if (isLast && r.pages === fullSheet) {
-      r.pageRange = 'עמ' ' + front + '–' + (front + r.pages - 1);
+      r.pageRange = "עמ' " + front + '–' + (front + r.pages - 1);
       front += r.pages;
     } else {
-      r.pageRange = 'עמ' ' + front + '–' + fEnd + ' + עמ' ' + bStart + '–' + back;
+      r.pageRange = "עמ' " + front + '–' + fEnd + " + עמ' " + bStart + '–' + back;
       front += half;
       back  -= half;
     }
