@@ -3865,7 +3865,8 @@ function buildPrintCard(c) {
   // שדה "מס' גיליונות" / "מס' עותקים"
   const _sheetsLabel = _hasRuns ? 'מס\' גיליונות' : 'מס\' עותקים';
   const _sheetsVal   = _hasRuns
-    ? _runs.map(function(r){ return '<div style="font-size:1.2rem;font-weight:900;line-height:1.7">ריצה '+r.num+' — '+(parseInt(r.copies)||0).toLocaleString()+'</div>'; }).join('')
+    ? _runs.map(function(r,i){ return (i>0?'<div style="border-top:1px solid #e0e0e0;margin:4px 0"></div>':'')+
+        '<div style="font-size:1.2rem;font-weight:900;line-height:1.9">ריצה '+r.num+' — '+(parseInt(r.copies)||0).toLocaleString()+'</div>'; }).join('')
     : (_copiesNum ? '<strong style="font-size:1.35rem;font-weight:900">'+_copiesNum.toLocaleString()+'</strong>' : '');
 
   // הערות: אם יש ריצות — מוסיפים שורת "מספר עותקים"
