@@ -2744,12 +2744,12 @@ function calcRuns() {
   currentRuns = buildRuns(pages, copies, fs);
   currentRuns.forEach(r=>{ if(prev[r.num]) r.machine=prev[r.num]; });
 
-  _runsLabel = lbl; _runsPages = pages; _runsCopies = copies;
+  _runsLabel = lbl; _runsPages = pages; _runsCopies = copies; _runsFs = fs;
   _renderCurrentRunsOutput();
   field.style.display='';
 }
 
-var _runsLabel='', _runsPages=0, _runsCopies=0;
+var _runsLabel='', _runsPages=0, _runsCopies=0, _runsFs=0;
 
 function _renderCurrentRunsOutput() {
   const out = document.getElementById('runs-output');
@@ -2793,10 +2793,31 @@ function _renderCurrentRunsOutput() {
     </div></div>`;
 }
 
+function _recalcPageRanges() {
+  if (!currentRuns.length || !_runsFs) return;
+  var fullSheet = _runsFs;
+  var front = 1, back = _runsPages;
+  currentRuns.forEach(function(r, i) {
+    var half    = r.pages / 2;
+    var isLast  = (i === currentRuns.length - 1);
+    var fEnd    = front + half - 1;
+    var bStart  = back  - half + 1;
+    if (isLast && r.pages === fullSheet) {
+      r.pageRange = 'עמ' ' + front + '–' + (front + r.pages - 1);
+      front += r.pages;
+    } else {
+      r.pageRange = 'עמ' ' + front + '–' + fEnd + ' + עמ' ' + bStart + '–' + back;
+      front += half;
+      back  -= half;
+    }
+  });
+}
+
 function moveCurrentRun(i, dir) {
   var j = i + dir;
   if (j < 0 || j >= currentRuns.length) return;
   var tmp = currentRuns[i]; currentRuns[i] = currentRuns[j]; currentRuns[j] = tmp;
+  _recalcPageRanges();
   _renderCurrentRunsOutput();
 }
 
@@ -5275,57 +5296,80 @@ function openWorkItemEdit(cardId) {
 
 function printWorkList(machine) {
   _syncWorkOrder();
-  var order = _workOrder[machine] || [];
+  var order   = _workOrder[machine] || [];
   var cardMap = {};
   (cards||[]).forEach(function(c){ cardMap[c.id] = c; });
   var rows = order.map(function(id){ return cardMap[id]; }).filter(Boolean);
 
-  var today = new Date();
-  var dateStr = today.toLocaleDateString('he-IL', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  var today   = new Date();
+  var dateStr = today.toLocaleDateString('he-IL', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  var timeStr = today.toLocaleTimeString('he-IL', {hour:'2-digit',minute:'2-digit'});
 
-  var rowsHtml = rows.map(function(c, idx) {
-    var notesHtml = c.notes ? '<div style="font-size:.82rem;color:#555;margin-top:3px;white-space:pre-wrap">' + escHtml(c.notes) + '</div>' : '';
-    return '<tr style="' + (idx%2 ? 'background:#f8f8f8' : '') + ';border-bottom:1px solid #ddd">'
-      + '<td style="padding:10px 8px;font-weight:900;color:#1a1a4e;font-size:.9rem;width:28px;text-align:center;vertical-align:top">' + (idx+1) + '</td>'
-      + '<td style="padding:10px 8px;vertical-align:top">'
-      +   '<div style="font-weight:800;font-size:.95rem;color:#111">' + escHtml(c.name||'ללא שם') + (c.docNum ? ' <span style="font-size:.75rem;color:#999">#'+escHtml(String(c.docNum))+'</span>' : '') + '</div>'
-      +   (c.paper ? '<div style="font-size:.82rem;color:#374151;margin-top:2px">🗒️ <strong>נייר:</strong> ' + escHtml(c.paper) + '</div>' : '')
-      +   (c.size  ? '<div style="font-size:.82rem;color:#374151;margin-top:2px">📐 <strong>גודל:</strong> '  + escHtml(c.size)  + '</div>' : '')
-      +   notesHtml
+  var bodyRows = rows.map(function(c, idx) {
+    var notes = (c.notes||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+    var copies = c.copies ? parseInt(c.copies).toLocaleString() : '—';
+    var bg = idx%2 ? '#f4f6fb' : '#fff';
+    return '<tr style="background:'+bg+'">'
+      + '<td style="text-align:center;font-weight:900;font-size:15px;color:#2d3561;padding:10px 8px;border-bottom:1px solid #ddd;width:32px">' + (idx+1) + '</td>'
+      + '<td style="font-weight:800;font-size:13px;padding:10px 8px;border-bottom:1px solid #ddd;border-right:1px solid #e5e7eb">'
+      +   escHtml(c.name||'ללא שם')
+      +   (c.docNum ? '<br><span style="font-size:10px;color:#aaa;font-weight:400">#'+escHtml(String(c.docNum))+'</span>' : '')
       + '</td>'
+      + '<td style="font-size:12px;padding:10px 8px;border-bottom:1px solid #ddd;border-right:1px solid #e5e7eb">' + escHtml(c.paper||'—') + '</td>'
+      + '<td style="text-align:center;font-size:13px;font-weight:700;padding:10px 8px;border-bottom:1px solid #ddd;border-right:1px solid #e5e7eb;white-space:nowrap">' + copies + '</td>'
+      + '<td style="font-size:11px;color:#444;padding:10px 8px;border-bottom:1px solid #ddd;line-height:1.55">' + (notes||'—') + '</td>'
       + '</tr>';
   }).join('');
 
   var html = '<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="utf-8">'
     + '<title>רשימת עבודות — ' + escHtml(machine) + '</title>'
     + '<style>'
-    + 'body{font-family:Heebo,Arial,sans-serif;direction:rtl;margin:0;padding:0;color:#111}'
-    + 'table{width:100%;border-collapse:collapse}'
-    + '@media print{body{margin:0}@page{margin:15mm 12mm}}'
-    + '</style></head><body>'
-    + '<div style="padding:18px 22px 10px;border-bottom:2.5px solid #111;display:flex;justify-content:space-between;align-items:baseline">'
+    + '*{box-sizing:border-box;margin:0;padding:0}'
+    + 'body{font-family:"Heebo",Arial,sans-serif;direction:rtl;color:#111}'
+    + '.page{padding:12mm 10mm}'
+    + 'table{width:100%;border-collapse:collapse;border:1.5px solid #bbb}'
+    + 'thead{background:#1a1a4e;color:#fff}'
+    + 'th{padding:10px 8px;font-size:12px;font-weight:700;text-align:right;border-left:1px solid #334}'
+    + 'th:first-child{text-align:center;width:32px}'
+    + '@media print{body{margin:0}.page{padding:8mm 6mm}@page{margin:0;size:A4 portrait}}'
+    + '</style></head><body><div class="page">'
+
+    // header
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #1a1a4e;padding-bottom:10px;margin-bottom:12px">'
     +   '<div>'
-    +     '<div style="font-size:1.3rem;font-weight:900">רשימת עבודות</div>'
-    +     '<div style="font-size:1rem;font-weight:700;color:#2d3561;margin-top:2px">' + escHtml(machine) + '</div>'
+    +     '<div style="font-size:22px;font-weight:900;line-height:1">רשימת עבודות להדפסה</div>'
+    +     '<div style="font-size:15px;font-weight:700;color:#2d3561;margin-top:4px">' + escHtml(machine) + '</div>'
     +   '</div>'
-    +   '<div style="text-align:left;font-size:.78rem;color:#555">'
-    +     '<div>' + escHtml(dateStr) + '</div>'
-    +     '<div style="margin-top:2px">' + rows.length + ' עבודות בתור</div>'
+    +   '<div style="text-align:left;font-size:11px;color:#555;line-height:1.8">'
+    +     '<strong style="font-size:13px;color:#111;display:block">' + escHtml(dateStr) + '</strong>'
+    +     'סה&quot;כ ' + rows.length + ' עבודות בתור'
     +   '</div>'
     + '</div>'
-    + '<table style="margin-top:4px">'
-    + '<thead><tr style="background:#1a1a4e;color:white">'
-    + '<th style="padding:8px;width:28px;text-align:center;font-size:.8rem">#</th>'
-    + '<th style="padding:8px;text-align:right;font-size:.8rem">פרטי עבודה</th>'
-    + '</tr></thead>'
-    + '<tbody>' + rowsHtml + '</tbody>'
-    + '</table>'
-    + (rows.length===0 ? '<div style="text-align:center;padding:40px;color:#999">אין עבודות בתור</div>' : '')
-    + '<div style="border-top:1px solid #ccc;padding:8px 22px;font-size:.7rem;color:#888;text-align:center;margin-top:8px">סולן הדפסות בע"מ</div>'
-    + '</body></html>';
 
-  var w = window.open('', '_blank', 'width=700,height=900');
-  if (!w) { showToast('אפשר חלונות קופצים בדפדפן'); return; }
+    // table
+    + (rows.length === 0
+        ? '<div style="text-align:center;padding:48px;color:#999;font-size:15px">אין עבודות בתור למכונה זו</div>'
+        : '<table>'
+          + '<thead><tr>'
+          + '<th style="text-align:center;width:32px">#</th>'
+          + '<th style="border-right:1px solid #334">שם העבודה</th>'
+          + '<th style="border-right:1px solid #334;width:160px">סוג נייר</th>'
+          + '<th style="text-align:center;border-right:1px solid #334;width:80px">כמות</th>'
+          + '<th>הערות</th>'
+          + '</tr></thead>'
+          + '<tbody>' + bodyRows + '</tbody>'
+          + '</table>'
+    )
+
+    // footer
+    + '<div style="margin-top:12px;border-top:1px solid #ccc;padding-top:6px;display:flex;justify-content:space-between;font-size:10px;color:#888">'
+    +   '<span>סולן הדפסות בע&quot;מ</span>'
+    +   '<span>הודפס: ' + timeStr + ' · ' + escHtml(dateStr) + '</span>'
+    + '</div>'
+    + '</div></body></html>';
+
+  var w = window.open('', '_blank', 'width=800,height=1000');
+  if (!w) { showToast('יש לאפשר חלונות קופצים בדפדפן'); return; }
   w.document.open(); w.document.write(html); w.document.close();
   w.onload = function(){ w.focus(); w.print(); };
 }
