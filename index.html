@@ -1236,7 +1236,8 @@ window._fbInit = () => true;
           📥 עדכון חודשי (xlsb)
           <input type="file" accept=".xlsb,.xlsx,.xls" onchange="loadInventoryXlsb(this)" style="display:none">
         </label>
-        <button id="inv-undo-btn" class="btn btn-tpl" onclick="undoInventoryImport()" style="font-size:.8rem;display:none;background:#fff3e0;border-color:#ff9800;color:#e65100">↩️ בטל עדכון אחרון</button>
+        <button id="inv-undo-btn" class="btn btn-tpl" onclick="undoInventoryImport()" style="font-size:.8rem;display:none;background:#fff3e0;border-color:#ff9800;color:#e65100">↩️ בטל ייבוא</button>
+        <button id="inv-undo-stack-btn" class="btn btn-tpl" onclick="undoInventoryAction()" style="font-size:.8rem;display:none;background:#fef3c7;border-color:#d97706;color:#92400e">↩️ בטל פעולה</button>
         <button class="btn btn-tpl" onclick="cleanupDoc171Once()" title="מזג שורות כפולות עם אותו תאריך" style="font-size:.8rem">🔧 מזג כפילויות</button>
         <button class="btn btn-danger" onclick="clearInventory()" style="font-size:.8rem">🗑️ נקה מלאי</button>
         <label class="btn btn-tpl" style="cursor:pointer" title="העלה חשבונית — מוסיף כמות למלאי">
@@ -2032,6 +2033,38 @@ let orders         = JSON.parse(localStorage.getItem('solanOrders')         || '
 let inventoryDeductions = JSON.parse(localStorage.getItem('solanInventoryDeductions') || '[]');
 let inventoryHistory    = JSON.parse(localStorage.getItem('solanInventoryHistory')    || '[]');
 let _inventorySnapshot  = null; // snapshot לפני עדכון חודשי (לא נשמר ב-localStorage)
+var _inventoryUndoStack = [];   // עד 5 מצבים לביטול פעולות מלאי
+
+function _pushInventoryUndo() {
+  _inventoryUndoStack.push({
+    inventory: JSON.parse(JSON.stringify(inventory)),
+    inventoryHistory: JSON.parse(JSON.stringify(inventoryHistory)),
+    inventoryDeductions: JSON.parse(JSON.stringify(inventoryDeductions))
+  });
+  if (_inventoryUndoStack.length > 5) _inventoryUndoStack.shift();
+  _updateInventoryUndoBtn();
+}
+
+function _updateInventoryUndoBtn() {
+  var btn = document.getElementById('inv-undo-stack-btn');
+  if (btn) {
+    var n = _inventoryUndoStack.length;
+    btn.style.display = n ? '' : 'none';
+    btn.textContent = '↩️ בטל פעולה (' + n + ')';
+  }
+}
+
+function undoInventoryAction() {
+  if (!_inventoryUndoStack.length) { showToast('⚠️ אין פעולה לביטול'); return; }
+  var snap = _inventoryUndoStack.pop();
+  inventory = snap.inventory;
+  inventoryHistory = snap.inventoryHistory;
+  inventoryDeductions = snap.inventoryDeductions;
+  persist();
+  renderInventoryWarehouse();
+  _updateInventoryUndoBtn();
+  showToast('↩️ פעולת מלאי בוטלה');
+}
 // quote item: { id, type:'quote'|'order', docNum, customer, date, notes, items:[{desc,qty,price}], vatPct, ts }
 // invoiceLogs item: { id, doc_number, doc_type, supplier, date, total_ils, items:[{name,qty,price_per_sheet,price_total}], priceOnly, ts }
 let currentRuns = [];
@@ -4563,6 +4596,7 @@ function confirmDeduct() {
   var item2 = inventory.find(function(it){ return it.name === _pname2; });
   if (!item2) { showToast("⚠️ בחר סוג נייר מהרשימה"); return; }
   if (qty <= 0) { showToast("⚠️ הכנס כמות תקינה"); return; }
+  _pushInventoryUndo();
   // הורד מחשבונית ספציפית
   var _invIdxEl2 = document.getElementById("del-invoice-idx");
   var _invIdx2 = _invIdxEl2 ? parseInt(_invIdxEl2.value) : -1;
@@ -4705,6 +4739,7 @@ function confirmOrderDeduct() {
     showToast("⚠️ נבחרו " + activeInputs.length + " סוגי נייר — ניתן להוריד סוג אחד בלבד בפעם אחת");
     return;
   }
+  _pushInventoryUndo();
   var count = 0;
   inputs.forEach(function(inp) {
     var qty = parseInt(inp.value) || 0;
@@ -5836,10 +5871,36 @@ async function renderAgentTab() {
 
     var extraTh = isPending ? '<th style="padding:6px 8px;font-size:.72rem;color:#555">דלג</th>' : '';
 
+    var approveLabel = isOut ? '✅ אשר — הורד מהמלאי' : '✅ אשר — הוסף למלאי';
+    var flipLabel    = isOut ? '🔄 שנה ל: קבלת סחורה' : '🔄 שנה ל: הורדה ללקוח';
+
+    // אזהרות לתעודת משלוח ממתינה
+    var warningsHtml = '';
+    if (isPending && isOut) {
+      var warnLines = [];
+      if (!doc.order_number || !doc.order_number.trim())
+        warnLines.push('⚠️ חסר מספר הזמנה (מספר הזמנתך) במסמך');
+      var newInOut = (doc.items||[]).filter(function(it){ return it.is_new; });
+      if (newInOut.length)
+        warnLines.push('⚠️ ' + newInOut.map(function(it){ return '"'+(it.extracted_name||'')+ '"'; }).join(', ') + ' — לא קיים במלאי, לא יורד');
+      if (warnLines.length)
+        warningsHtml = '<div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;padding:8px 12px;margin-top:10px;font-size:.8rem;color:#991b1b;line-height:1.7">' +
+          warnLines.join('<br>') + '</div>';
+    }
+    // אזהרה לחשבונית — נייר חדש יתווסף אוטומטית
+    if (isPending && !isOut) {
+      var newIn = (doc.items||[]).filter(function(it){ return it.is_new; });
+      if (newIn.length)
+        warningsHtml = '<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:8px;padding:8px 12px;margin-top:10px;font-size:.8rem;color:#92400e;line-height:1.7">' +
+          '🆕 ' + newIn.map(function(it){ return '"'+(it.extracted_name||'')+ '"'; }).join(', ') + ' — נייר חדש, יתווסף כסעיף חדש במלאי' +
+          '</div>';
+    }
+
     var actionsHtml = isPending
-      ? '<div style="display:flex;gap:8px;margin-top:12px">' +
-          '<button class="btn btn-primary" style="flex:1;padding:10px" onclick="approveAgentDoc(' + doc.id + ')">✅ אשר ועדכן מלאי</button>' +
-          '<button class="btn btn-clear" style="padding:10px 16px;border:1.5px solid #e5e7eb" onclick="rejectAgentDoc(' + doc.id + ')">❌ דחה</button>' +
+      ? '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">' +
+          '<button class="btn btn-primary" style="flex:1;min-width:160px;padding:10px" onclick="approveAgentDoc(' + doc.id + ')">' + approveLabel + '</button>' +
+          '<button class="btn btn-clear" style="padding:10px 12px;border:1.5px solid #d1d5db;font-size:.78rem" onclick="flipAgentDirection(' + doc.id + ')" title="שנה כיוון המסמך">' + flipLabel + '</button>' +
+          '<button class="btn btn-clear" style="padding:10px 14px;border:1.5px solid #e5e7eb" onclick="rejectAgentDoc(' + doc.id + ')">❌ דחה</button>' +
         '</div>'
       : '';
 
@@ -5862,6 +5923,7 @@ async function renderAgentTab() {
         '<tbody>' + itemsHtml + '</tbody>' +
       '</table>' +
       (isPending ? '<div style="font-size:.72rem;color:#9ca3af;margin-top:6px;text-align:left">💡 ניתן לערוך כמות, שיוך מלאי ולדלג על שורות לפני האישור</div>' : '') +
+      warningsHtml +
       actionsHtml +
     '</div>';
   }).join('');
@@ -5869,30 +5931,74 @@ async function renderAgentTab() {
   el.innerHTML = html;
 }
 
+function flipAgentDirection(docId) {
+  var doc = _agentDocs.find(function(d){ return d.id === docId; });
+  if (!doc) return;
+  doc.direction = (doc.direction === 'out') ? 'in' : 'out';
+  // reset unit labels
+  (doc.items||[]).forEach(function(it) {
+    it.unit = doc.direction === 'out' ? 'עותקים' : 'גיליונות';
+  });
+  renderAgentTab();
+}
+
 async function approveAgentDoc(docId) {
   var doc = _agentDocs.find(function(d){ return d.id === docId; });
   if (!doc) return;
+  // ברירת מחדל: אם אין direction ואם שם הקובץ מכיל "תעודה" — out
+  if (!doc.direction) {
+    var fname = (doc.file || '').toLowerCase();
+    doc.direction = (fname.includes('תעודה') || fname.includes('delivery') || fname.includes('teuoda')) ? 'out' : 'in';
+  }
   var isOut = doc.direction === 'out';
+
+  // ── בדיקות תקינות לתעודת משלוח ──
+  if (isOut) {
+    var missingOrder = !doc.order_number || !doc.order_number.trim();
+    // בדוק פריטים ממתינים שהנייר לא קיים
+    var activeItems = (doc.items||[]).filter(function(it, idx){
+      return !_getAgentItemEdit(docId, idx, 'skip', false);
+    });
+    var newPapers = activeItems.filter(function(it, idx){
+      var realIdx = (doc.items||[]).indexOf(it);
+      var editMatch = _getAgentItemEdit(docId, realIdx, 'matched_name', it.matched_name||'');
+      return !editMatch || it.is_new;
+    });
+
+    var warnings = [];
+    if (missingOrder) warnings.push('⚠️ חסר מספר הזמנה במסמך');
+    if (newPapers.length) {
+      var names = newPapers.map(function(it){ return '"' + (it.extracted_name||'') + '"'; }).join(', ');
+      warnings.push('⚠️ הנייר ' + names + ' לא קיים במלאי — לא ניתן להוריד ממנו');
+    }
+    if (warnings.length) {
+      var proceed = confirm(warnings.join('\n') + '\n\nלהמשיך בכל זאת ולדלג על פריטים אלה?');
+      if (!proceed) return;
+    }
+  }
 
   // טען מלאי עדכני מ-Firebase
   var inventory = await window._fbGet('inventory') || [];
   if (!Array.isArray(inventory)) inventory = Object.values(inventory);
 
-  var affected = 0;
+  var affected = 0, skipped = [], created = [];
   (doc.items||[]).forEach(function(it, idx) {
-    var skip        = _getAgentItemEdit(docId, idx, 'skip', false);
+    var skip    = _getAgentItemEdit(docId, idx, 'skip', false);
     if (skip) return;
-    var editQty     = _getAgentItemEdit(docId, idx, 'qty', it.qty||0);
-    var editMatch   = _getAgentItemEdit(docId, idx, 'matched_name', it.matched_name||'');
-    if (!editMatch || editQty <= 0) return;
+    var editQty   = _getAgentItemEdit(docId, idx, 'qty', it.qty||0);
+    var editMatch = _getAgentItemEdit(docId, idx, 'matched_name', it.matched_name||'');
+    if (editQty <= 0) return;
 
-    var inv_item = inventory.find(function(x){
-      return (x.name||'').toLowerCase().trim() === (editMatch||'').toLowerCase().trim();
-    });
-    if (!inv_item) return;
+    var inv_item = editMatch ? inventory.find(function(x){
+      return (x.name||'').toLowerCase().trim() === editMatch.toLowerCase().trim();
+    }) : null;
 
     if (isOut) {
-      // הורדה מהמלאי
+      // ── תעודת משלוח: הורדה מהמלאי ──
+      if (!inv_item) {
+        skipped.push(it.extracted_name || editMatch || '?');
+        return; // נייר לא קיים — דלג
+      }
       if (!inv_item.deductions) inv_item.deductions = [];
       inv_item.deductions.push({
         date: doc.date || new Date().toISOString().slice(0,10),
@@ -5901,15 +6007,14 @@ async function approveAgentDoc(docId) {
         qty: editQty,
         source_file: doc.file
       });
-      // עדכן מלאי: סכום קבלות פחות סכום הורדות
       var totalIn  = (inv_item.invoices||[]).reduce(function(s,x){ return s+(x.qty||0); }, 0);
       var totalOut = inv_item.deductions.reduce(function(s,x){ return s+(x.qty||0); }, 0);
       inv_item.qty = Math.max(0, totalIn - totalOut);
+      affected++;
     } else {
-      // הוספה למלאי — חשבונית ספק
+      // ── חשבונית: הוספה למלאי ──
       if (it.duplicate) return;
-      if (!inv_item.invoices) inv_item.invoices = [];
-      inv_item.invoices.push({
+      var invoiceEntry = {
         date: doc.date || new Date().toISOString().slice(0,10),
         inv: doc.doc_number || '',
         orderNum: '',
@@ -5917,21 +6022,32 @@ async function approveAgentDoc(docId) {
         price: it.price_per_unit || 0,
         supplier: doc.supplier || '',
         source_file: doc.file
-      });
+      };
+      if (!inv_item) {
+        // נייר חדש — צור סעיף חדש במלאי
+        var paperName = editMatch || it.extracted_name || 'נייר חדש';
+        inv_item = { name: paperName, qty: 0, invoices: [] };
+        inventory.push(inv_item);
+        created.push(paperName);
+      }
+      if (!inv_item.invoices) inv_item.invoices = [];
+      inv_item.invoices.push(invoiceEntry);
       inv_item.qty = inv_item.invoices.reduce(function(s,x){ return s+(x.qty||0); }, 0);
+      affected++;
     }
-    affected++;
   });
 
   // שמור מלאי מעודכן
+  _pushInventoryUndo();
   await window._fbPut('inventory', inventory);
-  // שנה סטטוס
   doc.status = 'approved';
   doc.approved_at = new Date().toISOString();
   await window._fbPut('agent_pending', _agentDocs);
 
-  var verb = isOut ? 'הורדו' : 'נוספו';
-  showToast('✅ מלאי עודכן — ' + verb + ' ' + affected + ' פריטים');
+  var msg = isOut ? ('✅ הורדו ' + affected + ' פריטים') : ('✅ נוספו ' + affected + ' פריטים');
+  if (created.length) msg += ' · 🆕 נוצרו סעיפים חדשים: ' + created.join(', ');
+  if (skipped.length) msg += ' · ⚠️ דולגו (לא במלאי): ' + skipped.join(', ');
+  showToast(msg, skipped.length ? 5000 : 3000);
   renderAgentTab();
 }
 
@@ -6343,17 +6459,15 @@ function unmarkRunDone(cardId, runIdx, machine) {
 function renderMachineQueue() {
   const el = document.getElementById('queue-content');
   const MACHINES = ['מכונה 4 צבעים','מכונה 8 צבעים'];
-  const active = (cards||[]).filter(c => c.status !== 'done');
+  // כל הכרטיסים — כולל done (להצגת עבודות שהושלמו)
+  const allCards = cards || [];
 
   let html = '<div style="padding:12px 4px">';
-  html += '<div style="font-size:1rem;font-weight:900;margin-bottom:16px;color:#1a1a4e">&#127981; תור מכונות — עבודות פתוחות</div>';
+  html += '<div style="font-size:1rem;font-weight:900;margin-bottom:16px;color:#1a1a4e">&#127981; תור מכונות</div>';
 
   MACHINES.forEach(machine => {
-    // Build a flat list of run-rows for this machine
-    // Each row: { c, runIdx (-1 = card-level), runLabel, sheets, hrs, isCustom, done }
     let runRows = [];
-
-    active.forEach(c => {
+    allCards.forEach(c => {
       const runsForMachine = (c.runs||[])
         .map(function(r,i){ return {r:r, i:i}; })
         .filter(function(x){ return x.r.machine === machine || (!x.r.machine && c.machine === machine); });
@@ -6368,32 +6482,33 @@ function renderMachineQueue() {
           runRows.push({ c:c, runIdx:i, runLabel:r.label||('ריצה '+(i+1)), sheets:sheets, hrs:hrs, isCustom:isCustom, done:!!r.done });
         });
       } else if (c.machine === machine) {
-        // Card with no runs array — single row
         var sheets = parseInt(c.sheets||0)||0;
         var customT = (c.customMachineTime && c.customMachineTime[machine]) ? parseFloat(c.customMachineTime[machine]) : null;
         var hrs = (customT != null) ? customT : _calcMachineTime(machine, sheets);
         var isCustom = (customT != null);
-        runRows.push({ c:c, runIdx:-1, runLabel:null, sheets:sheets, hrs:hrs, isCustom:isCustom, done:false });
+        // done if card status is done
+        runRows.push({ c:c, runIdx:-1, runLabel:null, sheets:sheets, hrs:hrs, isCustom:isCustom, done:c.status==='done' });
       }
     });
 
-    const activeRows = runRows.filter(function(r){ return !r.done; });
-    let totalHours = 0;
-    let hasUnknown = false;
-    activeRows.forEach(function(r){ if(r.hrs!=null) totalHours+=r.hrs; else hasUnknown=true; });
+    const pendingRows = runRows.filter(function(r){ return !r.done; });
+    const doneRows    = runRows.filter(function(r){ return r.done; });
+    let totalHours = 0, hasUnknown = false;
+    pendingRows.forEach(function(r){ if(r.hrs!=null) totalHours+=r.hrs; else hasUnknown=true; });
 
     const colorMap = {'מכונה 4 צבעים':'#dbeafe','מכונה 8 צבעים':'#d1fae5'};
     const iconMap  = {'מכונה 4 צבעים':'&#128309;','מכונה 8 צבעים':'&#128994;'};
 
-    html += `<div style="margin-bottom:20px;border-radius:12px;overflow:hidden;border:1.5px solid #e5e7eb">
+    html += `<div style="margin-bottom:24px;border-radius:12px;overflow:hidden;border:1.5px solid #e5e7eb">
       <div style="background:${colorMap[machine]};padding:12px 16px;display:flex;justify-content:space-between;align-items:center">
         <div style="font-weight:900;font-size:.95rem">${iconMap[machine]} ${machine}</div>
         <div style="font-size:.85rem;font-weight:700;color:#374151">
-          ${activeRows.length} ריצות · סה"כ: <strong>${_fmtHours(totalHours||null)}${hasUnknown?' (+ריצות ללא גיליונות)':''}</strong>
+          ${pendingRows.length} עבודות · סה"כ זמן הדפסה: <strong>${_fmtHours(totalHours||null)}${hasUnknown?' (+ריצות ללא גיליונות)':''}</strong>
         </div>
       </div>`;
 
-    if (!runRows.length) {
+    // ── תור פעיל ──
+    if (!pendingRows.length) {
       html += '<div style="padding:14px 16px;color:#9ca3af;font-size:.88rem">אין עבודות פתוחות</div>';
     } else {
       html += '<table style="width:100%;border-collapse:collapse">';
@@ -6401,48 +6516,51 @@ function renderMachineQueue() {
             + '<th style="padding:8px 12px;text-align:right;font-weight:700">עבודה</th>'
             + '<th style="padding:8px;text-align:center">ריצה</th>'
             + '<th style="padding:8px;text-align:center">גיליונות</th>'
-            + '<th style="padding:8px;text-align:center">זמן משוער</th>'
-            + '<th style="padding:8px;text-align:center;color:#1d4ed8">סיום משוער</th>'
             + '<th style="padding:8px;text-align:center">פעולה</th></tr>';
 
-      let cumHours = 0;
-      runRows.forEach(function({c, runIdx, runLabel, sheets, hrs, isCustom, done}, idx) {
-        if (!done && hrs != null) cumHours += hrs;
-        const finishTime = (!done && hrs != null) ? _fmtEndTime(cumHours) : '—';
-        const rowBg = done ? 'background:#f3f4f6;' : (idx%2 ? 'background:#fafafa;' : '');
-        const rowStyle = done ? rowBg + 'opacity:.48;' : rowBg;
+      pendingRows.forEach(function({c, runIdx, runLabel, sheets, hrs, isCustom}, idx) {
+        const rowBg = idx%2 ? 'background:#fafafa;' : '';
         const machineSafe = machine.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-        const editBtn = !done
-          ? `<button onclick="editRunTime('${c.id}',${runIdx},'${machineSafe}')"
-               title="ערוך זמן ריצה"
-               style="background:none;border:none;cursor:pointer;font-size:.78rem;color:#9ca3af;padding:0 2px;vertical-align:middle">&#9201;</button>`
-          : '';
-        const actionBtn = done
-          ? `<button onclick="unmarkRunDone('${c.id}',${runIdx},'${machineSafe}')"
-               style="background:#e5e7eb;color:#374151;border:none;border-radius:7px;padding:5px 12px;font-family:Heebo,sans-serif;font-size:.78rem;font-weight:700;cursor:pointer">
-               &#8617; בטל
-             </button>`
-          : `<button onclick="markRunDone('${c.id}',${runIdx},'${machineSafe}')"
-               style="background:#16a34a;color:white;border:none;border-radius:7px;padding:5px 12px;font-family:Heebo,sans-serif;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap">
-               &#10003; הודפס
-             </button>`;
+        const editBtn = `<button onclick="editRunTime('${c.id}',${runIdx},'${machineSafe}')"
+             title="ערוך זמן ריצה"
+             style="background:none;border:none;cursor:pointer;font-size:.78rem;color:#9ca3af;padding:0 2px;vertical-align:middle">&#9201;</button>`;
+        const actionBtn = `<button onclick="markRunDone('${c.id}',${runIdx},'${machineSafe}')"
+             style="background:#16a34a;color:white;border:none;border-radius:7px;padding:5px 12px;font-family:Heebo,sans-serif;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap">
+             &#10003; הודפס
+           </button>`;
 
-        html += `<tr style="border-top:1px solid #f3f4f6;font-size:.85rem;${rowStyle}">
+        html += `<tr style="border-top:1px solid #f3f4f6;font-size:.85rem;${rowBg}">
           <td style="padding:9px 12px;font-weight:700">${c.name||c.customer||'ללא שם'}${c.docNum?' <span style="color:#9ca3af;font-size:.75rem">#'+c.docNum+'</span>':''}</td>
           <td style="padding:9px 8px;text-align:center;color:#374151;font-size:.8rem">${runLabel||'—'}</td>
-          <td style="padding:9px 8px;text-align:center">${sheets||'—'}</td>
-          <td style="padding:9px 8px;text-align:center;font-weight:700;color:${done?'#9ca3af':hrs&&hrs>4?'#b91c1c':hrs&&hrs>2?'#d97706':'#166534'}">
-            ${done ? '<span style="color:#9ca3af">&#10003;</span>' : (_fmtHours(hrs) + (isCustom?' <span title="זמן מותאם אישית" style="font-size:.7rem;color:#7c3aed">&#9998;</span>':''))}
-            ${editBtn}
-          </td>
-          <td style="padding:9px 8px;text-align:center;font-weight:900;font-size:.95rem;letter-spacing:.5px;color:${done?'#9ca3af':'#1d4ed8'}">
-            ${!done && hrs != null ? '~' + finishTime : '—'}
-          </td>
-          <td style="padding:6px 8px;text-align:center">${actionBtn}</td>
+          <td style="padding:9px 8px;text-align:center">${sheets||'—'} ${hrs!=null?'<span style="font-size:.72rem;color:#6b7280">('+_fmtHours(hrs)+(isCustom?' ✎':'')+')</span>':''}</td>
+          <td style="padding:6px 8px;text-align:center">${editBtn} ${actionBtn}</td>
         </tr>`;
       });
       html += '</table>';
     }
+
+    // ── עבודות שהושלמו ──
+    if (doneRows.length) {
+      html += '<details style="border-top:2px solid #e5e7eb">'
+            + '<summary style="padding:10px 16px;font-size:.82rem;font-weight:700;color:#6b7280;cursor:pointer;user-select:none;list-style:none">'
+            + '&#10003; עבודות שהושלמו (' + doneRows.length + ')</summary>'
+            + '<table style="width:100%;border-collapse:collapse">';
+      doneRows.forEach(function({c, runIdx, runLabel, sheets}) {
+        const machineSafe = machine.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        const unmarkBtn = `<button onclick="unmarkRunDone('${c.id}',${runIdx},'${machineSafe}')"
+             style="background:#e5e7eb;color:#374151;border:none;border-radius:7px;padding:4px 10px;font-family:Heebo,sans-serif;font-size:.75rem;font-weight:700;cursor:pointer">
+             &#8617; בטל
+           </button>`;
+        html += `<tr style="border-top:1px solid #f3f4f6;font-size:.82rem;opacity:.6">
+          <td style="padding:7px 12px;font-weight:700">&#10003; ${c.name||c.customer||'ללא שם'}${c.docNum?' <span style="font-size:.72rem">#'+c.docNum+'</span>':''}</td>
+          <td style="padding:7px 8px;text-align:center;font-size:.78rem;color:#6b7280">${runLabel||'—'}</td>
+          <td style="padding:7px 8px;text-align:center">${sheets||'—'}</td>
+          <td style="padding:5px 8px;text-align:center">${unmarkBtn}</td>
+        </tr>`;
+      });
+      html += '</table></details>';
+    }
+
     html += '</div>';
   });
 
