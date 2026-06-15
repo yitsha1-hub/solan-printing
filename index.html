@@ -3904,55 +3904,71 @@ function buildPrintCard(c) {
   const _notesVal = [c.notes||'', _copiesLine ? 'מספר עותקים: <strong>'+_copiesLine+'</strong>' : '']
     .filter(Boolean).join('<br>');
 
-  const fields = [
+  const _fldRow = (lbl, val) => val ? `
+    <div style="display:flex;border-bottom:1.5px solid #e0e0e0;padding:12px 0;align-items:baseline">
+      <div style="width:165px;font-size:1.05rem;font-weight:700;color:#333;flex-shrink:0">${lbl}</div>
+      <div style="font-size:1.18rem;color:#111;font-weight:500;flex:1">${val}</div>
+    </div>` : '';
+
+  const fieldsTop = [
     ['שם העבודה', c.name||''],
     ['סוג עבודה', c.type||''],
     ['תאריך הזמנה', c.orderDate||''],
-    ['מועד אספקה', `<strong>${c.deliveryDate||'לא הוגדר'}</strong>`],
+    ['מועד אספקה', `<strong style="font-size:1.18rem">${c.deliveryDate||'לא הוגדר'}</strong>`],
     [_sheetsLabel, _sheetsVal],
-    ['מס\' עמודים', c.pages ? '<strong style="font-size:1.35rem;font-weight:900">'+c.pages+'</strong>' : ''],
+    ['מס\' עמודים', c.pages ? '<strong style="font-size:1.45rem;font-weight:900">'+c.pages+'</strong>' : ''],
+  ].map(([l,v])=>_fldRow(l,v)).join('');
+
+  const fieldsBottom = [
     ['גודל סופי', c.size||''],
     ['סוג נייר', c.paper||''],
     ['מכונה', c.machine||''],
     ['צבע', c.color||''],
-    ['הערות', _notesVal],
-  ];
+  ].map(([l,v])=>_fldRow(l,v)).join('');
 
-  const fieldRows = fields.map(([lbl,val]) => val ? `
-    <div style="display:flex;border-bottom:1.5px solid #e0e0e0;padding:11px 0;align-items:baseline">
-      <div style="width:155px;font-size:.92rem;font-weight:700;color:#333;flex-shrink:0">${lbl}</div>
-      <div style="font-size:1.05rem;color:#111;font-weight:500;flex:1">${val}</div>
-    </div>` : '').join('');
+  const notesRow = _notesVal ? _fldRow('הערות', _notesVal) : '';
+  const placementRow = c.placementDetails ? `
+    <div style="display:flex;border-bottom:2px solid #111;padding:12px 0;align-items:baseline">
+      <div style="width:165px;font-size:1.05rem;font-weight:700;color:#333;flex-shrink:0">מפרט פלייסמנטים</div>
+      <div style="font-size:1.18rem;font-weight:800;color:#111;white-space:pre-wrap;flex:1">${c.placementDetails}</div>
+    </div>` : '';
 
-  return `<div style="font-family:'Heebo',Arial,sans-serif;direction:rtl;width:100%;background:white;color:#111">
-    <!-- כותרת כרטיס -->
-    <div style="padding:18px 32px 14px;display:flex;justify-content:space-between;align-items:baseline;border-bottom:3px solid #111">
-      <div style="font-size:1.65rem;font-weight:900;color:#111">כרטיס עבודה</div>
-      <div style="font-size:.82rem;color:#555">נוצר: ${c.createdAt} &nbsp;|&nbsp; מס' עבודה: ${c.id}</div>
-    </div>
-    <!-- שדות -->
-    <div style="padding:6px 32px 20px;flex:1">${fieldRows}${c.placementDetails?`<div style="display:flex;border-bottom:2px solid #111;padding:12px 0;align-items:baseline"><div style="width:155px;font-size:.92rem;font-weight:700;color:#333;flex-shrink:0">מפרט פלייסמנטים</div><div style="font-size:1.05rem;font-weight:800;color:#111;white-space:pre-wrap;flex:1">${c.placementDetails}</div></div>`:''}</div>
-    ${(c.runs&&c.runs.length&&!(c.size&&c.size.includes('פלייסמנטים')))?`
-    <!-- ריצות -->
-    <div style="margin:0 32px 6px;font-size:.9rem;font-weight:800;color:#111;padding:8px 0;border-top:2.5px solid #111">פירוט ריצות הדפסה</div>
-    <div style="padding:0 32px 20px">
+  const hasRuns = c.runs && c.runs.length && !(c.size && c.size.includes('פלייסמנטים'));
+  const runsSection = hasRuns ? `
+    <div style="margin:0 32px 4px;font-size:1rem;font-weight:800;color:#111;padding:8px 0;border-top:2.5px solid #111">פירוט ריצות הדפסה</div>
+    <div style="padding:0 32px 16px">
       <table style="width:100%;border-collapse:collapse">
         <thead>
           <tr style="background:#111">
-            <th style="padding:8px 10px;color:#fff;text-align:right;font-size:.78rem">ריצה</th>
-            <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">עמודים</th>
-            <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">טווח</th>
-            <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">כמות להדפסה</th>
-            <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">קיפולים</th>
-            <th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">מכונה</th>
-            ${_hasPaper ? '<th style="padding:8px 10px;color:#fff;text-align:center;font-size:.78rem">סוג נייר</th>' : ''}
+            <th style="padding:9px 10px;color:#fff;text-align:right;font-size:.88rem">ריצה</th>
+            <th style="padding:9px 10px;color:#fff;text-align:center;font-size:.88rem">עמודים</th>
+            <th style="padding:9px 10px;color:#fff;text-align:center;font-size:.88rem">טווח</th>
+            <th style="padding:9px 10px;color:#fff;text-align:center;font-size:.88rem">כמות להדפסה</th>
+            <th style="padding:9px 10px;color:#fff;text-align:center;font-size:.88rem">קיפולים</th>
+            <th style="padding:9px 10px;color:#fff;text-align:center;font-size:.88rem">מכונה</th>
+            ${_hasPaper ? '<th style="padding:9px 10px;color:#fff;text-align:center;font-size:.88rem">סוג נייר</th>' : ''}
           </tr>
         </thead>
         <tbody>${runsRows}</tbody>
       </table>
-    </div>`:''}
+    </div>` : '';
+
+  return `<div style="font-family:'Heebo',Arial,sans-serif;direction:rtl;width:100%;background:white;color:#111">
+    <!-- כותרת -->
+    <div style="padding:18px 32px 14px;display:flex;justify-content:space-between;align-items:baseline;border-bottom:3px solid #111">
+      <div style="font-size:1.85rem;font-weight:900;color:#111">כרטיס עבודה</div>
+      <div style="font-size:.88rem;color:#555">נוצר: ${c.createdAt} &nbsp;|&nbsp; מס' עבודה: ${c.id}</div>
+    </div>
+    <!-- שדות עליונים (עד מס' עמודים) -->
+    <div style="padding:6px 32px 4px">${fieldsTop}</div>
+    <!-- ריצות (בין מס' עמודים לגודל סופי) -->
+    ${runsSection}
+    <!-- שדות תחתונים (גודל סופי ומטה) -->
+    <div style="padding:0 32px 4px">${fieldsBottom}${placementRow}</div>
+    <!-- הערות -->
+    ${notesRow ? `<div style="padding:0 32px 16px">${notesRow}</div>` : ''}
     <!-- פוטר -->
-    <div style="border-top:1px solid #ccc;padding:10px 32px;font-size:.78rem;color:#777;text-align:center;margin-top:auto">
+    <div style="border-top:1px solid #ccc;padding:10px 32px;font-size:.82rem;color:#777;text-align:center;margin-top:auto">
       סולן הדפסות בע"מ
     </div>
   </div>`;
