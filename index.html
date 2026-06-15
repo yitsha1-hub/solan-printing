@@ -846,9 +846,30 @@ window._fbInit = () => true;
             <button type="button" class="size-btn" onclick="pickSize('פוסטר חצי גיליון')">פוסטר ½ גיליון</button>
             <button type="button" class="size-btn" onclick="pickSize('A3 קיפול ל-A4')">A3 קיפול ל-A4</button>
             <button type="button" class="size-btn" onclick="pickSize('פלייסמנטים')">פלייסמנטים</button>
+            <button type="button" class="size-btn" id="size-btn-printer" onclick="togglePrinterPaperPicker()">🖨️ נייר מדפסת ▾</button>
           </div>
-          <input class="fi" type="text" id="f-size" placeholder='או גודל אחר...' autocomplete="off"
-            oninput="calcRuns()" onchange="calcRuns()">
+          <div id="printer-paper-picker" style="display:none;margin-top:6px;padding:10px 14px;background:#f0f4ff;border-radius:8px;border:1.5px solid #c0ccf0;display:none;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-size:.76rem;font-weight:700;color:#2d3561;white-space:nowrap">כמה בגיליון?</span>
+              <button type="button" class="size-btn" id="pp-btn-8" onclick="setPrinterPerSheet(8)" style="font-size:.85rem">8 בגיליון</button>
+              <button type="button" class="size-btn" id="pp-btn-9" onclick="setPrinterPerSheet(9)" style="font-size:.85rem">9 בגיליון</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-size:.76rem;font-weight:700;color:#2d3561;white-space:nowrap">גרמאז נייר?</span>
+              <button type="button" class="size-btn" id="pp-btn-80" onclick="setPrinterGram('נ/ע 80 גרם 64*90')" style="font-size:.85rem">נ/ע 80 גרם</button>
+              <button type="button" class="size-btn" id="pp-btn-90" onclick="setPrinterGram('נ/ע 90 גרם 64*90')" style="font-size:.85rem">נ/ע 90 גרם</button>
+              <button type="button" onclick="clearPrinterPaper()" style="font-size:.78rem;padding:4px 10px;border:1.5px solid #c0ccf0;border-radius:6px;background:white;color:#666;cursor:pointer;font-family:Heebo,sans-serif">✕ נייר אחר</button>
+            </div>
+          </div>
+          <div style="display:none">
+          </div>
+          <div class="ac-wrap">
+            <input class="fi" type="text" id="f-size" placeholder='או גודל אחר...' autocomplete="off"
+              oninput="calcRuns();acInput(this,'ac-size',acSugg('f-size',this.value))"
+              onfocus="acInput(this,'ac-size',acSugg('f-size',this.value))"
+              onblur="acDelay('ac-size')" onchange="calcRuns()">
+            <div class="ac-list" id="ac-size"></div>
+          </div>
         </div>
       </div>
 
@@ -2452,12 +2473,58 @@ function acDelay(listId) {
 // ========== SIZE BUTTONS ==========
 function pickSize(val) {
   document.getElementById('f-size').value = val;
+  // סגור picker נייר מדפסת אם פתוח
+  var pp = document.getElementById('printer-paper-picker');
+  if (pp) pp.style.display = 'none';
   syncSizeBtns(val);
   calcRuns();
+}
+var _ppSheet = 0, _ppGram = '';
+function togglePrinterPaperPicker() {
+  var pp = document.getElementById('printer-paper-picker');
+  if (!pp) return;
+  var open = pp.style.display === 'flex';
+  pp.style.display = open ? 'none' : 'flex';
+}
+function _applyPrinterPaper() {
+  if (!_ppSheet) return;
+  var sizeVal = 'נייר מדפסת — ' + _ppSheet + ' בגיליון (גיליון 64×90)';
+  document.getElementById('f-size').value = sizeVal;
+  syncSizeBtns(sizeVal);
+  calcRuns();
+  if (_ppGram) {
+    document.getElementById('f-paper').value = _ppGram;
+  }
+  if (_ppSheet && _ppGram) {
+    document.getElementById('printer-paper-picker').style.display = 'none';
+  }
+}
+function setPrinterPerSheet(n) {
+  _ppSheet = n;
+  document.getElementById('pp-btn-8').classList.toggle('active', n === 8);
+  document.getElementById('pp-btn-9').classList.toggle('active', n === 9);
+  _applyPrinterPaper();
+}
+function setPrinterGram(g) {
+  _ppGram = g;
+  document.getElementById('pp-btn-80').classList.toggle('active', g === 'נ/ע 80 גרם 64*90');
+  document.getElementById('pp-btn-90').classList.toggle('active', g === 'נ/ע 90 גרם 64*90');
+  _applyPrinterPaper();
+}
+function clearPrinterPaper() {
+  _ppGram = '';
+  document.getElementById('f-paper').value = '';
+  document.getElementById('pp-btn-80').classList.remove('active');
+  document.getElementById('pp-btn-90').classList.remove('active');
+  document.getElementById('f-paper').focus();
+  document.getElementById('printer-paper-picker').style.display = 'none';
 }
 function syncSizeBtns(val) {
   document.querySelectorAll('#view-new .size-btn').forEach(b =>
     b.classList.toggle('active', b.textContent.trim()===val.trim()));
+  // סנכרן כפתור נייר מדפסת
+  var pb = document.getElementById('size-btn-printer');
+  if (pb) pb.classList.toggle('active', val.startsWith('נייר מדפסת'));
 }
 function pmPickSize(val) {
   document.getElementById('pm-size').value = val;
@@ -3385,6 +3452,8 @@ function saveCard() {
   addHistory('f-name',  name);
   addHistory('f-type',  document.getElementById('f-type').value.trim());
   addHistory('f-paper', document.getElementById('f-paper').value.trim());
+  addHistory('f-size',  document.getElementById('f-size').value.trim());
+  addHistory('f-notes', document.getElementById('f-notes').value.trim());
   const card={
     id:Date.now(), name,
     type:         document.getElementById('f-type').value,
@@ -3778,6 +3847,8 @@ function saveFromPreview() {
   addHistory('f-name',  card.name);
   addHistory('f-type',  card.type);
   addHistory('f-paper', card.paper);
+  addHistory('f-size',  card.size);
+  addHistory('f-notes', card.notes);
   cards.unshift(card);
   persist();
   document.getElementById('print-modal-save-btn').style.display = 'none';
