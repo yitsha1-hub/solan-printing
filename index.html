@@ -3232,6 +3232,10 @@ function openRunsModal(n, pages) {
     </div>
   </div>`;
 
+  const _rmSize = (n.size||'').toLowerCase();
+  const _rmFs32 = /70[\s×x*]?100|16[.,]5[\s×x*]?24/.test(_rmSize);
+  const _rmFs16 = /64[\s×x*]?90|a4|240[\s×x*]?330|330[\s×x*]?240/.test(_rmSize);
+
   if (currentRuns.length) {
     bodyHTML += `<div style="text-align:left;margin-bottom:8px">
       <button type="button" class="btn btn-sm btn-tpl" id="toggle-run-paper"
@@ -3240,6 +3244,8 @@ function openRunsModal(n, pages) {
     </div>`;
     bodyHTML += currentRuns.map((r,i) => {
       const defPaper = defaultPapers[i] || paperForThis || '';
+      const _canTumble = (_rmFs32 && r.pages < 32) || (_rmFs16 && r.pages < 16);
+      const _showTumble = _canTumble && r.machine === 'מכונה 4 צבעים';
       return `
       <div class="runs-modal-row">
         <div style="display:flex;flex-direction:column;gap:2px;margin-left:4px">
@@ -3260,13 +3266,20 @@ function openRunsModal(n, pages) {
               width:100%;margin-top:4px;box-sizing:border-box">
         </div>
         <div class="run-copies-badge">${r.copies.toLocaleString()} יח'</div>
-        <select class="run-mach-sel" data-run="${r.num}"
-          onchange="currentRuns[${i}].machine=this.value">
-          <option value="">-- מכונה --</option>
-          <option value="מכונה 4 צבעים">מכונה 4 צבעים</option>
-          <option value="מכונה 8 צבעים">מכונה 8 צבעים</option>
-          
-        </select>
+        <div style="display:flex;flex-direction:column;align-items:flex-start;gap:5px">
+          <select class="run-mach-sel" data-run="${r.num}" data-idx="${i}" data-cantumble="${_canTumble?'1':'0'}"
+            onchange="currentRuns[${i}].machine=this.value;_rmUpdateTumble(${i},this.value,${_canTumble})">
+            <option value="">-- מכונה --</option>
+            <option value="מכונה 4 צבעים" ${r.machine==='מכונה 4 צבעים'?'selected':''}>מכונה 4 צבעים</option>
+            <option value="מכונה 8 צבעים" ${r.machine==='מכונה 8 צבעים'?'selected':''}>מכונה 8 צבעים</option>
+          </select>
+          ${_canTumble ? `<label id="rm-tumble-${i}" onclick="currentRuns[${i}].tumble=!currentRuns[${i}].tumble;this.style.background=currentRuns[${i}].tumble?'#eff6ff':'#f8fafc';this.style.borderColor=currentRuns[${i}].tumble?'#2563eb':'#cbd5e1';this.style.color=currentRuns[${i}].tumble?'#1d4ed8':'#64748b';this.textContent=currentRuns[${i}].tumble?'🔄 מתהפך ✓':'🔄 מתהפך'"
+            style="display:${_showTumble?'inline-flex':'none'};align-items:center;gap:4px;cursor:pointer;font-size:.8rem;font-weight:700;
+              padding:3px 9px;border-radius:6px;border:1.5px solid ${r.tumble?'#2563eb':'#cbd5e1'};
+              background:${r.tumble?'#eff6ff':'#f8fafc'};color:${r.tumble?'#1d4ed8':'#64748b'};white-space:nowrap">
+            ${r.tumble?'🔄 מתהפך ✓':'🔄 מתהפך'}
+          </label>` : ''}
+        </div>
       </div>`;
     }).join('');
   } else {
@@ -3323,6 +3336,14 @@ function _updateRunsCopies(val) {
     const btn = document.getElementById('toggle-run-paper');
     if (btn) btn.style.background = '#dbeafe';
   }
+}
+
+function _rmUpdateTumble(idx, machine, canTumble) {
+  var btn = document.getElementById('rm-tumble-' + idx);
+  if (!btn) return;
+  var show = canTumble && machine === 'מכונה 4 צבעים';
+  btn.style.display = show ? 'inline-flex' : 'none';
+  if (!show) { currentRuns[idx].tumble = false; }
 }
 
 function closeRunsModal() {
