@@ -2748,11 +2748,12 @@ function calcRuns() {
   else if (/64[\s×x*]?90|90[\s×x*]?64|a4|240[\s×x*]?330|330[\s×x*]?240/.test(size)) { fs=16; lbl='64×90/A4/240×330 — 16 עמ\' לגיליון'; }
   else { field.style.display='none'; currentRuns=[]; return; }
 
-  // preserve machine choices
-  const prev = {};
+  // preserve machine + tumble choices
+  const prev = {}, prevTumble = {};
   document.querySelectorAll('.mach-sel').forEach(s=>{ if(s.dataset.run) prev[s.dataset.run]=s.value; });
+  currentRuns.forEach(r=>{ prevTumble[r.num]=r.tumble||false; });
   currentRuns = buildRuns(pages, copies, fs);
-  currentRuns.forEach(r=>{ if(prev[r.num]) r.machine=prev[r.num]; });
+  currentRuns.forEach(r=>{ if(prev[r.num]) r.machine=prev[r.num]; if(prevTumble[r.num]) r.tumble=true; });
 
   _runsLabel = lbl; _runsPages = pages; _runsCopies = copies; _runsFs = fs;
   _renderCurrentRunsOutput();
@@ -2764,43 +2765,61 @@ var _runsLabel='', _runsPages=0, _runsCopies=0, _runsFs=0;
 function _renderCurrentRunsOutput() {
   const out = document.getElementById('runs-output');
   if (!out || !currentRuns.length) return;
-  const rows = currentRuns.map((r,i)=>`
-    <tr>
-      <td>
-        <div style="display:flex;align-items:center;gap:4px">
-          <div style="display:flex;flex-direction:column;gap:1px">
-            <button type="button" onclick="moveCurrentRun(${i},-1)"
-              style="background:none;border:1px solid #ccc;border-radius:3px;padding:0 5px;line-height:1.3;font-size:.7rem;cursor:pointer;color:#555"
-              ${i===0?'disabled style="opacity:.3;cursor:default"':''}>▲</button>
-            <button type="button" onclick="moveCurrentRun(${i},1)"
-              style="background:none;border:1px solid #ccc;border-radius:3px;padding:0 5px;line-height:1.3;font-size:.7rem;cursor:pointer;color:#555"
-              ${i===currentRuns.length-1?'disabled style="opacity:.3;cursor:default"':''}>▼</button>
-          </div>
-          <strong>ריצה ${i+1}</strong>
-        </div>
-      </td>
-      <td>${r.pages} עמ'</td>
-      <td style="font-size:.8rem;color:#444">${r.pageRange}</td>
-      <td><strong>${r.copies.toLocaleString()}</strong></td>
-      <td style="font-size:.76rem;color:#888">${r.folds}</td>
-      <td><select class="mach-sel" data-run="${r.num}" onchange="currentRuns[${i}].machine=this.value">
-        <option value="">-- מכונה --</option>
-        <option value="מכונה 4 צבעים" ${r.machine==='מכונה 4 צבעים'?'selected':''}>מכונה 4 צבעים</option>
-        <option value="מכונה 8 צבעים" ${r.machine==='מכונה 8 צבעים'?'selected':''}>מכונה 8 צבעים</option>
-      </select></td>
-    </tr>`).join('');
+  const _size = (document.getElementById('f-size')||{value:''}).value.trim().toLowerCase();
+  const _is32 = /70[\s×x*]?100|100[\s×x*]?70|16[.,]5[\s×x*]?24|24[\s×x*]?16|^a5$/.test(_size);
+  const _is16 = /64[\s×x*]?90|90[\s×x*]?64|a4|240[\s×x*]?330|330[\s×x*]?240/.test(_size);
 
-  out.innerHTML=`<div class="runs-box">
-    <div class="runs-box-title">🔢 ריצות הדפסה — ${_runsLabel}</div>
-    <table class="runs-table">
-      <thead><tr><th></th><th>עמודים</th><th>טווח עמודים</th><th>כמות</th><th>קיפולים</th><th>מכונה</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div class="runs-summary">
-      <span>ריצות: <strong>${currentRuns.length}</strong></span>
-      <span>עמודים: <strong>${_runsPages}</strong></span>
-      <span>עותקים: <strong>${_runsCopies.toLocaleString()}</strong></span>
-    </div></div>`;
+  const rows = currentRuns.map(function(r,i){
+    var _is4c = r.machine === 'מכונה 4 צבעים';
+    var _showTumble = (_is32 && _is4c && r.pages < 32) || (_is16 && r.pages < 16);
+    var _tumbleBtn = _showTumble ? (
+      '<label onclick="currentRuns['+i+'].tumble=!currentRuns['+i+'].tumble;_renderCurrentRunsOutput()" '+
+      'style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:.82rem;font-weight:700;'+
+      'padding:3px 10px;border-radius:6px;border:1.5px solid '+(r.tumble?'#2563eb':'#cbd5e1')+';'+
+      'background:'+(r.tumble?'#eff6ff':'#f8fafc')+';color:'+(r.tumble?'#1d4ed8':'#64748b')+';white-space:nowrap;margin-top:5px;display:block">'+
+      '🔄 מתהפך'+(r.tumble?' ✓':'')+
+      '</label>'
+    ) : '';
+    return '<tr>'+
+      '<td>'+
+        '<div style="display:flex;align-items:center;gap:4px">'+
+          '<div style="display:flex;flex-direction:column;gap:1px">'+
+            '<button type="button" onclick="moveCurrentRun('+i+',-1)" '+
+              'style="background:none;border:1px solid #ccc;border-radius:3px;padding:0 5px;line-height:1.3;font-size:.7rem;cursor:pointer;color:#555"'+
+              (i===0?' disabled':'')+'>▲</button>'+
+            '<button type="button" onclick="moveCurrentRun('+i+',1)" '+
+              'style="background:none;border:1px solid #ccc;border-radius:3px;padding:0 5px;line-height:1.3;font-size:.7rem;cursor:pointer;color:#555"'+
+              (i===currentRuns.length-1?' disabled':'')+'>▼</button>'+
+          '</div>'+
+          '<strong>ריצה '+(i+1)+'</strong>'+
+        '</div>'+
+      '</td>'+
+      '<td>'+r.pages+' עמ\'</td>'+
+      '<td style="font-size:.8rem;color:#444">'+r.pageRange+'</td>'+
+      '<td><strong>'+r.copies.toLocaleString()+'</strong></td>'+
+      '<td style="font-size:.76rem;color:#888">'+r.folds+'</td>'+
+      '<td>'+
+        '<select class="mach-sel" data-run="'+r.num+'" onchange="currentRuns['+i+'].machine=this.value;_renderCurrentRunsOutput()">'+
+          '<option value="">— מכונה —</option>'+
+          '<option value="מכונה 4 צבעים"'+(r.machine==='מכונה 4 צבעים'?' selected':'')+'>מכונה 4 צבעים</option>'+
+          '<option value="מכונה 8 צבעים"'+(r.machine==='מכונה 8 צבעים'?' selected':'')+'>מכונה 8 צבעים</option>'+
+        '</select>'+
+        _tumbleBtn+
+      '</td>'+
+    '</tr>';
+  }).join('');
+
+  out.innerHTML='<div class="runs-box">'+
+    '<div class="runs-box-title">🔢 ריצות הדפסה — '+_runsLabel+'</div>'+
+    '<table class="runs-table">'+
+      '<thead><tr><th></th><th>עמודים</th><th>טווח עמודים</th><th>כמות</th><th>קיפולים</th><th>מכונה</th></tr></thead>'+
+      '<tbody>'+rows+'</tbody>'+
+    '</table>'+
+    '<div class="runs-summary">'+
+      '<span>ריצות: <strong>'+currentRuns.length+'</strong></span>'+
+      '<span>עמודים: <strong>'+_runsPages+'</strong></span>'+
+      '<span>עותקים: <strong>'+_runsCopies.toLocaleString()+'</strong></span>'+
+    '</div></div>';
 }
 
 function _recalcPageRanges() {
@@ -3859,7 +3878,7 @@ function buildPrintCard(c) {
       <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center">${r.pages ? r.pages+' עמ\'' : '—'}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-size:.8rem">${r.pageRange||'—'}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-weight:700">${r.copies?parseInt(r.copies).toLocaleString():'—'}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center">${r.folds||'—'}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center">${r.folds||'—'}${r.tumble?' <span style="color:#1d4ed8;font-weight:700;font-size:.75rem"> · 🔄מתהפך</span>':''}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-weight:700">${r.machine||'—'}</td>
       ${_hasPaper ? `<td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-size:.8rem">${r.paper||'—'}</td>` : ''}
     </tr>`).join('');
