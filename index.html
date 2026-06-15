@@ -8150,6 +8150,10 @@ async function _fbPollAll() {
       });
       solanUsers = merged;
       localStorage.setItem('solanUsers', JSON.stringify(solanUsers));
+      // דחוף חזרה ל-Firebase אם היו משתמשים מקומיים שחסרו שם
+      if (merged.length > incoming.length) {
+        window._fbPut('solanUsers', solanUsers);
+      }
       if (currentUser) {
         var me = solanUsers.find(function(u){ return u.id === currentUser.id; });
         if (me) { currentUser.permissions = me.permissions||{}; sessionStorage.setItem('solanCurrentUser', JSON.stringify(currentUser)); }
