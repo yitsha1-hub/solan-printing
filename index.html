@@ -2165,6 +2165,7 @@ function persist() {
       inventoryHistory: inventoryHistory, invoiceLogs: invoiceLogs,
       quotes: quotes, customers: customers, orders: orders
     };
+    window._fbPendingPuts = window._fbPendingPuts || {};
     Object.keys(_paths).forEach(function(p) {
       var _json = JSON.stringify(_paths[p]);
       // אם ה-collection הזה לא השתנה אצלנו מאז הסנכרון האחרון מהשרת — לא דוחפים אותו.
@@ -2172,7 +2173,13 @@ function persist() {
       // שבוצעה במקום אחר רק בגלל ש-persist() נקרא על שינוי בקולקציה אחרת.
       if (window._fbSnapshot && window._fbSnapshot[p] === _json) return;
       window._fbSnapshot[p] = _json;
-      window._fbPut(p, _paths[p]);
+      // מסמנים "כתיבה בתהליך" כדי שה-poll (כל 15 שניות) לא ימשוך בטעות נתון ישן
+      // מהשרת בזמן שהכתיבה הזו עדיין באוויר, וידרוס איתו את העדכון המקומי שלנו
+      // (זה מה שגרם לתעודות משלוח/הורדות מלאי "להתאפס" בחזרה אחרי כמה שניות).
+      window._fbPendingPuts[p] = (window._fbPendingPuts[p] || 0) + 1;
+      window._fbPut(p, _paths[p]).then(function() {
+        window._fbPendingPuts[p] = Math.max(0, (window._fbPendingPuts[p] || 1) - 1);
+      });
     });
     updateFBStatus(true);
   }
@@ -8857,9 +8864,10 @@ async function _fbPollAll() {
   // כדי שלא נמשוך מהשרת נתון ישן (לפני שהכתיבה שלנו הגיעה) וננטרל את השינוי המקומי
   if (Date.now() - (window._lastLocalWriteAt||0) < 4000) return;
   try {
+    var _pend = window._fbPendingPuts || {};
     // כרטיסים
     var v = await window._fbGet('cards');
-    if (v !== null) {
+    if (v !== null && !(_pend.cards > 0)) {
       cards = Array.isArray(v) ? v : Object.values(v);
       localStorage.setItem('solanCards', JSON.stringify(cards));
       window._fbSnapshot.cards = JSON.stringify(cards);
@@ -8869,15 +8877,15 @@ async function _fbPollAll() {
     }
     // הזמנות
     var ov = await window._fbGet('orders');
-    if (ov !== null) {
+    if (ov !== null && !(_pend.orders > 0)) {
       orders = Array.isArray(ov) ? ov : Object.values(ov);
       localStorage.setItem('solanOrders', JSON.stringify(orders));
       window._fbSnapshot.orders = JSON.stringify(orders);
       if (document.getElementById('view-orders') && document.getElementById('view-orders').style.display!=='none') renderOrders();
     }
-    // מלאי
+    // מלאי — לא דורסים אם יש PUT באוויר (זה מה שגרם לתעודות/הורדות מלאי "להתאפס")
     var inv = await window._fbGet('inventory');
-    if (inv !== null) {
+    if (inv !== null && !(_pend.inventory > 0)) {
       inventory = Array.isArray(inv) ? inv : Object.values(inv);
       localStorage.setItem('solanInventory', JSON.stringify(inventory));
       window._fbSnapshot.inventory = JSON.stringify(inventory);
@@ -8885,21 +8893,21 @@ async function _fbPollAll() {
     }
     // עיתונים
     var nv = await window._fbGet('newspapers');
-    if (nv !== null) {
+    if (nv !== null && !(_pend.newspapers > 0)) {
       newspapers = Array.isArray(nv) ? nv : Object.values(nv);
       localStorage.setItem('solanNewspapers', JSON.stringify(newspapers));
       window._fbSnapshot.newspapers = JSON.stringify(newspapers);
     }
     // הצעות מחיר
     var qv = await window._fbGet('quotes');
-    if (qv !== null) {
+    if (qv !== null && !(_pend.quotes > 0)) {
       quotes = Array.isArray(qv) ? qv : Object.values(qv);
       localStorage.setItem('solanQuotes', JSON.stringify(quotes));
       window._fbSnapshot.quotes = JSON.stringify(quotes);
     }
     // לקוחות
     var cv = await window._fbGet('customers');
-    if (cv !== null) {
+    if (cv !== null && !(_pend.customers > 0)) {
       customers = Array.isArray(cv) ? cv : Object.values(cv);
       localStorage.setItem('solanCustomers', JSON.stringify(customers));
       window._fbSnapshot.customers = JSON.stringify(customers);
