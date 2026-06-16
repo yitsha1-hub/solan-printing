@@ -5903,6 +5903,19 @@ function _setAgentItemEdit(docId, idx, field, value) {
   _agentEdits[docId][idx][field] = value;
 }
 
+// קובע אם אישור המסמך יוריד מהמלאי ("subtract") או יוסיף נייר חדש למלאי ("add").
+// כלל העסקי: תעודת משלוח (מהספק RONYMAR או ללקוח) תמיד מורידה מהמלאי, חשבונית תמיד מוסיפה —
+// זה לא תלוי ב-direction (שמשמש רק לתצוגה/לקיבוץ "נכנס/יוצא").
+// doc.action_override מאפשר עקיפה ידנית (כפתור "שנה ל...").
+function _agentDocAction(doc) {
+  if (doc.action_override === 'add' || doc.action_override === 'subtract') return doc.action_override;
+  var t = doc.doc_type || '';
+  if (t.indexOf('משלוח') >= 0) return 'subtract';   // תעודת_משלוח_ספק / תעודת_משלוח_לקוח
+  if (t.indexOf('חשבונית') >= 0) return 'add';       // חשבונית / חשבונית_מס
+  // doc_type לא ברור — תאימות לאחור: לפי direction
+  return doc.direction === 'out' ? 'subtract' : 'add';
+}
+
 async function renderAgentTab() {
   var el = document.getElementById('agent-content');
   el.innerHTML = '<div style="padding:40px;text-align:center;color:#888">טוען נתונים מהסוכן...</div>';
@@ -5951,20 +5964,21 @@ async function renderAgentTab() {
   html += sorted.map(function(doc) {
     var isPending  = doc.status === 'pending';
     var isApproved = doc.status === 'approved';
-    var isOut      = doc.direction === 'out';
+    var action     = _agentDocAction(doc);
+    var isOut      = action === 'subtract';
     var borderColor = isPending ? '#f59e0b' : (isApproved ? '#16a34a' : '#9ca3af');
     var bgColor     = isPending ? '#fffbeb' : (isApproved ? '#f0fdf4' : '#f9fafb');
     var statusLabel = isPending ? '⏳ ממתין לאישור' : (isApproved ? '✅ אושר' : '❌ נדחה');
     var dirBadge    = isOut
-      ? '<span style="background:#fef3c7;color:#92400e;border-radius:8px;padding:2px 8px;font-size:.72rem;font-weight:800;margin-right:6px">📤 הורדה ללקוח</span>'
-      : '<span style="background:#dbeafe;color:#1e40af;border-radius:8px;padding:2px 8px;font-size:.72rem;font-weight:800;margin-right:6px">📥 קבלת סחורה</span>';
+      ? '<span style="background:#fef3c7;color:#92400e;border-radius:8px;padding:2px 8px;font-size:.72rem;font-weight:800;margin-right:6px">📤 יוריד מהמלאי</span>'
+      : '<span style="background:#dbeafe;color:#1e40af;border-radius:8px;padding:2px 8px;font-size:.72rem;font-weight:800;margin-right:6px">📥 יוסיף למלאי</span>';
 
     var metaParts = [doc.doc_type, doc.doc_number ? '#' + doc.doc_number : '', doc.date];
     if (!isOut && doc.supplier) metaParts.push(doc.supplier);
     if (isOut && doc.customer)  metaParts.push('לקוח: ' + doc.customer);
-    if (isOut && doc.order_number) metaParts.push('הזמנה: ' + doc.order_number);
+    if (doc.order_number) metaParts.push('הזמנה: ' + doc.order_number);
 
-    var thLabel = isOut ? 'שם העבודה' : 'שם הנייר';
+    var thLabel = isOut ? 'שם העבודה/נייר' : 'שם הנייר';
     var matchLabel = isOut ? 'נייר להורדה' : 'התאמה במלאי';
 
     var itemsHtml = (doc.items||[]).map(function(it, idx){
@@ -6011,7 +6025,7 @@ async function renderAgentTab() {
     var extraTh = isPending ? '<th style="padding:6px 8px;font-size:.72rem;color:#555">דלג</th>' : '';
 
     var approveLabel = isOut ? '✅ אשר — הורד מהמלאי' : '✅ אשר — הוסף למלאי';
-    var flipLabel    = isOut ? '🔄 שנה ל: קבלת סחורה' : '🔄 שנה ל: הורדה ללקוח';
+    var flipLabel    = isOut ? '🔄 שנה ל: הוספה למלאי' : '🔄 שנה ל: הורדה מהמלאי';
 
     // אזהרות לתעודת משלוח ממתינה
     var warningsHtml = '';
@@ -6073,10 +6087,11 @@ async function renderAgentTab() {
 function flipAgentDirection(docId) {
   var doc = _agentDocs.find(function(d){ return d.id === docId; });
   if (!doc) return;
-  doc.direction = (doc.direction === 'out') ? 'in' : 'out';
-  // reset unit labels
+  // מעקף ידני על הפעולה בפועל (הוספה/הורדה) — לא משנה את doc.direction (תיאור חיצוני בלבד)
+  var current = _agentDocAction(doc);
+  doc.action_override = (current === 'subtract') ? 'add' : 'subtract';
   (doc.items||[]).forEach(function(it) {
-    it.unit = doc.direction === 'out' ? 'עותקים' : 'גיליונות';
+    it.unit = doc.action_override === 'subtract' ? 'עותקים' : 'גיליונות';
   });
   renderAgentTab();
 }
@@ -6089,7 +6104,9 @@ async function approveAgentDoc(docId) {
     var fname = (doc.file || '').toLowerCase();
     doc.direction = (fname.includes('תעודה') || fname.includes('delivery') || fname.includes('teuoda')) ? 'out' : 'in';
   }
-  var isOut = doc.direction === 'out';
+  // הפעולה בפועל (הוספה/הורדה) נקבעת לפי doc_type ולא לפי direction —
+  // תעודת משלוח (מספק או ללקוח) תמיד מורידה מהמלאי, חשבונית תמיד מוסיפה.
+  var isOut = _agentDocAction(doc) === 'subtract';
 
   // ── בדיקות תקינות לתעודת משלוח ──
   if (isOut) {
@@ -6156,7 +6173,7 @@ async function approveAgentDoc(docId) {
       var invoiceEntry = {
         date: doc.date || new Date().toISOString().slice(0,10),
         inv: doc.doc_number || '',
-        orderNum: '',
+        orderNum: doc.order_number || '',
         qty: editQty,
         price: it.price_per_unit || 0,
         supplier: doc.supplier || '',
