@@ -164,13 +164,18 @@ textarea.fi{resize:none;min-height:52px;}
 .runs-summary strong{color:var(--press);}
 
 /* SAVED CARDS */
-.cards-list{display:flex;flex-direction:column;gap:12px;}
+.cards-list{display:flex;flex-direction:column;gap:12px;max-width:860px;margin:0 auto;}
 .empty-state{text-align:center;padding:50px 20px;color:var(--gray);}
 .empty-state .icon{font-size:2.8rem;margin-bottom:10px;}
 .job-card{background:white;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.08);overflow:hidden;}
 .jc-header{background:var(--press);color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;}
 .jc-title{font-size:1rem;font-weight:800;}
 .jc-type{background:var(--gold);color:#1a1a2e;padding:2px 9px;border-radius:20px;font-size:.74rem;font-weight:700;}
+.jc-attrib{display:flex;gap:12px;flex-wrap:wrap;padding:5px 16px 0;font-size:.7rem;color:var(--gray);font-family:Heebo,sans-serif;}
+.completed-section{max-width:860px;margin:24px auto 0;}
+.completed-toggle-btn{width:100%;text-align:right;background:#f3f4f6;border:1.5px solid #e5e7eb;border-radius:10px;
+  padding:10px 16px;font-family:Heebo,sans-serif;font-size:.9rem;font-weight:800;color:#374151;cursor:pointer;}
+.completed-toggle-btn:hover{border-color:var(--gold);}
 .jc-meta{padding:12px 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border-bottom:1px solid var(--line);}
 .jcf-label{font-size:.67rem;color:var(--gold);font-weight:700;}
 .jcf-val{font-size:.9rem;font-weight:600;}
@@ -838,12 +843,14 @@ textarea.fi{resize:none;min-height:52px;}
 
 /* production board */
 .dash-board-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
-.dash-board-col{background:var(--d-bg);border-radius:12px;padding:10px;min-height:80px;}
+.dash-board-col{background:var(--d-bg);border-radius:12px;padding:10px;min-height:80px;transition:background .15s,outline .15s;}
+.dash-board-col-over{outline:2px dashed var(--d-blue);background:var(--d-blue-bg);}
 .dash-board-col-head{font-size:.82rem;font-weight:800;color:var(--d-sub);margin-bottom:8px;padding:0 4px;}
 .dash-board-col-head span{font-weight:700;color:var(--d-sub);}
 .dash-board-card{background:var(--d-card);border:1.5px solid var(--d-line);border-radius:10px;
-  padding:9px 11px;margin-bottom:8px;cursor:pointer;transition:all .15s;}
+  padding:9px 11px;margin-bottom:8px;cursor:grab;transition:all .15s;}
 .dash-board-card:hover{border-color:var(--gold);transform:translateY(-1px);box-shadow:var(--d-shadow);}
+.dash-board-card-dragging{opacity:.4;cursor:grabbing;}
 .dash-board-card-overdue{border-color:var(--d-red-line);background:var(--d-red-bg);}
 .dash-board-card-name{font-weight:800;font-size:.85rem;color:var(--d-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .dash-board-card-sub{font-size:.74rem;color:var(--d-sub);margin-top:2px;}
@@ -856,6 +863,8 @@ textarea.fi{resize:none;min-height:52px;}
 .dash-activity-time{color:var(--d-sub);font-weight:700;font-size:.76rem;min-width:38px;}
 .dash-activity-icon{font-size:.95rem;}
 .dash-activity-text{color:var(--d-text);font-weight:600;}
+.dash-activity-user{color:var(--d-sub);font-weight:700;}
+.dash-board-card-by{font-size:.68rem;color:var(--d-sub);margin-top:3px;}
 
 @media(max-width:900px){
   .dash-kpis{grid-template-columns:repeat(3,1fr);}
@@ -1169,6 +1178,10 @@ window._fbSnapshot = {};
 <!-- ===== SAVED CARDS ===== -->
 <div id="view-saved" style="display:none">
   <div id="cards-container" class="cards-list"></div>
+  <div class="completed-section">
+    <button id="completed-toggle-btn" class="completed-toggle-btn" onclick="toggleCompletedCards()">✅ עבודות שהושלמו (0) ▾</button>
+    <div id="cards-container-done" class="cards-list" style="display:none;margin-top:12px"></div>
+  </div>
 </div>
 
 <!-- ===== NEWSPAPER MANAGEMENT ===== -->
@@ -1882,6 +1895,12 @@ let solanUsers = (_savedUsers && _savedUsers.length) ? _savedUsers : _defaultUse
 let currentUser    = JSON.parse(sessionStorage.getItem('solanCurrentUser') || 'null');
 let _loginPinStr   = '';
 let _loginUserId   = null;
+
+function _userName(id) {
+  if (!id) return null;
+  var u = (solanUsers||[]).find(function(x){ return x.id===id; });
+  return u ? u.name : id;
+}
 
 function saveUsers() {
   localStorage.setItem('solanUsers', JSON.stringify(solanUsers));
@@ -6709,6 +6728,7 @@ function markJobPrinted(cardId) {
   if (!c) return;
   c.status = 'done';
   c.printedAt = new Date().toISOString();
+  c.lastUpdatedBy = currentUser ? currentUser.id : 'admin';
   persist();
   renderMachineQueue();
   renderCards();
@@ -6765,6 +6785,7 @@ function markRunDone(cardId, runIdx, machine) {
   if (runIdx < 0) { markJobPrinted(cardId); return; }
   if (!c.runs || !c.runs[runIdx]) return;
   c.runs[runIdx].done = true;
+  c.lastUpdatedBy = currentUser ? currentUser.id : 'admin';
   // If ALL runs for this card (across all machines) are done → mark card done
   var allDone = c.runs.every(function(r){ return !!r.done; });
   if (allDone) {
@@ -6784,6 +6805,7 @@ function unmarkRunDone(cardId, runIdx, machine) {
   var c = cards.find(function(x){ return String(x.id) === String(cardId); });
   if (!c || !c.runs || !c.runs[runIdx]) return;
   c.runs[runIdx].done = false;
+  c.lastUpdatedBy = currentUser ? currentUser.id : 'admin';
   // If card was marked done, re-open it
   if (c.status === 'done') {
     c.status = 'inprogress';
@@ -7196,11 +7218,16 @@ function deleteCard(id) {
 function setStatus(id,s) {
   const c=cards.find(c=>c.id===id);
   if(c){
-    c.status=s;persist();renderCards();
+    c.status=s;
+    if (s==='done') { c.printedAt = c.printedAt || new Date().toISOString(); }
+    else { delete c.printedAt; }
+    c.lastUpdatedBy = currentUser ? currentUser.id : 'admin';
+    persist();renderCards();
     var lbl = s==='pending' ? 'הועברה לממתין' : s==='inprogress' ? 'עברה להדפסה' : 'הושלמה';
     var ic  = s==='pending' ? '⏳' : s==='inprogress' ? '🖨️' : '✅';
     _logActivity(ic, 'עבודה "'+(c.name||'')+'" '+lbl);
     showToast(ic+' "'+(c.name||'')+'" '+lbl);
+    if (typeof renderDashboard === 'function' && document.getElementById('view-dashboard') && document.getElementById('view-dashboard').style.display !== 'none') renderDashboard();
   }
 }
 function statusLabel(s) {
@@ -7265,30 +7292,10 @@ function doPrintCard(id) {
   document.getElementById('print-modal-save-btn').style.display = 'none';
 }
 
-function renderCards() {
-  const el=document.getElementById('cards-container');
-  let displayCards=cards;
-  if(currentUser&&!currentUser.isAdmin){var wcp=(currentUser.permissions||{}).workCards;if(wcp==='none'){el.innerHTML='<div class="empty-state"><div class="icon">🔒</div><p>אין הרשאה לצפות בכרטיסי עבודה</p></div>';return;}if(wcp==='own')displayCards=cards.filter(function(x){return !x.createdBy||x.createdBy===currentUser.id;});}
-  // פילטר חיפוש
-  var filterBanner = '';
-  if (_cardFilterQ) {
-    var lf = _cardFilterQ.toLowerCase();
-    if (_cardFilterExact) {
-      // פילטר מדויק לפי שם לקוח (מגיע מחיפוש)
-      displayCards = displayCards.filter(function(c){
-        return (c.customer||'').toLowerCase() === lf;
-      });
-    } else {
-      displayCards = displayCards.filter(function(c){
-        return [c.name,c.customer,c.size,c.paper,c.type,c.machine].join(' ').toLowerCase().includes(lf);
-      });
-    }
-    filterBanner = '<div style="display:flex;align-items:center;gap:10px;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:8px 14px;margin-bottom:12px;font-family:Heebo,sans-serif">' +
-      '<span style="font-size:.9rem;font-weight:700;color:#1d4ed8;flex:1">👤 כל העבודות של: <strong>' + escHtml(_cardFilterQ) + '</strong> (' + displayCards.length + ')</span>' +
-      '<button onclick="clearCardFilter()" style="background:none;border:none;cursor:pointer;color:#6b7280;font-size:1rem;font-weight:700;padding:0 4px">✕ הצג הכל</button></div>';
-  }
-  if(!displayCards.length){el.innerHTML='<div style="text-align:center;padding:60px 20px;color:#9ca3af"><div style="font-size:3rem;margin-bottom:16px">📋</div><div style="font-size:1.1rem;font-weight:700;color:#374151;margin-bottom:8px">אין כרטיסי עבודה עדיין</div><div style="font-size:.88rem;margin-bottom:20px">לחץ על <strong>➕ כרטיס חדש</strong> כדי ליצור את הכרטיס הראשון</div><button class="btn btn-primary" onclick="switchTab(\'new\')">➕ צור כרטיס חדש</button></div>';return;}
-  el.innerHTML=filterBanner+displayCards.map(c=>`
+var _completedCardsOpen = false;
+
+function _jobCardHtml(c) {
+  return `
     <div class="job-card">
       <div class="jc-header">
         <div class="jc-title">${c.name}</div>
@@ -7297,6 +7304,10 @@ function renderCards() {
           ${statusLabel(c.status)}
           ${c.printedAt?'<span style="font-size:.72rem;background:#dcfce7;color:#15803d;border-radius:5px;padding:2px 7px;font-weight:700">🖨️ '+(c.printCount>1?c.printCount+'x ':'')+new Date(c.printedAt).toLocaleDateString("he-IL")+'</span>':''}
         </div>
+      </div>
+      <div class="jc-attrib">
+        ${c.createdBy?'<span>👤 הכין: '+escHtml(_userName(c.createdBy)||c.createdBy)+'</span>':''}
+        ${(c.lastUpdatedBy && c.lastUpdatedBy!==c.createdBy)?'<span>✏️ עודכן ע״י: '+escHtml(_userName(c.lastUpdatedBy)||c.lastUpdatedBy)+'</span>':''}
       </div>
       <div class="jc-meta">
         <div class="jc-field"><div class="jcf-label">תאריך הזמנה</div><div class="jcf-val">${c.orderDate||'—'}</div></div>
@@ -7325,7 +7336,55 @@ function renderCards() {
         <button class="btn btn-sm" style="background:#fff7ed;color:#c2410c;border:1.5px solid #fed7aa" onclick="makeCardWeekly(${c.id})" title="הכרטיס יחזור כל שבוע ביומן השבועי">📅 הפוך לעבודה שבועית</button>
         <button class="btn btn-sm btn-danger" onclick="deleteCard(${c.id})">מחק</button>
       </div>
-    </div>`).join('');
+    </div>`;
+}
+
+function _updateCompletedCardsSection(doneCards) {
+  var btn = document.getElementById('completed-toggle-btn');
+  var elDone = document.getElementById('cards-container-done');
+  if (btn) btn.textContent = '✅ עבודות שהושלמו (' + doneCards.length + ') ' + (_completedCardsOpen?'▴':'▾');
+  if (elDone) {
+    elDone.style.display = _completedCardsOpen ? '' : 'none';
+    elDone.innerHTML = doneCards.length
+      ? doneCards.map(_jobCardHtml).join('')
+      : '<div style="text-align:center;padding:30px 20px;color:#9ca3af;font-size:.9rem">אין עבודות שהושלמו עדיין</div>';
+  }
+}
+
+function toggleCompletedCards() {
+  _completedCardsOpen = !_completedCardsOpen;
+  renderCards();
+}
+
+function renderCards() {
+  const el=document.getElementById('cards-container');
+  let displayCards=cards;
+  if(currentUser&&!currentUser.isAdmin){var wcp=(currentUser.permissions||{}).workCards;if(wcp==='none'){el.innerHTML='<div class="empty-state"><div class="icon">🔒</div><p>אין הרשאה לצפות בכרטיסי עבודה</p></div>';_updateCompletedCardsSection([]);return;}if(wcp==='own')displayCards=cards.filter(function(x){return !x.createdBy||x.createdBy===currentUser.id;});}
+  // פילטר חיפוש
+  var filterBanner = '';
+  if (_cardFilterQ) {
+    var lf = _cardFilterQ.toLowerCase();
+    if (_cardFilterExact) {
+      // פילטר מדויק לפי שם לקוח (מגיע מחיפוש)
+      displayCards = displayCards.filter(function(c){
+        return (c.customer||'').toLowerCase() === lf;
+      });
+    } else {
+      displayCards = displayCards.filter(function(c){
+        return [c.name,c.customer,c.size,c.paper,c.type,c.machine].join(' ').toLowerCase().includes(lf);
+      });
+    }
+    filterBanner = '<div style="display:flex;align-items:center;gap:10px;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:8px 14px;margin-bottom:12px;font-family:Heebo,sans-serif">' +
+      '<span style="font-size:.9rem;font-weight:700;color:#1d4ed8;flex:1">👤 כל העבודות של: <strong>' + escHtml(_cardFilterQ) + '</strong> (' + displayCards.length + ')</span>' +
+      '<button onclick="clearCardFilter()" style="background:none;border:none;cursor:pointer;color:#6b7280;font-size:1rem;font-weight:700;padding:0 4px">✕ הצג הכל</button></div>';
+  }
+  var activeCards = displayCards.filter(function(c){ return c.status !== 'done'; });
+  var doneCards   = displayCards.filter(function(c){ return c.status === 'done'; });
+  if(!displayCards.length){el.innerHTML='<div style="text-align:center;padding:60px 20px;color:#9ca3af"><div style="font-size:3rem;margin-bottom:16px">📋</div><div style="font-size:1.1rem;font-weight:700;color:#374151;margin-bottom:8px">אין כרטיסי עבודה עדיין</div><div style="font-size:.88rem;margin-bottom:20px">לחץ על <strong>➕ כרטיס חדש</strong> כדי ליצור את הכרטיס הראשון</div><button class="btn btn-primary" onclick="switchTab(\'new\')">➕ צור כרטיס חדש</button></div>';_updateCompletedCardsSection([]);return;}
+  el.innerHTML = filterBanner + (activeCards.length
+    ? activeCards.map(_jobCardHtml).join('')
+    : '<div style="text-align:center;padding:40px 20px;color:#9ca3af"><div style="font-size:2.4rem;margin-bottom:10px">🎉</div><div style="font-size:1rem;font-weight:700;color:#374151">אין עבודות פעילות כרגע</div></div>');
+  _updateCompletedCardsSection(doneCards);
   // כפתור היסטוריית הדפסות אם יש רשומות
   if (printLog.length) {
     el.insertAdjacentHTML('afterend',
@@ -9631,7 +9690,8 @@ var _dashTheme      = localStorage.getItem('solanDashTheme') || 'light';
 var _dashTickTimer  = null;
 
 function _logActivity(icon, text) {
-  dashActivity.unshift({ t: Date.now(), icon: icon, text: text });
+  var uname = currentUser ? (currentUser.name || _userName(currentUser.id)) : null;
+  dashActivity.unshift({ t: Date.now(), icon: icon, text: text, user: uname });
   dashActivity = dashActivity.slice(0, 60);
   localStorage.setItem('solanDashActivity', JSON.stringify(dashActivity));
   renderActivityFeed();
@@ -9772,7 +9832,7 @@ function renderDashToday() {
       + '<div class="dash-today-dot"></div>'
       + '<div class="dash-today-main">'
       + '<div class="dash-today-name">'+escHtml(c.name||'ללא שם')+(c.customer?' · '+escHtml(c.customer):'')+'</div>'
-      + '<div class="dash-today-sub">'+escHtml(c.type||'')+(c.copies?' · '+c.copies+' עותקים':'')+'</div>'
+      + '<div class="dash-today-sub">'+escHtml(c.type||'')+(c.copies?' · '+c.copies+' עותקים':'')+(_userName(c.createdBy)?' · 👤 '+escHtml(_userName(c.createdBy)):'')+'</div>'
       + '</div>'
       + '<div class="dash-today-badge dash-badge-'+st.tone+'">'+st.label+'</div>'
       + '</div>';
@@ -9802,21 +9862,61 @@ function renderDashBoard() {
     var items = active.filter(function(c){ return c.status === col.key; });
     var cardsHtml = items.map(function(c){
       var overdue = c.status !== 'done' && c.deliveryDate && c.deliveryDate < today;
-      return '<div class="dash-board-card'+(overdue?' dash-board-card-overdue':'')+'" onclick="switchTab(\'saved\')">'
+      var byName = _userName(c.lastUpdatedBy) || _userName(c.createdBy);
+      return '<div class="dash-board-card'+(overdue?' dash-board-card-overdue':'')+'" draggable="true" data-card-id="'+c.id+'" '
+        + 'ondragstart="_dashDragStart(event,'+c.id+')" ondragend="_dashDragEnd(event)" onclick="switchTab(\'saved\')">'
         + '<div class="dash-board-card-name">'+escHtml(c.name||'ללא שם')+'</div>'
         + '<div class="dash-board-card-sub">'+escHtml(c.customer||c.type||'')+'</div>'
         + '<div class="dash-board-card-meta">'
         + (c.copies?'<span>📄 '+c.copies+'</span>':'')
         + (c.deliveryDate?'<span'+(overdue?' style="color:var(--d-red);font-weight:800"':'')+'>📅 '+c.deliveryDate+'</span>':'')
-        + '</div></div>';
+        + '</div>'
+        + (byName?'<div class="dash-board-card-by">👤 '+escHtml(byName)+'</div>':'')
+        + '</div>';
     }).join('');
-    return '<div class="dash-board-col"><div class="dash-board-col-head">'+col.label+' <span>('+items.length+')</span></div>'
+    return '<div class="dash-board-col" data-status="'+col.key+'" ondragover="_dashDragOver(event)" ondragleave="_dashDragLeave(event)" ondrop="_dashDrop(event,\''+col.key+'\')">'
+      + '<div class="dash-board-col-head">'+col.label+' <span>('+items.length+')</span></div>'
       + (cardsHtml || '<div class="dash-empty" style="padding:14px 4px">אין עבודות</div>')
       + '</div>';
   }).join('');
 
-  el.innerHTML = '<div class="dash-card-head"><span>🏭 לוח ייצור</span></div>'
+  el.innerHTML = '<div class="dash-card-head"><span>🏭 לוח ייצור <span style="font-size:.72rem;color:var(--d-sub);font-weight:600">(ניתן לגרור בין עמודות)</span></span></div>'
     + '<div class="dash-board-cols">' + colsHtml + '</div>';
+}
+
+// ── גרירה ושינוי סטטוס בלוח הייצור ─────────────────────────
+var _dashDragCardId = null;
+function _dashDragStart(ev, id) {
+  _dashDragCardId = id;
+  if (ev.dataTransfer) {
+    ev.dataTransfer.effectAllowed = 'move';
+    try { ev.dataTransfer.setData('text/plain', String(id)); } catch(e) {}
+  }
+  if (ev.currentTarget) ev.currentTarget.classList.add('dash-board-card-dragging');
+}
+function _dashDragEnd(ev) {
+  if (ev.currentTarget) ev.currentTarget.classList.remove('dash-board-card-dragging');
+}
+function _dashDragOver(ev) {
+  ev.preventDefault();
+  if (ev.currentTarget) ev.currentTarget.classList.add('dash-board-col-over');
+}
+function _dashDragLeave(ev) {
+  if (ev.currentTarget) ev.currentTarget.classList.remove('dash-board-col-over');
+}
+function _dashDrop(ev, status) {
+  ev.preventDefault();
+  if (ev.currentTarget) ev.currentTarget.classList.remove('dash-board-col-over');
+  var id = _dashDragCardId;
+  if (id == null && ev.dataTransfer) {
+    var dt = ev.dataTransfer.getData('text/plain');
+    id = dt ? parseInt(dt, 10) : null;
+  }
+  _dashDragCardId = null;
+  if (id == null) return;
+  var c = (cards||[]).find(function(x){ return String(x.id) === String(id); });
+  if (!c || c.status === status) return;
+  setStatus(c.id, status);
 }
 
 // ── עומס מכונות ───────────────────────────────────────────
@@ -9847,7 +9947,7 @@ function renderActivityFeed() {
     return '<div class="dash-activity-row">'
       + '<span class="dash-activity-time">'+time+'</span>'
       + '<span class="dash-activity-icon">'+a.icon+'</span>'
-      + '<span class="dash-activity-text">'+escHtml(a.text)+'</span>'
+      + '<span class="dash-activity-text">'+escHtml(a.text)+(a.user?' <span class="dash-activity-user">· '+escHtml(a.user)+'</span>':'')+'</span>'
       + '</div>';
   }).join('');
   el.innerHTML = '<div class="dash-card-head"><span>📜 פעילות אחרונה</span></div>'
