@@ -3350,17 +3350,29 @@ function renderManualRuns() {
 function getEffectiveRuns() {
   // אם יש ריצות אוטומטיות — השתמש בהן
   if (currentRuns.length) return currentRuns.map(r=>({...r}));
-  // אחרת — ריצות ידניות
+  // אחרת — ריצות ידניות: טווח העמודים מחושב לפי הסדר הנוכחי של הריצות
+  // (כל ריצה תופסת את העמודים הבאים ברצף לפי "עמודים" שלה) — כך שאם
+  // המשתמש מסדר את הריצות מחדש, טווחי העמודים מתעדכנים בהתאם בעת השמירה.
+  var _nextPage = 1;
   return manualRuns
     .filter(r => r.pages || r.copies || r.machine)
-    .map((r,i)=>({
-      num: i+1,
-      pages: parseInt(r.pages)||0,
-      copies: parseInt(r.copies)||0,
-      folds: '',
-      pageRange: '',
-      machine: r.machine
-    }));
+    .map((r,i)=>{
+      var pages = parseInt(r.pages)||0;
+      var pageRange = '';
+      if (pages > 0) {
+        var start = _nextPage, end = _nextPage + pages - 1;
+        pageRange = "עמ' " + start + '–' + end;
+        _nextPage = end + 1;
+      }
+      return {
+        num: i+1,
+        pages: pages,
+        copies: parseInt(r.copies)||0,
+        folds: '',
+        pageRange: pageRange,
+        machine: r.machine
+      };
+    });
 }
 
 // ========== WEEKLY VIEW ==========
@@ -4508,11 +4520,12 @@ function buildPrintCard(c) {
       <div style="font-size:1.18rem;color:#111;font-weight:500;flex:1">${val}</div>
     </div>` : '';
 
-  const _pagesRow = c.pages ? `
+  // שורת "מס' עמ'" — מוצגת תמיד מתחת ל"מס' גיליונות" (ריקה למילוי ביד כשאין ערך)
+  const _pagesRow = `
     <div style="display:flex;padding:12px 0 0;align-items:baseline">
-      <div style="width:165px;font-size:1.05rem;font-weight:700;color:#333;flex-shrink:0">מס' עמודים</div>
-      <div style="font-size:1.18rem;color:#111;font-weight:500;flex:1"><strong style="font-size:1.45rem;font-weight:900">${c.pages}</strong></div>
-    </div>` : '';
+      <div style="width:165px;font-size:1.05rem;font-weight:700;color:#333;flex-shrink:0">מס' עמ'</div>
+      <div style="font-size:1.18rem;color:#111;font-weight:500;flex:1">${c.pages ? '<strong style="font-size:1.45rem;font-weight:900">'+c.pages+'</strong>' : '<span style="display:inline-block;min-width:170px;border-bottom:1.5px solid #999;height:1.5em"></span>'}</div>
+    </div>`;
 
   const fieldsTop = [
     ['שם העבודה', c.name||''],
@@ -6716,11 +6729,12 @@ async function renderAgentTab() {
   html += sorted.map(function(doc) {
     var isPending  = doc.status === 'pending';
     var isApproved = doc.status === 'approved';
+    var isPartial  = doc.status === 'partial' || doc.status === 'failed';
     var action     = _agentDocAction(doc);
     var isOut      = action === 'subtract';
-    var borderColor = isPending ? '#f59e0b' : (isApproved ? '#16a34a' : '#9ca3af');
-    var bgColor     = isPending ? '#fffbeb' : (isApproved ? '#f0fdf4' : '#f9fafb');
-    var statusLabel = isPending ? '⏳ ממתין לאישור' : (isApproved ? '✅ אושר' : '❌ נדחה');
+    var borderColor = isPending ? '#f59e0b' : (isApproved ? '#16a34a' : (isPartial ? '#dc2626' : '#9ca3af'));
+    var bgColor     = isPending ? '#fffbeb' : (isApproved ? '#f0fdf4' : (isPartial ? '#fef2f2' : '#f9fafb'));
+    var statusLabel = isPending ? '⏳ ממתין לאישור' : (isApproved ? '✅ אושר' : (isPartial ? '⚠️ ' + (doc.status==='failed' ? 'נכשל — לא נמצא במלאי' : 'אושר חלקית — חלק מהפריטים לא נמצאו במלאי') + (doc.skipped_items ? ' (' + doc.skipped_items.join(', ') + ')' : '') : '❌ נדחה'));
     var dirBadge    = isOut
       ? '<span style="background:#fef3c7;color:#92400e;border-radius:8px;padding:2px 8px;font-size:.72rem;font-weight:800;margin-right:6px">📤 יוריד מהמלאי</span>'
       : '<span style="background:#dbeafe;color:#1e40af;border-radius:8px;padding:2px 8px;font-size:.72rem;font-weight:800;margin-right:6px">📥 יוסיף למלאי</span>';
@@ -6940,7 +6954,11 @@ async function approveAgentDoc(docId) {
       }
       if (!inv_item.invoices) inv_item.invoices = [];
       inv_item.invoices.push(invoiceEntry);
-      inv_item.qty = inv_item.invoices.reduce(function(s,x){ return s+(x.qty||0); }, 0);
+      // qty = סה"כ נכנס מהחשבוניות פחות סה"כ ירד בתעודות משלוח שכבר אושרו
+      // (לפני התיקון השורה התעלמה מ-deductions וביטלה הורדות מלאי קודמות בכל אישור חשבונית חדשה)
+      var _totalIn  = inv_item.invoices.reduce(function(s,x){ return s+(x.qty||0); }, 0);
+      var _totalOut = (inv_item.deductions||[]).reduce(function(s,x){ return s+(x.qty||0); }, 0);
+      inv_item.qty = Math.max(0, _totalIn - _totalOut);
       affected++;
     }
   });
@@ -6948,7 +6966,10 @@ async function approveAgentDoc(docId) {
   // שמור מלאי מעודכן
   _pushInventoryUndo();
   await window._fbPut('inventory', inventory);
-  doc.status = 'approved';
+  // אם פריטים דולגו (לא נמצאו במלאי) — אין לסמן "אושר" באופן מטעה, כי בפועל
+  // לא כל הירידה/הוספה בוצעה. מסמנים 'partial' כדי שיישאר גלוי וניתן לטיפול חוזר.
+  doc.status = skipped.length ? (affected ? 'partial' : 'failed') : 'approved';
+  doc.skipped_items = skipped.length ? skipped : null;
   doc.approved_at = new Date().toISOString();
   await window._fbPut('agent_pending', _agentDocs);
 
@@ -10086,7 +10107,11 @@ function cleanupDoc171Once() {
       }
     });
     item.invoices = merged;
-    item.qty = merged.reduce((s, x) => s + (x.qty||0), 0);
+    // qty = סה"כ נכנס (אחרי המיזוג) פחות סה"כ ירד בתעודות משלוח —
+    // לפני התיקון השורה התעלמה מ-item.deductions ואיפסה כל הורדת מלאי
+    // שכבר בוצעה (תעודות משלוח שאושרו) בכל הרצה של מיזוג כפילויות
+    const totalOut = (item.deductions||[]).reduce((s, x) => s + (x.qty||0), 0);
+    item.qty = Math.max(0, merged.reduce((s, x) => s + (x.qty||0), 0) - totalOut);
   });
 
   if (changed) {
