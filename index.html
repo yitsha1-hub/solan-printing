@@ -2116,6 +2116,7 @@ function logoutUser() {
   initLoginScreen();
 }
 
+var _pushCardOpenChecked = false;
 function applyPermissionsToUI() {
   if (!currentUser) return;
   // הסתר מסך לוגין אם המשתמש כבר מחובר
@@ -2158,6 +2159,19 @@ function applyPermissionsToUI() {
   // כפתור הוסף עובד בכותרת — רק מנהל
   var adminControls = document.querySelectorAll('.admin-only');
   adminControls.forEach(function(el){ el.style.display = isAdmin ? '' : 'none'; });
+
+  // אם נכנסו לאפליקציה דרך לחיצה על התראת פוש (?openCard=ID ב-URL) —
+  // פותחים את הכרטיס הרלוונטי פעם אחת בלבד, רק אחרי שהלוגין/הרשאות טופלו.
+  if (!_pushCardOpenChecked) {
+    _pushCardOpenChecked = true;
+    try {
+      var _cid = new URLSearchParams(location.search).get('openCard');
+      if (_cid) {
+        history.replaceState(null, '', location.pathname + location.hash);
+        setTimeout(function(){ _openCardFromPush(_cid); }, 300);
+      }
+    } catch(e) {}
+  }
 }
 
 // ---- ניהול משתמשים (מהגדרות) ----
@@ -11185,6 +11199,23 @@ async function registerPushServiceWorker() {
   if (!('serviceWorker' in navigator)) return null;
   try { return await navigator.serviceWorker.register('./sw.js'); }
   catch(e) { console.warn('SW register failed', e); return null; }
+}
+
+// ── פתיחת הכרטיס שעליו הגיעה התראת פוש ──────────────────────
+// נקרא גם כשהאפליקציה כבר פתוחה (postMessage מה-SW אחרי focus) וגם
+// כשהאפליקציה נפתחת מחדש דרך לחיצה על ההתראה (פרמטר ?openCard= ב-URL).
+function _openCardFromPush(cardId) {
+  if (!cardId) return;
+  var c = (cards || []).find(function (x) { return String(x.id) === String(cardId); });
+  if (!c) { showToast('⚠️ הכרטיס מההתראה לא נמצא (אולי נמחק)'); return; }
+  switchTab('saved');
+  showPrintModal(c);
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', function (event) {
+    if (event.data && event.data.type === 'openCard') _openCardFromPush(event.data.cardId);
+  });
 }
 
 function _updatePushBtnUI(active) {
