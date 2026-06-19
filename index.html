@@ -974,7 +974,7 @@ window._fbSnapshot = {};
       onkeydown="if(event.key==='Escape'){this.value='';document.getElementById('global-search-results').style.display='none'}"
       >
     <div id="global-search-results" style="display:none;position:absolute;top:calc(100% + 4px);right:0;left:0;z-index:8888;
-      background:white;border:1.5px solid var(--line);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.18);
+      background:white;color:#111;border:1.5px solid var(--line);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.18);
       max-height:340px;overflow-y:auto;direction:rtl"></div>
   </div>
 </header>
@@ -1944,7 +1944,7 @@ const ADMIN_DEFAULTS = Object.assign({}, DEFAULT_PERMISSIONS);
 function _defaultUsers() {
   return [{
     id: 'admin',
-    name: 'מנהל',
+    name: 'איציק',
     pin: '0000',
     isAdmin: true,
     permissions: Object.assign({}, ADMIN_DEFAULTS)
@@ -2168,8 +2168,10 @@ function renderUsersManager() {
   solanUsers.forEach(function(u) {
     var p = u.permissions || {};
     if (u.isAdmin) {
-      html += '<div style="background:#f0f4ff;border:1.5px solid #c0ccf0;border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">' +
-              '<strong style="color:var(--press)">&#128081; ' + _esc(u.name) + ' (מנהל)</strong>' +
+      html += '<div style="background:#f0f4ff;border:1.5px solid #c0ccf0;border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px">' +
+              '<div style="display:flex;align-items:center;gap:6px">👑 ' +
+              '<input class="um-name-input" data-uid="' + u.id + '" value="' + _esc(u.name) + '" style="font-size:.95rem;font-weight:800;color:var(--press);border:1.5px solid #c0ccf0;border-radius:5px;padding:3px 6px;font-family:Heebo,sans-serif;width:120px;background:white">' +
+              '<span style="color:var(--press);font-weight:800">(מנהל)</span></div>' +
               '<button class="btn btn-sm btn-tpl" onclick="changeAdminPin()">&#128273; שנה PIN</button></div>';
       return;
     }
@@ -2258,7 +2260,16 @@ function deleteUser(uid) {
 
 function updateUserName(uid, name) {
   var u = solanUsers.find(function(x){ return x.id === uid; });
-  if (u) { u.name = name.trim(); saveUsers(); }
+  if (!u) return;
+  u.name = name.trim();
+  saveUsers();
+  // אם זה המשתמש המחובר כרגע — עדכן גם את currentUser ואת השם בכותרת באופן מיידי
+  if (currentUser && currentUser.id === uid) {
+    currentUser.name = u.name;
+    sessionStorage.setItem('solanCurrentUser', JSON.stringify(currentUser));
+    var hUser = document.getElementById('header-username');
+    if (hUser) hUser.textContent = '👤 ' + currentUser.name;
+  }
 }
 
 function applyRolePreset(uid, role) {
@@ -5919,8 +5930,8 @@ function renderGlobalSearch(q) {
   if (jobHits.length) {
     html += section('עבודות');
     html += jobHits.map(c =>
-      row('📋', hl(c.name||''), [c.customer,c.size].filter(Boolean).join(' · '), 'כרטיס',
-        `showPrintModal(cards.find(function(x){return x.id===${c.id}}))`)
+      row('📋', hl(c.name||''), [c.customer,c.size].filter(Boolean).join(' · '), 'הצג הכל',
+        `openSearchJobResults(${JSON.stringify(q)})`)
     ).join('');
   }
 
@@ -7926,6 +7937,15 @@ let _dashCardFilter = null;   // { type, label } — פילטר שמגיע מל�
 function openCustomerCards(customerName) {
   _cardFilterQ = customerName || '';
   _cardFilterExact = true;
+  _dashCardFilter = null;
+  switchTab('saved');
+}
+
+// נקרא בלחיצה על "עבודה" בתוצאות החיפוש הכללי — פותח את כל העבודות הקשורות
+// לאותו חיפוש (לפי שם/לקוח/גודל/נייר/סוג/מכונה), במקום לפתוח כרטיס בודד
+function openSearchJobResults(query) {
+  _cardFilterQ = query || '';
+  _cardFilterExact = false;
   _dashCardFilter = null;
   switchTab('saved');
 }
@@ -10064,6 +10084,9 @@ async function _fbPollAll() {
       updateBadge(); updateFBStatus(true); _fbConnected = true;
       if (document.getElementById('view-saved').style.display!=='none') renderCards();
       if (document.getElementById('view-week').style.display!=='none')  renderWeek();
+      // עדכון כרטיסים שהגיע מ-Firebase (למשל ע"י עובד אחר) חייב גם לרענן את הדאשבורד
+      // אם הוא פתוח כרגע — אחרת "עומס מכונות" וחלוניות נוספות נשארות עם נתונים ישנים
+      if (document.getElementById('view-dashboard') && document.getElementById('view-dashboard').style.display!=='none' && typeof renderDashboard==='function') renderDashboard();
     }
     // הזמנות
     var ov = await window._fbGet('orders');
@@ -10096,6 +10119,7 @@ async function _fbPollAll() {
       window._fbSnapshot.weeklyJobs = JSON.stringify(weeklyJobs);
       if (document.getElementById('view-week') && document.getElementById('view-week').style.display!=='none') renderWeek();
     }
+    if (typeof _autoCompleteWeeklyJobs === 'function') _autoCompleteWeeklyJobs();
     // הצעות מחיר
     var qv = await window._fbGet('quotes');
     if (qv !== null && !(_pend.quotes > 0)) {
@@ -10127,7 +10151,13 @@ async function _fbPollAll() {
       }
       if (currentUser) {
         var me = solanUsers.find(function(u){ return u.id === currentUser.id; });
-        if (me) { currentUser.permissions = me.permissions||{}; sessionStorage.setItem('solanCurrentUser', JSON.stringify(currentUser)); }
+        if (me) {
+          currentUser.permissions = me.permissions||{};
+          currentUser.name = me.name || currentUser.name;
+          sessionStorage.setItem('solanCurrentUser', JSON.stringify(currentUser));
+          var hUser2 = document.getElementById('header-username');
+          if (hUser2) hUser2.textContent = '👤 ' + currentUser.name;
+        }
       }
     }
     // מהירות מכונות
@@ -10450,16 +10480,21 @@ function _dashTick() {
 }
 
 function renderDashboard() {
+  // כל חלונית עוטפת ב-try/catch כדי שתקלה בחלונית אחת (למשל KPI/לוח ייצור)
+  // לא תעצור את הריצה ותמנע מ"עומס מכונות" (ושאר החלוניות שאחריה) להתעדכן
   applyDashTheme();
   _dashTick();
   if (_dashTickTimer) clearInterval(_dashTickTimer);
   _dashTickTimer = setInterval(_dashTick, 30000);
-  renderDashKPIs();
-  renderDashToday();
-  renderDashBoard();
-  renderDashMachines();
-  DEPARTMENTS.forEach(function(d){ renderDeptSchedule(d); });
-  renderActivityFeed();
+  function _safe(name, fn) {
+    try { fn(); } catch (e) { console.error('renderDashboard: שגיאה ב-' + name, e); }
+  }
+  _safe('renderDashKPIs', renderDashKPIs);
+  _safe('renderDashToday', renderDashToday);
+  _safe('renderDashBoard', renderDashBoard);
+  _safe('renderDashMachines', renderDashMachines);
+  _safe('renderDeptSchedule', function(){ DEPARTMENTS.forEach(function(d){ renderDeptSchedule(d); }); });
+  _safe('renderActivityFeed', renderActivityFeed);
 }
 
 // ── חישובי עומס מכונות ───────────────────────────────────
@@ -10729,6 +10764,32 @@ function renderActivityFeed() {
     + '<div class="dash-activity-list">' + (rows || '<div class="dash-empty">אין פעילות עדיין</div>') + '</div>';
 }
 
+// ── סיווג אוטומטי של עבודות שבועיות כהושלמו ────────────────
+// כרטיס שנוצר לעבודה שבועית (weeklyJobs) יסומן אוטומטית כ"הושלם"
+// למחרת היום הקבוע שלה בשבוע, מ-6:00 בבוקר ואילך (לדוגמה: עבודה שבועית
+// הקבועה לראשון → הכרטיס שנוצר לה יסומן הושלם אוטומטית ביום שני ב-6:00).
+function _autoCompleteWeeklyJobs() {
+  var now = new Date();
+  if (now.getHours() < 6) return; // עדיין לפני 6:00 בבוקר
+  var todayIdx = now.getDay(); // 0=ראשון ... 6=שבת, כמו DAYS
+  (weeklyJobs||[]).forEach(function(w){
+    if (!w.cardCreated) return;
+    var schedIdx = DAYS.indexOf(w.day);
+    if (schedIdx < 0) return;
+    var dayAfterIdx = (schedIdx + 1) % 7;
+    if (todayIdx !== dayAfterIdx) return; // פועל רק ביום שאחרי יום ההדפסה הקבוע
+    var c = (cards||[]).find(function(x){ return x.id === w.cardCreated; });
+    if (!c || c.status === 'done') return;
+    c.status = 'done';
+    c.printedAt = c.printedAt || new Date().toISOString();
+    persist();
+    if (typeof _logActivity === 'function') _logActivity('✅', 'עבודה שבועית "'+(c.name||'')+'" סווגה אוטומטית כהושלמה');
+    if (document.getElementById('view-saved') && document.getElementById('view-saved').style.display!=='none' && typeof renderCards==='function') renderCards();
+    if (document.getElementById('view-week') && document.getElementById('view-week').style.display!=='none' && typeof renderWeek==='function') renderWeek();
+    if (document.getElementById('view-dashboard') && document.getElementById('view-dashboard').style.display!=='none' && typeof renderDashboard==='function') renderDashboard();
+  });
+}
+
 // ========== INIT ==========
 updateBadge();
 renderDashboard();
@@ -10736,6 +10797,8 @@ renderWeek();
 connectFirebase();
 setTimeout(checkLowInventory, 1000);
 setTimeout(autoBackup, 2000);
+setTimeout(_autoCompleteWeeklyJobs, 1500);
+setInterval(_autoCompleteWeeklyJobs, 5 * 60 * 1000);
 // אתחול לוגין
 (function(){
   if(currentUser){applyPermissionsToUI();}
