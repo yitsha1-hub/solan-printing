@@ -207,6 +207,11 @@ textarea.fi{resize:none;min-height:52px;}
 .modal-box{background:#fff;border-radius:14px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.3);}
 .modal{background:white;border-radius:14px;width:100%;max-width:560px;max-height:92vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.3);}
 .modal-header{background:var(--press);color:white;padding:15px 20px;display:flex;justify-content:space-between;align-items:center;border-radius:14px 14px 0 0;}
+.oc-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px;}
+.oc-row label{font-size:.8rem;color:#444;flex:1;}
+.oc-in.fi{width:110px;margin:0;font-size:.86rem;text-align:left;direction:ltr;padding:6px 8px;}
+.oc-line{display:flex;justify-content:space-between;padding:6px 0;border-top:1px dashed var(--line);font-size:.82rem;color:#777;margin-top:2px;}
+.oc-line b{color:#222;}
 .modal-header h3{font-size:1.05rem;font-weight:800;}
 .modal-close{background:none;border:none;color:white;font-size:1.5rem;cursor:pointer;line-height:1;}
 .modal-body{padding:18px 20px;}
@@ -1366,6 +1371,9 @@ window._fbSnapshot = {};
         onmouseover="this.style.borderColor='var(--press)';this.style.color='var(--press)'"
         onmouseout="this.style.borderColor='#c0ccf0';this.style.color='#aaa'">+ הוסף שורה</button>
 
+      <button onclick="openOffsetCalc()" style="width:100%;padding:9px;border:1.5px solid var(--press);border-radius:7px;
+        background:#eef2ff;color:var(--press);font-family:Heebo,sans-serif;font-size:.84rem;font-weight:700;cursor:pointer;margin-bottom:14px">🧮 מחשבון תמחור עיתון/חוברת</button>
+
       <div style="background:#f8f9ff;border-radius:8px;padding:12px 16px;font-size:.88rem">
         <div style="display:flex;justify-content:space-between;margin-bottom:6px">
           <span style="color:#555">סה"כ לפני מע"מ:</span>
@@ -1391,6 +1399,122 @@ window._fbSnapshot = {};
       <button class="btn btn-tpl" onclick="saveAndPreviewQuote()">👁️ תצוגה מקדימה</button>
       <button class="btn btn-tpl" onclick="saveAndSendQuote()" style="background:#1a3a6b;color:#fff;border-color:#1a3a6b">⬇️📧 הורד ושלח</button>
       <button class="btn btn-primary" onclick="saveQuote()">💾 שמור</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== OFFSET NEWSPAPER/BOOKLET PRICE CALCULATOR ===== -->
+<div class="modal-overlay" id="offset-calc-modal" style="z-index:260">
+  <div class="modal-box" style="max-width:840px;width:97vw">
+    <div class="modal-header">
+      <span>🧮 מחשבון תמחור עיתון/חוברת</span>
+      <span style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-clear" style="font-size:.76rem;padding:5px 10px" onclick="openOffsetPricing()">⚙️ תעריפים</button>
+        <button class="modal-close" onclick="closeOffsetCalc()">✕</button>
+      </span>
+    </div>
+    <div style="padding:16px 20px;overflow-y:auto;max-height:76vh">
+
+      <!-- מפרט העבודה -->
+      <div style="border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="font-weight:800;color:var(--press);margin-bottom:10px;font-size:.92rem">📋 מפרט העבודה</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+          <span style="font-size:.8rem;color:#555">גודל עיתון סופי:</span>
+          <button type="button" class="size-btn" id="ocsz-1" onclick="ocPickSize('16.5×24')">16.5×24</button>
+          <button type="button" class="size-btn" id="ocsz-2" onclick="ocPickSize('A4')">A4 (64×90)</button>
+          <input class="fi" id="oc_sizeCustom" placeholder="אחר (70×100 / 64×90)" style="width:160px;margin:0;font-size:.84rem"
+            oninput="document.getElementById('oc_size').value=this.value;renderOffsetCalc()">
+          <input type="hidden" id="oc_size">
+        </div>
+        <div id="oc_sheetInfo" style="font-size:.8rem;color:#7c3aed;font-weight:700;margin-bottom:10px;min-height:16px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+          <div style="display:flex;flex-direction:column;gap:3px"><label style="font-size:.72rem;color:#777">מספר עמודים</label><input class="fi" id="oc_pages" type="number" min="0" step="1" oninput="renderOffsetCalc()" style="margin:0"></div>
+          <div style="display:flex;flex-direction:column;gap:3px"><label style="font-size:.72rem;color:#777">כמות עותקים</label><input class="fi" id="oc_copies" type="number" min="0" step="1" oninput="renderOffsetCalc()" style="margin:0"></div>
+          <div style="display:flex;flex-direction:column;gap:3px"><label style="font-size:.72rem;color:#777">מספר צבעים</label><input class="fi" id="oc_colors" type="number" min="1" step="1" oninput="renderOffsetCalc()" style="margin:0"></div>
+          <div style="display:flex;flex-direction:column;gap:3px;grid-column:1/-1"><label style="font-size:.72rem;color:#777">נייר</label><select class="fi" id="oc_paper" onchange="renderOffsetCalc()" style="margin:0"></select></div>
+        </div>
+      </div>
+
+      <!-- פירוט פנימי (לא מוצג ללקוח) -->
+      <div style="border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="font-weight:800;color:var(--press);margin-bottom:8px;font-size:.92rem">🔍 פירוט פנימי <span style="font-weight:400;color:#aaa;font-size:.76rem">(לא מוצג ללקוח)</span></div>
+        <div id="oc_runsTable" style="margin-bottom:10px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 22px">
+          <div class="oc-line"><span>גיליונות נטו</span><b id="oc_netSheets">0</b></div>
+          <div class="oc-line"><span>פחת</span><b id="oc_waste">0</b></div>
+          <div class="oc-line"><span>סה"כ גיליונות</span><b id="oc_totalSheets">0</b></div>
+          <div class="oc-line"><span>משקל נייר</span><b id="oc_weight">0 ק"ג</b></div>
+          <div class="oc-line"><span>עלות נייר</span><b id="oc_paperCost">₪0</b></div>
+          <div class="oc-line"><span>לוחות (<span id="oc_platesCount">0</span>)</span><b id="oc_platesCost">₪0</b></div>
+          <div class="oc-line"><span>הדפסה</span><b id="oc_printCost">₪0</b></div>
+          <div class="oc-line"><span>קיפול</span><b id="oc_foldCost">₪0</b></div>
+          <div class="oc-line"><span>כריכה (<span id="oc_stations">0</span> תחנות)</span><b id="oc_bindCost">₪0</b></div>
+        </div>
+      </div>
+
+      <!-- סיכום (מע"מ מתווסף בטופס ההצעה) -->
+      <div style="background:#eef2ff;border:1px solid var(--press);border-radius:10px;padding:14px 16px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:.9rem"><span style="color:#555">סכום ביניים (עלות)</span><b id="oc_subtotal">₪0</b></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:.9rem">
+          <span style="color:#555;display:flex;align-items:center;gap:6px">תוספת רווח
+            <input type="number" id="oc_markup" value="0" min="0" step="1" oninput="renderOffsetCalc()"
+              style="width:54px;padding:2px 6px;border:1px solid #ccc;border-radius:4px;font-family:Heebo;font-size:.84rem;text-align:center">%</span>
+          <b id="oc_markupVal">₪0</b>
+        </div>
+        <div style="display:flex;justify-content:space-between;border-top:1px solid var(--press);padding-top:9px;margin-top:4px">
+          <span style="font-weight:900;color:var(--press)">מחיר ללקוח (לפני מע"מ)</span>
+          <b style="font-size:1.2rem;color:var(--press)" id="oc_grand">₪0</b>
+        </div>
+      </div>
+    </div>
+    <div style="padding:14px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-clear" onclick="closeOffsetCalc()">ביטול</button>
+      <button class="btn btn-primary" onclick="offsetAddToQuote()">➕ הוסף להצעה (שורה אחת ללקוח)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== OFFSET PRICING SETTINGS ===== -->
+<div class="modal-overlay" id="offset-pricing-modal" style="z-index:270">
+  <div class="modal-box" style="max-width:780px;width:96vw">
+    <div class="modal-header">
+      <span>⚙️ תעריפי תמחור</span>
+      <button class="modal-close" onclick="closeOffsetPricing()">✕</button>
+    </div>
+    <div style="padding:16px 20px;overflow-y:auto;max-height:78vh">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 18px">
+        <div class="oc-row"><label>פחת לכל ריצה (גיליונות)</label><input class="fi oc-in" id="ps_waste" type="number" min="0"></div>
+        <div class="oc-row"><label>מספר צבעים ברירת מחדל</label><input class="fi oc-in" id="ps_colors" type="number" min="1"></div>
+        <div class="oc-row"><label>מחיר ללוח (₪)</label><input class="fi oc-in" id="ps_plate" type="number" min="0"></div>
+        <div class="oc-row"><label>הדפסה — אלף ראשון (₪)</label><input class="fi oc-in" id="ps_firstK" type="number" min="0"></div>
+        <div class="oc-row"><label>הדפסה — אלף רץ (₪)</label><input class="fi oc-in" id="ps_runK" type="number" min="0"></div>
+      </div>
+
+      <div style="font-weight:800;color:var(--press);margin:16px 0 6px;font-size:.86rem">קיפול — מחיר ל-1000 לפי מס' קיפולים</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+        <div style="display:flex;flex-direction:column;gap:2px"><label style="font-size:.72rem;color:#777">4 קיפולים</label><input class="fi" id="ps_fold4" type="number" min="0" style="margin:0"></div>
+        <div style="display:flex;flex-direction:column;gap:2px"><label style="font-size:.72rem;color:#777">3 קיפולים</label><input class="fi" id="ps_fold3" type="number" min="0" style="margin:0"></div>
+        <div style="display:flex;flex-direction:column;gap:2px"><label style="font-size:.72rem;color:#777">2 קיפולים</label><input class="fi" id="ps_fold2" type="number" min="0" style="margin:0"></div>
+        <div style="display:flex;flex-direction:column;gap:2px"><label style="font-size:.72rem;color:#777">1 קיפול</label><input class="fi" id="ps_fold1" type="number" min="0" style="margin:0"></div>
+      </div>
+
+      <div style="font-weight:800;color:var(--press);margin:16px 0 6px;font-size:.86rem">כריכה — מחיר ל-1000 לפי מס' תחנות (ריצות)</div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px">
+        <div style="display:flex;flex-direction:column;gap:2px"><label style="font-size:.72rem;color:#777">1</label><input class="fi" id="ps_bind1" type="number" min="0" style="margin:0"></div>
+        <div style="display:flex;flex-direction:column;gap:2px"><label style="font-size:.72rem;color:#777">2</label><input class="fi" id="ps_bind2" type="number" min="0" style="margin:0"></div>
+        <div style="display:flex;flex-direction:column;gap:2px"><label style="font-size:.72rem;color:#777">3</label><input class="fi" id="ps_bind3" type="number" min="0" style="margin:0"></div>
+        <div style="display:flex;flex-direction:column;gap:2px"><label style="font-size:.72rem;color:#777">4</label><input class="fi" id="ps_bind4" type="number" min="0" style="margin:0"></div>
+        <div style="display:flex;flex-direction:column;gap:2px"><label style="font-size:.72rem;color:#777">5</label><input class="fi" id="ps_bind5" type="number" min="0" style="margin:0"></div>
+        <div style="display:flex;flex-direction:column;gap:2px"><label style="font-size:.72rem;color:#777">6</label><input class="fi" id="ps_bind6" type="number" min="0" style="margin:0"></div>
+      </div>
+
+      <div style="font-weight:800;color:var(--press);margin:16px 0 6px;font-size:.86rem">ניירות (גודל גיליון, גרמז', מחיר טון) — מוזן פעם אחת</div>
+      <div id="ps_papers"></div>
+      <button class="btn btn-tpl" onclick="addPricingPaper()" style="font-size:.82rem;margin-top:8px">+ הוסף נייר</button>
+    </div>
+    <div style="padding:14px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-clear" onclick="closeOffsetPricing()">ביטול</button>
+      <button class="btn btn-primary" onclick="saveOffsetPricing()">💾 שמור תעריפים</button>
     </div>
   </div>
 </div>
@@ -2334,6 +2458,19 @@ let customers      = JSON.parse(localStorage.getItem('solanCustomers')      || '
 let orders         = JSON.parse(localStorage.getItem('solanOrders')         || '[]');
 let inventoryDeductions = JSON.parse(localStorage.getItem('solanInventoryDeductions') || '[]');
 let inventoryHistory    = JSON.parse(localStorage.getItem('solanInventoryHistory')    || '[]');
+// תעריפי תמחור עיתון/חוברת — מוזנים פעם אחת דרך ⚙️ תעריפים וניתנים לעדכון
+var DEFAULT_OFFSET_PRICING = {
+  wastePerRun: 250,      // פחת בגיליונות לכל ריצה
+  colors: 4,             // מספר צבעים ברירת מחדל (ריצה רגילה = צבעים×2 לוחות, מתהפכת = צבעים×1)
+  platePrice: 0,         // מחיר ללוח
+  printFirstK: 0,        // הדפסה — 'אלף ראשון' (פיקס לכל ריצה)
+  printRunningK: 0,      // הדפסה — 'אלף רץ' נוסף
+  foldRates: { '4':0, '3':0, '2':0, '1':0 },           // קיפול — מחיר ל-1000 לפי מס' קיפולים
+  bindRates: { '1':0, '2':0, '3':0, '4':0, '5':0, '6':0 }, // כריכה — מחיר ל-1000 לפי מס' תחנות (ריצות)
+  papers: []             // [{name, sheet:'70×100', sheetW:70, sheetH:100, gram, tonPrice}]
+};
+let quotePricing = JSON.parse(localStorage.getItem('solanQuotePricing') || 'null');
+if (!quotePricing) quotePricing = JSON.parse(JSON.stringify(DEFAULT_OFFSET_PRICING));
 let _inventorySnapshot  = null; // snapshot לפני עדכון חודשי (לא נשמר ב-localStorage)
 var _inventoryUndoStack = [];   // עד 5 מצבים לביטול פעולות מלאי
 
@@ -2429,6 +2566,7 @@ function persist() {
   localStorage.setItem('solanInventoryDeductions', JSON.stringify(inventoryDeductions));
   localStorage.setItem('solanInvoiceLogs',         JSON.stringify(invoiceLogs));
   localStorage.setItem('solanQuotes',              JSON.stringify(quotes));
+  localStorage.setItem('solanQuotePricing',        JSON.stringify(quotePricing));
   localStorage.setItem('solanCustomers',           JSON.stringify(customers));
   localStorage.setItem('solanOrders',            JSON.stringify(orders));
   localStorage.setItem('solanCards',               JSON.stringify(cards));
@@ -2448,7 +2586,7 @@ function persist() {
       inventoryPress: inventoryPress, inventoryDeductions: inventoryDeductions,
       inventoryHistory: inventoryHistory, invoiceLogs: invoiceLogs,
       quotes: quotes, customers: customers, orders: orders,
-      weeklyJobs: weeklyJobs
+      weeklyJobs: weeklyJobs, quotePricing: quotePricing
     };
     window._fbPendingPuts = window._fbPendingPuts || {};
     Object.keys(_paths).forEach(function(p) {
@@ -9439,6 +9577,267 @@ function calcQuoteTotals() {
   if (t) t.textContent = fmt(total);
 }
 
+// ═══════════════════════════════════════════
+// מחשבון תמחור עיתון/חוברת (אופסט) — מבוסס מפרט
+// מזינים מפרט עבודה (גודל/עמודים/כמות/נייר) → המערכת מחשבת ריצות (buildRuns
+// הקיים), כמות גיליונות+פחת, משקל, לוחות, הדפסה, קיפול וכריכה לפי התעריפים
+// שהוזנו פעם אחת (quotePricing). הלקוח רואה שורה אחת בלבד; הפירוט פנימי.
+// המע"מ מתווסף בטופס ההצעה עצמו — המחשבון עובד ב"לפני מע"מ".
+// ═══════════════════════════════════════════
+function _ocILS(n){ return '₪' + (Math.round(n*100)/100).toLocaleString('he-IL'); }
+
+// גודל עיתון סופי → גיליון מומלץ ומס' עמודים לגיליון (תואם מנוע הריצות הקיים)
+function _offsetSizeInfo(sizeRaw){
+  var size = String(sizeRaw||'').trim().toLowerCase();
+  if (/70[\s×x*]?100|100[\s×x*]?70|16[.,]5[\s×x*]?24|24[\s×x*]?16|^a5$/.test(size))
+    return { fullSheet:32, sheet:'70×100', sheetW:70, sheetH:100 };
+  if (/64[\s×x*]?90|90[\s×x*]?64|a4|240[\s×x*]?330|330[\s×x*]?240/.test(size))
+    return { fullSheet:16, sheet:'64×90', sheetW:64, sheetH:90 };
+  return null;
+}
+
+function ocPickSize(size){
+  document.getElementById('oc_size').value = size;
+  document.getElementById('oc_sizeCustom').value = '';
+  var b1 = document.getElementById('ocsz-1'), b2 = document.getElementById('ocsz-2');
+  if (b1) b1.classList.toggle('active', size === '16.5×24');
+  if (b2) b2.classList.toggle('active', size === 'A4');
+  renderOffsetCalc();
+}
+
+// בניית אפשרויות בורר הנייר מתוך התעריפים השמורים (מסומן הנייר התואם לגיליון המומלץ)
+function _renderOffsetPaperOptions(recommendedSheet){
+  var sel = document.getElementById('oc_paper');
+  if (!sel) return;
+  var prev = sel.value;
+  var papers = (quotePricing && quotePricing.papers) || [];
+  var html = '<option value="">— בחר נייר —</option>';
+  papers.forEach(function(p, idx){
+    var match = recommendedSheet && p.sheet === recommendedSheet ? ' ✓' : '';
+    html += '<option value="' + idx + '">' + _esc(p.name || ((p.gram||'?') + ' גרם ' + (p.sheet||''))) + match + '</option>';
+  });
+  sel.innerHTML = html;
+  if (prev && papers[prev]) sel.value = prev;
+}
+
+// הליבה: מחשב מפרט → תמחור מלא (כולל פירוט פנימי)
+function computeOffsetQuote(){
+  var pr = quotePricing || DEFAULT_OFFSET_PRICING;
+  var size   = document.getElementById('oc_size').value;
+  var pages  = parseInt(document.getElementById('oc_pages').value)||0;
+  var copies = parseInt(document.getElementById('oc_copies').value)||0;
+  var colors = parseInt(document.getElementById('oc_colors').value) || pr.colors || 4;
+  var markupPct = parseFloat(document.getElementById('oc_markup').value)||0;
+  var paperIdx  = document.getElementById('oc_paper').value;
+  var paper  = (pr.papers||[])[paperIdx] || null;
+  var info   = _offsetSizeInfo(size);
+
+  if (!info || !pages || !copies) return { ok:false, info:info, runs:[] };
+
+  var runs = buildRuns(pages, copies, info.fullSheet);
+
+  // גיליונות: סכום ה-copies של כל ריצה (כבר חצי בריצה מתהפכת) + פחת לכל ריצה
+  var netSheets = runs.reduce(function(s,r){ return s + (parseInt(r.copies)||0); }, 0);
+  var waste = runs.length * (pr.wastePerRun||0);
+  var totalSheets = netSheets + waste;
+
+  // משקל נייר (לפי גודל הגיליון של הנייר שנבחר, אחרת לפי הגיליון המומלץ)
+  var sw = paper ? (paper.sheetW||info.sheetW) : info.sheetW;
+  var sh = paper ? (paper.sheetH||info.sheetH) : info.sheetH;
+  var gram = paper ? (paper.gram||0) : 0;
+  var weightKg = totalSheets * (sw * sh * gram / 10000000);
+  var paperCost = weightKg * (paper ? (paper.tonPrice||0) : 0) / 1000;
+
+  // לוחות / הדפסה / קיפול — לכל ריצה
+  var plates = 0, printCost = 0, foldCost = 0;
+  runs.forEach(function(r){
+    var rc = parseInt(r.copies)||0;
+    var isTurn = rc < copies;                 // ריצה מתהפכת (מדפיסה חצי גיליונות, חצי לוחות)
+    r._isTurn = isTurn;
+    r._plates = colors * (isTurn ? 1 : 2);    // רגילה=צבעים×2, מתהפכת=צבעים×1
+    plates += r._plates;
+    // הדפסה: לכל ריצה — אלף ראשון פיקס + אלף רץ לכל 1000 מעבר ל-1000 (לפי גיליונות הריצה)
+    if (rc > 0) {
+      printCost += (pr.printFirstK||0);
+      if (rc > 1000) printCost += Math.ceil((rc - 1000)/1000) * (pr.printRunningK||0);
+    }
+    // קיפול: לפי מס' העותקים (לא לפי גיליונות הריצה!), בתעריף לפי מס' הקיפולים של הריצה.
+    // גם ריצה מתהפכת שמדפיסה חצי גיליונות — מקופלת לפי כל העותקים.
+    var fc = parseInt(r.folds)||0;            // '4 קיפולים' → 4
+    r._foldCount = fc;
+    r._foldQty = copies;
+    r._foldCost = Math.ceil(copies/1000) * (((pr.foldRates||{})[String(fc)])||0);
+    foldCost += r._foldCost;
+  });
+  var platesCost = plates * (pr.platePrice||0);
+
+  // כריכה: לפי מספר התחנות (=מספר הריצות), בתעריף ל-1000
+  var stations = runs.length;
+  var bindCost = Math.ceil(copies/1000) * (((pr.bindRates||{})[String(stations)])||0);
+
+  var subtotal  = paperCost + platesCost + printCost + foldCost + bindCost;
+  var markupVal = subtotal * markupPct / 100;
+  var grand     = subtotal + markupVal;
+
+  return { ok:true, info:info, paper:paper, runs:runs, pages:pages, copies:copies, colors:colors,
+    netSheets:netSheets, waste:waste, totalSheets:totalSheets, weightKg:weightKg, gram:gram,
+    paperCost:paperCost, plates:plates, platesCost:platesCost, printCost:printCost,
+    foldCost:foldCost, bindCost:bindCost, stations:stations,
+    subtotal:subtotal, markupPct:markupPct, markupVal:markupVal, grand:grand };
+}
+
+function renderOffsetCalc(){
+  var size = document.getElementById('oc_size').value;
+  var info = _offsetSizeInfo(size);
+  _renderOffsetPaperOptions(info ? info.sheet : '');
+
+  var infoEl = document.getElementById('oc_sheetInfo');
+  if (size && !info) infoEl.textContent = '⚠️ גודל לא מזוהה — נסה 16.5×24 / A4 / 70×100 / 64×90';
+  else if (info) infoEl.textContent = '📐 גיליון מומלץ: ' + info.sheet + ' · ' + info.fullSheet + ' עמ\' לגיליון';
+  else infoEl.textContent = '';
+
+  var q = computeOffsetQuote();
+  var set = function(id, val){ var e=document.getElementById(id); if(e) e.textContent = val; };
+
+  if (!q.ok){
+    document.getElementById('oc_runsTable').innerHTML = '<div style="color:#aaa;font-size:.82rem">מלא גודל, עמודים וכמות כדי לחשב…</div>';
+    ['oc_netSheets','oc_waste','oc_totalSheets','oc_platesCount','oc_stations'].forEach(function(id){ set(id,'0'); });
+    set('oc_weight','0 ק"ג');
+    ['oc_paperCost','oc_platesCost','oc_printCost','oc_foldCost','oc_bindCost','oc_subtotal','oc_markupVal','oc_grand'].forEach(function(id){ set(id,'₪0'); });
+    return;
+  }
+
+  // טבלת ריצות (פנימי)
+  var rows = q.runs.map(function(r,i){
+    return '<tr>' +
+      '<td style="padding:3px 8px">ריצה ' + (i+1) + (r._isTurn ? ' <span style="color:#1d4ed8;font-weight:700">🔄 מתהפכת</span>' : '') + '</td>' +
+      '<td style="padding:3px 8px;text-align:center">' + r.pages + ' עמ\'</td>' +
+      '<td style="padding:3px 8px;text-align:center">' + (r.copies||0).toLocaleString('he-IL') + ' גיל\'</td>' +
+      '<td style="padding:3px 8px;text-align:center">' + r._plates + ' לוחות</td>' +
+      '<td style="padding:3px 8px;text-align:center">' + (r.folds||'—') + (r._foldQty ? ' · ' + r._foldQty.toLocaleString('he-IL') + ' עות\'' : '') + '</td>' +
+    '</tr>';
+  }).join('');
+  document.getElementById('oc_runsTable').innerHTML =
+    '<table style="width:100%;border-collapse:collapse;font-size:.78rem">' +
+    '<thead><tr style="color:#888;font-weight:700"><th style="text-align:right;padding:3px 8px">ריצה</th><th>עמודים</th><th>גיליונות</th><th>לוחות</th><th>קיפולים</th></tr></thead>' +
+    '<tbody>' + rows + '</tbody></table>';
+
+  set('oc_netSheets', q.netSheets.toLocaleString('he-IL'));
+  set('oc_waste', q.waste.toLocaleString('he-IL'));
+  set('oc_totalSheets', q.totalSheets.toLocaleString('he-IL'));
+  set('oc_weight', (Math.round(q.weightKg*10)/10).toLocaleString('he-IL') + ' ק"ג');
+  set('oc_paperCost', _ocILS(q.paperCost));
+  set('oc_platesCount', q.plates);
+  set('oc_platesCost', _ocILS(q.platesCost));
+  set('oc_printCost', _ocILS(q.printCost));
+  set('oc_foldCost', _ocILS(q.foldCost));
+  set('oc_stations', q.stations);
+  set('oc_bindCost', _ocILS(q.bindCost));
+  set('oc_subtotal', _ocILS(q.subtotal));
+  set('oc_markupVal', _ocILS(q.markupVal));
+  set('oc_grand', _ocILS(q.grand));
+}
+
+function openOffsetCalc(){
+  var colorsEl = document.getElementById('oc_colors');
+  if (colorsEl && !colorsEl.value) colorsEl.value = (quotePricing && quotePricing.colors) || 4;
+  document.getElementById('offset-calc-modal').classList.add('open');
+  renderOffsetCalc();
+}
+function closeOffsetCalc(){
+  document.getElementById('offset-calc-modal').classList.remove('open');
+}
+
+// הוספת שורה אחת ללקוח (תיאור כללי + מחיר). הפירוט הפנימי נשמר בשדה offset שלא מוצג ללקוח.
+function offsetAddToQuote(){
+  var q = computeOffsetQuote();
+  if (!q.ok || q.grand <= 0){ showToast('מלא מפרט ותעריפים כדי לחשב מחיר'); return; }
+  var sizeLabel = document.getElementById('oc_size').value || (q.info ? q.info.sheet : '');
+  var paperName = q.paper ? (q.paper.name || ((q.paper.gram||'') + ' גרם')) : '';
+  var desc = 'עיתון ' + sizeLabel + ', ' + q.pages + ' עמ\', ' + q.copies.toLocaleString('he-IL') + ' עותקים' + (paperName ? ', ' + paperName : '');
+  var item = {
+    desc: desc, qty: 1, price: Math.round(q.grand*100)/100,
+    offset: {  // פירוט פנימי — נשמר עם ההצעה, לא מוצג ללקוח ב-PDF
+      size: sizeLabel, pages: q.pages, copies: q.copies, colors: q.colors,
+      paper: paperName, totalSheets: q.totalSheets, waste: q.waste, weightKg: Math.round(q.weightKg*10)/10,
+      plates: q.plates, stations: q.stations,
+      costs: { paper: q.paperCost, plates: q.platesCost, print: q.printCost, fold: q.foldCost, bind: q.bindCost },
+      subtotal: q.subtotal, markupPct: q.markupPct, grand: q.grand
+    }
+  };
+  if (_quoteItems.length === 1 && !_quoteItems[0].desc && !_quoteItems[0].price) _quoteItems = [];
+  _quoteItems.push(item);
+  renderQuoteItems();
+  calcQuoteTotals();
+  closeOffsetCalc();
+  showToast('✅ נוסף להצעה');
+}
+
+// ───────── תעריפי תמחור (הגדרות) ─────────
+var _psPapers = [];
+function _psVal(id){ var v = parseFloat(document.getElementById(id).value); return isFinite(v) ? v : 0; }
+
+function openOffsetPricing(){
+  var p = quotePricing || DEFAULT_OFFSET_PRICING;
+  document.getElementById('ps_waste').value  = p.wastePerRun || 0;
+  document.getElementById('ps_colors').value = p.colors || 4;
+  document.getElementById('ps_plate').value  = p.platePrice || 0;
+  document.getElementById('ps_firstK').value = p.printFirstK || 0;
+  document.getElementById('ps_runK').value   = p.printRunningK || 0;
+  ['4','3','2','1'].forEach(function(k){ document.getElementById('ps_fold'+k).value = (p.foldRates||{})[k] || 0; });
+  ['1','2','3','4','5','6'].forEach(function(k){ document.getElementById('ps_bind'+k).value = (p.bindRates||{})[k] || 0; });
+  _psPapers = JSON.parse(JSON.stringify(p.papers || []));
+  renderPricingPapers();
+  document.getElementById('offset-pricing-modal').classList.add('open');
+}
+function closeOffsetPricing(){ document.getElementById('offset-pricing-modal').classList.remove('open'); }
+
+function addPricingPaper(){
+  _psPapers.push({ name:'', sheet:'70×100', sheetW:70, sheetH:100, gram:0, tonPrice:0 });
+  renderPricingPapers();
+}
+function removePricingPaper(i){ _psPapers.splice(i,1); renderPricingPapers(); }
+
+function renderPricingPapers(){
+  var wrap = document.getElementById('ps_papers');
+  if (!_psPapers.length){ wrap.innerHTML = '<div style="color:#aaa;font-size:.8rem">אין ניירות — הוסף נייר אחד או יותר.</div>'; return; }
+  var hdr = '<div style="display:grid;grid-template-columns:1.4fr 90px 70px 90px 30px;gap:6px;font-size:.7rem;color:#888;font-weight:700;margin-bottom:4px;padding:0 2px"><span>שם</span><span>גיליון</span><span>גרמז\'</span><span>מחיר טון</span><span></span></div>';
+  wrap.innerHTML = hdr + _psPapers.map(function(p,i){
+    return '<div style="display:grid;grid-template-columns:1.4fr 90px 70px 90px 30px;gap:6px;margin-bottom:6px">' +
+      '<input class="fi" style="margin:0;font-size:.82rem" value="' + _esc(p.name||'') + '" placeholder="כרומו 80 גרם" oninput="_psPapers['+i+'].name=this.value">' +
+      '<select class="fi" style="margin:0;font-size:.82rem" onchange="_psSetSheet('+i+',this.value)">' +
+        '<option value="70×100"' + (p.sheet==='70×100'?' selected':'') + '>70×100</option>' +
+        '<option value="64×90"'  + (p.sheet==='64×90' ?' selected':'') + '>64×90</option>' +
+      '</select>' +
+      '<input class="fi" type="number" min="0" style="margin:0;font-size:.82rem;text-align:center" value="' + (p.gram||0) + '" oninput="_psPapers['+i+'].gram=parseFloat(this.value)||0">' +
+      '<input class="fi" type="number" min="0" style="margin:0;font-size:.82rem;text-align:center" value="' + (p.tonPrice||0) + '" oninput="_psPapers['+i+'].tonPrice=parseFloat(this.value)||0">' +
+      '<button onclick="removePricingPaper('+i+')" style="background:none;border:none;color:#e07070;font-size:1.05rem;cursor:pointer;padding:0">✕</button>' +
+    '</div>';
+  }).join('');
+}
+function _psSetSheet(i, val){
+  _psPapers[i].sheet = val;
+  if (val === '70×100'){ _psPapers[i].sheetW = 70; _psPapers[i].sheetH = 100; }
+  else if (val === '64×90'){ _psPapers[i].sheetW = 64; _psPapers[i].sheetH = 90; }
+}
+
+function saveOffsetPricing(){
+  quotePricing = {
+    wastePerRun: _psVal('ps_waste'),
+    colors: _psVal('ps_colors') || 4,
+    platePrice: _psVal('ps_plate'),
+    printFirstK: _psVal('ps_firstK'),
+    printRunningK: _psVal('ps_runK'),
+    foldRates: { '4':_psVal('ps_fold4'), '3':_psVal('ps_fold3'), '2':_psVal('ps_fold2'), '1':_psVal('ps_fold1') },
+    bindRates: { '1':_psVal('ps_bind1'), '2':_psVal('ps_bind2'), '3':_psVal('ps_bind3'), '4':_psVal('ps_bind4'), '5':_psVal('ps_bind5'), '6':_psVal('ps_bind6') },
+    papers: _psPapers.filter(function(p){ return p.name || p.gram || p.tonPrice; })
+  };
+  persist();
+  closeOffsetPricing();
+  if (document.getElementById('offset-calc-modal').classList.contains('open')) renderOffsetCalc();
+  showToast('✅ התעריפים נשמרו');
+}
+
 function _buildQuoteObj() {
   const modal = document.getElementById('quote-modal');
   const type = modal.dataset.type || 'quote';
@@ -10140,6 +10539,13 @@ async function _fbPollAll() {
       quotes = Array.isArray(qv) ? qv : Object.values(qv);
       localStorage.setItem('solanQuotes', JSON.stringify(quotes));
       window._fbSnapshot.quotes = JSON.stringify(quotes);
+    }
+    // תעריפי תמחור עיתון/חוברת
+    var qpv = await window._fbGet('quotePricing');
+    if (qpv !== null && typeof qpv === 'object' && !(_pend.quotePricing > 0)) {
+      quotePricing = qpv;
+      localStorage.setItem('solanQuotePricing', JSON.stringify(quotePricing));
+      window._fbSnapshot.quotePricing = JSON.stringify(quotePricing);
     }
     // לקוחות
     var cv = await window._fbGet('customers');
