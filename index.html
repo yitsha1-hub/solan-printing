@@ -1430,7 +1430,12 @@ window._fbSnapshot = {};
             oninput="document.getElementById('oc_size').value=this.value;renderOffsetCalc()">
           <input type="hidden" id="oc_size">
         </div>
-        <div id="oc_sheetInfo" style="font-size:.8rem;color:#7c3aed;font-weight:700;margin-bottom:10px;min-height:16px"></div>
+        <div id="oc_sheetInfo" style="font-size:.8rem;color:#7c3aed;font-weight:700;margin-bottom:8px;min-height:16px"></div>
+        <div id="oc_recs" style="display:none;font-size:.8rem;margin-bottom:8px"></div>
+        <div id="oc_customFsWrap" style="display:none;margin-bottom:10px">
+          <label style="font-size:.72rem;color:#777">עמ' לגיליון (עקיפה ידנית — אופציונלי, אם המערכת לא קלעה)</label><br>
+          <input class="fi" id="oc_customFs" type="number" min="0" step="1" oninput="renderOffsetCalc()" placeholder="ברירת מחדל: לפי המלצה" style="margin-top:3px;width:200px">
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
           <div style="display:flex;flex-direction:column;gap:3px"><label style="font-size:.72rem;color:#777">מספר עמודים</label><input class="fi" id="oc_pages" type="number" min="0" step="1" oninput="renderOffsetCalc()" style="margin:0"></div>
           <div style="display:flex;flex-direction:column;gap:3px"><label style="font-size:.72rem;color:#777">כמות עותקים</label><input class="fi" id="oc_copies" type="number" min="0" step="1" oninput="renderOffsetCalc()" style="margin:0"></div>
@@ -9789,6 +9794,65 @@ function _offsetSizeInfo(sizeRaw){
   return null;
 }
 
+// ── פריסה לגדלים לא-סטנדרטיים ──
+var _ocCustomSheetIdx = 0;   // הגיליון המומלץ שנבחר (אינדקס ברשימה)
+var _ocLastSize = '';
+
+function _parseSize(s){
+  var m = String(s||'').replace(',', '.').match(/(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)/i);
+  if (!m) return null;
+  var w = parseFloat(m[1]), h = parseFloat(m[2]);
+  return (w > 0 && h > 0) ? { w:w, h:h } : null;
+}
+
+// גדלי גיליון מועמדים: בסיס סטנדרטי + גדלים שהוזנו בתעריפים
+function _sheetCandidates(){
+  var base = [{w:70,h:100},{w:64,h:90},{w:63,h:88},{w:57,h:89},{w:70,h:88}];
+  ((quotePricing && quotePricing.papers) || []).forEach(function(p){ if (p.sheetW && p.sheetH) base.unshift({ w:p.sheetW, h:p.sheetH }); });
+  var seen = {}, out = [];
+  base.forEach(function(s){ var k = s.w + 'x' + s.h; if (!seen[k]) { seen[k] = 1; out.push(s); } });
+  return out;
+}
+
+// כמה עמודים נכנסים בצד אחד של הגיליון, מעוגל ל"מספר מתקפל" (1/2/4/8/16/32)
+function _impositionPerSide(pw, ph, sw, sh){
+  var raw = Math.max(Math.floor(sw/pw) * Math.floor(sh/ph), Math.floor(sw/ph) * Math.floor(sh/pw));
+  var folds = [1,2,4,8,16,32], best = 0;
+  folds.forEach(function(f){ if (f <= raw) best = f; });
+  return best;
+}
+
+// המלצות גיליון לגודל עמוד נתון — ממוין מהמתאים ביותר (ניצול שטח גבוה / פחות פחת)
+function _recommendSheets(pw, ph){
+  var out = [];
+  _sheetCandidates().forEach(function(s){
+    var perSide = _impositionPerSide(pw, ph, s.w, s.h);
+    if (perSide >= 1) {
+      out.push({ w:s.w, h:s.h, label:(s.w + '×' + s.h), perSide:perSide, fullSheet:perSide*2,
+                 eff:(perSide * pw * ph) / (s.w * s.h) });
+    }
+  });
+  out.sort(function(a,b){ return (b.eff - a.eff) || (b.fullSheet - a.fullSheet); });
+  return out;
+}
+
+// פותר מידע גודל: סטנדרטי → מהמיפוי; מותאם → לפי המלצה/בחירה + עקיפה ידנית
+function _resolveSizeInfo(size){
+  var std = _offsetSizeInfo(size);
+  if (std) return std;
+  var dims = _parseSize(size);
+  if (!dims) return null;
+  var recs = _recommendSheets(dims.w, dims.h);
+  if (!recs.length) return null;
+  var idx = Math.min(_ocCustomSheetIdx, recs.length - 1);
+  var r = recs[idx];
+  var manualFs = parseInt((document.getElementById('oc_customFs')||{}).value) || 0;
+  return { fullSheet: manualFs > 0 ? manualFs : r.fullSheet, sheet:r.label, sheetW:r.w, sheetH:r.h,
+           final:(dims.w + '×' + dims.h), custom:true, recs:recs, dims:dims, recFullSheet:r.fullSheet };
+}
+
+function selectOcSheet(i){ _ocCustomSheetIdx = i; renderOffsetCalc(); }
+
 // רשימת שמות נייר זמינים להשלמה: מהמלאי (inventory) + מהתעריפים (quotePricing.papers)
 function _ocPaperSuggestions(){
   var names = [];
@@ -9864,7 +9928,7 @@ function computeOffsetQuote(){
   var markupPct = parseFloat(document.getElementById('oc_markup').value)||0;
   var paperName = document.getElementById('oc_paper').value.trim();
   var paper  = _resolveOcPaper(paperName);
-  var info   = _offsetSizeInfo(size);
+  var info   = _resolveSizeInfo(size);
 
   if (!info || !pages || !copies) return { ok:false, info:info, runs:[] };
 
@@ -9930,7 +9994,8 @@ function computeOffsetQuote(){
 
 function renderOffsetCalc(){
   var size = document.getElementById('oc_size').value;
-  var info = _offsetSizeInfo(size);
+  if (size !== _ocLastSize) { _ocCustomSheetIdx = 0; _ocLastSize = size; var _fsEl=document.getElementById('oc_customFs'); if(_fsEl) _fsEl.value=''; } // איפוס בחירת גיליון/עקיפה בשינוי גודל
+  var info = _resolveSizeInfo(size);
 
   // הובלה: שדה הסכום מוצג רק כשמסומן "כולל הובלה"; אחרת מוצג רמז שהמחיר אינו כולל הובלה
   var shipChecked = document.getElementById('oc_ship_inc').checked;
@@ -9940,9 +10005,26 @@ function renderOffsetCalc(){
   if (shipHint) shipHint.style.display = shipChecked ? 'none' : 'inline';
 
   var infoEl = document.getElementById('oc_sheetInfo');
-  if (size && !info) infoEl.textContent = '⚠️ גודל לא מזוהה — נסה 16.5×24 / A4 / 70×100 / 64×90';
-  else if (info) infoEl.textContent = '📐 עיתון ' + info.final + ' · גיליון ' + info.sheet + ' · ' + info.fullSheet + ' עמ\' לגיליון';
+  if (size && !info) infoEl.textContent = '⚠️ גודל לא מזוהה — הקלד גודל כמו 20×28 (ס"מ) או בחר 16.5×24 / A4';
+  else if (info) infoEl.textContent = '📐 ' + (info.custom ? 'גודל ' : 'עיתון ') + info.final + ' · גיליון מומלץ ' + info.sheet + ' · ' + info.fullSheet + ' עמ\' לגיליון' + (info.custom ? ' (מחושב)' : '');
   else infoEl.textContent = '';
+
+  // פאנל המלצות גיליון לגדלים מותאמים
+  var recsEl = document.getElementById('oc_recs');
+  var fsWrap = document.getElementById('oc_customFsWrap');
+  if (info && info.custom && info.recs && info.recs.length) {
+    recsEl.style.display = '';
+    if (fsWrap) fsWrap.style.display = '';
+    recsEl.innerHTML = '<span style="color:#555">בחר גיליון:</span> ' + info.recs.map(function(r, i){
+      var sel = (i === Math.min(_ocCustomSheetIdx, info.recs.length - 1));
+      return '<button type="button" onclick="selectOcSheet(' + i + ')" style="margin:2px;padding:4px 9px;border-radius:6px;cursor:pointer;font-family:Heebo,sans-serif;font-size:.78rem;font-weight:700;' +
+        'border:1.5px solid ' + (sel ? '#7c3aed' : '#cbd5e1') + ';background:' + (sel ? '#f3e8ff' : '#fff') + ';color:' + (sel ? '#6d28d9' : '#444') + '">' +
+        r.label + ' · ' + r.fullSheet + ' עמ\' · ' + Math.round(r.eff * 100) + '% ניצול</button>';
+    }).join('');
+  } else {
+    recsEl.style.display = 'none'; recsEl.innerHTML = '';
+    if (fsWrap) fsWrap.style.display = 'none';
+  }
 
   // הערת נייר: מתומחר / לא מתומחר (להזמנה)
   var paperName = document.getElementById('oc_paper').value.trim();
@@ -10126,8 +10208,7 @@ function renderPricingPapers(){
     return '<div style="display:grid;grid-template-columns:1.4fr 90px 70px 90px 30px;gap:6px;margin-bottom:6px">' +
       '<input class="fi" style="margin:0;font-size:.82rem" value="' + _esc(p.name||'') + '" placeholder="כרומו 80 גרם" oninput="_psPapers['+i+'].name=this.value">' +
       '<select class="fi" style="margin:0;font-size:.82rem" onchange="_psSetSheet('+i+',this.value)">' +
-        '<option value="70×100"' + (p.sheet==='70×100'?' selected':'') + '>70×100</option>' +
-        '<option value="64×90"'  + (p.sheet==='64×90' ?' selected':'') + '>64×90</option>' +
+        ['70×100','64×90','63×88','57×89','70×88'].map(function(sz){ return '<option value="'+sz+'"'+(p.sheet===sz?' selected':'')+'>'+sz+'</option>'; }).join('') +
       '</select>' +
       '<input class="fi" type="number" min="0" style="margin:0;font-size:.82rem;text-align:center" value="' + (p.gram||0) + '" oninput="_psPapers['+i+'].gram=parseFloat(this.value)||0">' +
       '<input class="fi" type="number" min="0" style="margin:0;font-size:.82rem;text-align:center" value="' + (p.tonPrice||0) + '" oninput="_psPapers['+i+'].tonPrice=parseFloat(this.value)||0">' +
@@ -10137,8 +10218,9 @@ function renderPricingPapers(){
 }
 function _psSetSheet(i, val){
   _psPapers[i].sheet = val;
-  if (val === '70×100'){ _psPapers[i].sheetW = 70; _psPapers[i].sheetH = 100; }
-  else if (val === '64×90'){ _psPapers[i].sheetW = 64; _psPapers[i].sheetH = 90; }
+  var m = String(val).split(/[×x*]/);
+  _psPapers[i].sheetW = parseInt(m[0]) || 0;
+  _psPapers[i].sheetH = parseInt(m[1]) || 0;
 }
 
 function saveOffsetPricing(){
