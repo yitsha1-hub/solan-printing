@@ -1235,11 +1235,12 @@ window._fbSnapshot = {};
 
 <!-- ===== SAVED CARDS ===== -->
 <div id="view-saved" style="display:none">
-  <div id="cards-container" class="cards-list"></div>
-  <div class="completed-section">
-    <button id="completed-toggle-btn" class="completed-toggle-btn" onclick="toggleCompletedCards()">✅ עבודות שהושלמו (0) ▾</button>
-    <div id="cards-container-done" class="cards-list" style="display:none;margin-top:12px"></div>
+  <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    <button id="svtab-active" class="emp-tab active" onclick="switchSavedTab('active')">📋 פעילות</button>
+    <button id="svtab-done" class="emp-tab" onclick="switchSavedTab('done')">✅ הושלמו <span id="svtab-done-count" style="opacity:.75"></span></button>
   </div>
+  <div id="cards-container" class="cards-list"></div>
+  <div id="cards-container-done" class="cards-list" style="display:none"></div>
 </div>
 
 <!-- ===== NEWSPAPER MANAGEMENT ===== -->
@@ -2551,6 +2552,17 @@ var FLAT_PRODUCTS = [
 ];
 let quotePricing = JSON.parse(localStorage.getItem('solanQuotePricing') || 'null');
 if (!quotePricing) quotePricing = JSON.parse(JSON.stringify(DEFAULT_OFFSET_PRICING));
+// מזהים שנמחקו לצמיתות — מסונכרן ל-Firebase כדי שמחיקה לא "תחזור" ע"י מכשיר/טאב אחר
+let deletedIds = JSON.parse(localStorage.getItem('solanDeletedIds') || '{}');
+function _markDeleted(coll, id){
+  if (!deletedIds[coll]) deletedIds[coll] = [];
+  if (deletedIds[coll].indexOf(id) === -1) deletedIds[coll].push(id);
+}
+function _filterDeleted(coll, arr){
+  var del = deletedIds[coll];
+  if (!del || !del.length || !Array.isArray(arr)) return arr;
+  return arr.filter(function(x){ return x && del.indexOf(x.id) === -1; });
+}
 let _inventorySnapshot  = null; // snapshot לפני עדכון חודשי (לא נשמר ב-localStorage)
 var _inventoryUndoStack = [];   // עד 5 מצבים לביטול פעולות מלאי
 
@@ -2646,6 +2658,7 @@ function persist() {
   localStorage.setItem('solanInventoryDeductions', JSON.stringify(inventoryDeductions));
   localStorage.setItem('solanInvoiceLogs',         JSON.stringify(invoiceLogs));
   localStorage.setItem('solanQuotes',              JSON.stringify(quotes));
+  localStorage.setItem('solanDeletedIds',          JSON.stringify(deletedIds));
   localStorage.setItem('solanQuotePricing',        JSON.stringify(quotePricing));
   localStorage.setItem('solanCustomers',           JSON.stringify(customers));
   localStorage.setItem('solanOrders',            JSON.stringify(orders));
@@ -2665,9 +2678,10 @@ function persist() {
       cards: cards, newspapers: newspapers, inventory: inventory,
       inventoryPress: inventoryPress, inventoryDeductions: inventoryDeductions,
       inventoryHistory: inventoryHistory, invoiceLogs: invoiceLogs,
-      quotes: quotes, customers: customers, orders: orders,
-      weeklyJobs: weeklyJobs, quotePricing: quotePricing, documentPrices: documentPrices
+      quotes: _filterDeleted('quotes', quotes), customers: customers, orders: _filterDeleted('orders', orders),
+      weeklyJobs: weeklyJobs, quotePricing: quotePricing, documentPrices: documentPrices, deletedIds: deletedIds
     };
+    _paths.cards = _filterDeleted('cards', cards);
     window._fbPendingPuts = window._fbPendingPuts || {};
     Object.keys(_paths).forEach(function(p) {
       var _json = JSON.stringify(_paths[p]);
@@ -2972,9 +2986,11 @@ function deleteOrder(id) {
   const item = orders.find(o=>o.id===id);
   if (!item) return;
   const snap = [...orders];
+  _markDeleted('orders', id);
   orders = orders.filter(function(x) { return x.id !== id; });
   persist(); renderOrders();
   showUndoToast('הזמנה של "' + (item.customer||'לקוח') + '" נמחקה', function() {
+    if (deletedIds.orders) deletedIds.orders = deletedIds.orders.filter(function(x){ return x !== id; });
     orders = snap; persist(); renderOrders();
   });
 }
@@ -6104,25 +6120,48 @@ function openSnapshotRestore() {
   panel.innerHTML = snaps.map((s, i) => {
     const d = new Date(s.ts);
     const label = s.date + ' ' + d.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f3f4f6">
-      <span style="font-size:.83rem">📸 ${label}</span>
-      <button class="btn btn-sm btn-tpl" onclick="restoreSnapshot(${i})" style="font-size:.78rem">שחזר</button>
+    var cnt = { c:0, inv:0, q:0 };
+    try { var dd = JSON.parse(s.data); cnt.c=(dd.solanCards||[]).length; cnt.inv=(dd.solanInventory||[]).length; cnt.q=(dd.solanQuotes||[]).length; } catch(e){}
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f3f4f6;gap:8px">
+      <span style="font-size:.83rem">📸 ${label}<br><span style="font-size:.72rem;color:#888">כרטיסים: ${cnt.c} · מלאי: ${cnt.inv} · הצעות: ${cnt.q}</span></span>
+      <button class="btn btn-sm btn-tpl" onclick="restoreSnapshot(${i})" style="font-size:.78rem;white-space:nowrap">שחזר ודחוף לענן</button>
     </div>`;
   }).join('');
+}
+
+// דוחף את הנתונים המשוחזרים ל-Firebase כדי שלא יידרסו ע"י הסנכרון (מחזיר Promise)
+function _pushRestoredToFirebase(data) {
+  window._lastLocalWriteAt = Date.now();
+  var map = { solanCards:'cards', solanInventory:'inventory', solanQuotes:'quotes',
+    solanOrders:'orders', solanNewspapers:'newspapers', solanWeeklyJobs:'weeklyJobs',
+    solanInventoryHistory:'inventoryHistory', solanInventoryDeductions:'inventoryDeductions' };
+  var puts = [];
+  Object.keys(map).forEach(function(lsKey){
+    var val = data[lsKey];
+    // דוחפים רק אוספים לא-ריקים — כדי לא לדרוס נתונים תקינים בענן עם מערך ריק מה-snapshot
+    if (Array.isArray(val) && val.length > 0 && window._fbPut) {
+      window._fbSnapshot[map[lsKey]] = JSON.stringify(val); // עדכן snapshot כדי שה-poll לא ידרוס
+      puts.push(window._fbPut(map[lsKey], val));
+    }
+  });
+  return Promise.all(puts);
 }
 function restoreSnapshot(idx) {
   let snaps = [];
   try { snaps = JSON.parse(localStorage.getItem('solanSnapshots') || '[]'); } catch(e) {}
   const snap = snaps[idx];
   if (!snap) return;
-  if (!confirm('לשחזר מתמונת מצב מ-' + snap.date + '? הנתונים הנוכחיים יוחלפו.')) return;
+  if (!confirm('לשחזר מתמונת מצב מ-' + snap.date + '? הנתונים הנוכחיים יוחלפו וייכתבו גם לענן.')) return;
   try {
     const data = JSON.parse(snap.data);
     Object.keys(data).forEach(k => {
       if (k !== '_exportedAt') localStorage.setItem(k, JSON.stringify(data[k]));
     });
-    showToast('✅ שוחזר מתמונת מצב — מרענן...');
-    setTimeout(() => location.reload(), 1200);
+    showToast('✅ משחזר ודוחף לענן…');
+    var done = false;
+    var fin = function(){ if (done) return; done = true; location.reload(); };
+    _pushRestoredToFirebase(data).then(fin).catch(fin);
+    setTimeout(fin, 8000); // גיבוי: רענון גם אם הדחיפה מתעכבת
   } catch(e) { alert('שגיאה בשחזור: ' + e.message); }
 }
 
@@ -8151,6 +8190,7 @@ function deleteCard(id) {
   const item = cards.find(c=>c.id===id);
   if (!item) return;
   const snap = [...cards];
+  _markDeleted('cards', id);
   cards = cards.filter(c=>c.id!==id);
   persist(); renderCards();
   // ניקוי רשימות חסימה/סדר עבודה כדי שלא יישארו אסמכתאות לכרטיס שנמחק
@@ -8161,6 +8201,7 @@ function deleteCard(id) {
   });
   _saveWorkOrder();
   showUndoToast('כרטיס "' + (item.name||item.customer||'ללא שם') + '" נמחק', function() {
+    if (deletedIds.cards) deletedIds.cards = deletedIds.cards.filter(function(x){ return x !== id; });
     cards = snap; persist(); renderCards();
   });
 }
@@ -8312,21 +8353,27 @@ function _jobCardHtml(c) {
     </div>`;
 }
 
+var _savedTab = 'active'; // 'active' = פעילות (הכול, ללא הושלמו) | 'done' = הושלמו בלבד
+
+function switchSavedTab(t) {
+  _savedTab = t;
+  var ba = document.getElementById('svtab-active'), bd = document.getElementById('svtab-done');
+  if (ba) ba.classList.toggle('active', t === 'active');
+  if (bd) bd.classList.toggle('active', t === 'done');
+  var ca = document.getElementById('cards-container'), cd = document.getElementById('cards-container-done');
+  if (ca) ca.style.display = (t === 'active') ? '' : 'none';
+  if (cd) cd.style.display = (t === 'done') ? '' : 'none';
+}
+
 function _updateCompletedCardsSection(doneCards) {
-  var btn = document.getElementById('completed-toggle-btn');
   var elDone = document.getElementById('cards-container-done');
-  if (btn) btn.textContent = '✅ עבודות שהושלמו (' + doneCards.length + ') ' + (_completedCardsOpen?'▴':'▾');
+  var cnt = document.getElementById('svtab-done-count');
+  if (cnt) cnt.textContent = '(' + doneCards.length + ')';
   if (elDone) {
-    elDone.style.display = _completedCardsOpen ? '' : 'none';
     elDone.innerHTML = doneCards.length
       ? doneCards.map(_jobCardHtml).join('')
       : '<div style="text-align:center;padding:30px 20px;color:#9ca3af;font-size:.9rem">אין עבודות שהושלמו עדיין</div>';
   }
-}
-
-function toggleCompletedCards() {
-  _completedCardsOpen = !_completedCardsOpen;
-  renderCards();
 }
 
 function renderCards() {
@@ -8376,6 +8423,11 @@ function renderCards() {
     activeCards = displayCards;
     doneCards = [];
   }
+  // נראות הטאבים: בסינון (דאשבורד/חיפוש) מציגים תמיד את "פעילות"; אחרת לפי הטאב הנבחר
+  var _eff = (_dashCardFilter || _cardFilterQ) ? 'active' : _savedTab;
+  var _ca = document.getElementById('cards-container'), _cd = document.getElementById('cards-container-done');
+  if (_ca) _ca.style.display = (_eff === 'active') ? '' : 'none';
+  if (_cd) _cd.style.display = (_eff === 'done') ? '' : 'none';
   if(!displayCards.length){
     el.innerHTML = filterBanner + (filterBanner
       ? '<div style="text-align:center;padding:40px 20px;color:#9ca3af"><div style="font-size:2.4rem;margin-bottom:10px">🔍</div><div style="font-size:1rem;font-weight:700;color:#374151">אין עבודות שתואמות לסינון</div></div>'
@@ -9966,10 +10018,27 @@ function closeOffsetCalc(){
   document.getElementById('offset-calc-modal').classList.remove('open');
 }
 
+// איתור פרטים חסרים / ערכים לא הגיוניים בחישוב העיתון
+function _offsetIssues(q){
+  var issues = [];
+  if (!document.getElementById('oc_paper').value.trim()) issues.push('לא צוין סוג נייר');
+  if (q.gram <= 0)       issues.push('גרמז\' חסר — עלות הנייר לא חושבה');
+  if (q.tonPrice <= 0)   issues.push('מחיר טון חסר');
+  if (q.paperCost <= 0)  issues.push('עלות נייר 0 — בדוק גרמז\'/מחיר טון');
+  if (q.platesCost <= 0) issues.push('מחיר ללוח לא הוזן ב-⚙️ תעריפים');
+  if (q.printCost <= 0)  issues.push('תעריף הדפסה (אלף ראשון/רץ) לא הוזן ב-⚙️ תעריפים');
+  if (q.foldCost <= 0)   issues.push('תעריף קיפול לא הוזן ב-⚙️ תעריפים');
+  if (q.bindCost <= 0)   issues.push('תעריף כריכה ל-' + q.stations + ' תחנות לא הוזן ב-⚙️ תעריפים');
+  if (q.shipInc && q.shipping <= 0) issues.push('סומן "כולל הובלה" אך לא הוזן סכום הובלה');
+  return issues;
+}
+
 // הוספת שורה אחת ללקוח (תיאור כללי + מחיר). הפירוט הפנימי נשמר בשדה offset שלא מוצג ללקוח.
 function offsetAddToQuote(){
   var q = computeOffsetQuote();
   if (!q.ok || q.grand <= 0){ showToast('מלא מפרט ותעריפים כדי לחשב מחיר'); return; }
+  var issues = _offsetIssues(q);
+  if (issues.length && !confirm('⚠️ שים לב — ייתכן שחסר פרט או שמשהו לא הגיוני:\n\n• ' + issues.join('\n• ') + '\n\nלהוסיף להצעה בכל זאת?')) return;
   var sizeLabel = document.getElementById('oc_size').value || (q.info ? q.info.sheet : '');
   var paperName = (document.getElementById('oc_paper').value.trim()) || (q.paper ? q.paper.name : '');
   var desc = 'עיתון ' + sizeLabel + ', ' + q.pages + ' עמ\', ' + q.copies.toLocaleString('he-IL') + ' עותקים' + (paperName ? ', ' + paperName : '');
@@ -10175,8 +10244,36 @@ function _buildQuoteObj() {
   return { id, type, docNum, customer, customerEmail, employee, date, notes, items, vatPct, ts: Date.now() };
 }
 
+// איתור פרטים חסרים / ערכים לא הגיוניים בהצעת המחיר כולה
+function _quoteIssues(q) {
+  var issues = [];
+  if (!q.customer) issues.push('לא צוין שם לקוח');
+  if (!q.date) issues.push('לא צוין תאריך');
+  if (!q.employee) issues.push('לא צוין עובד אחראי');
+  if (!q.items || !q.items.length) {
+    issues.push('אין שורות בהצעה');
+  } else {
+    q.items.forEach(function(it){
+      var label = (it.desc || '').slice(0, 30) || 'שורה ללא תיאור';
+      if (!it.desc) issues.push('שורה ללא תיאור');
+      if (!(it.price > 0)) issues.push('שורה ללא מחיר: "' + label + '"');
+      if (!(it.qty > 0))   issues.push('שורה ללא כמות: "' + label + '"');
+    });
+    var total = q.items.reduce(function(s,it){ return s + (it.qty||0)*(it.price||0); }, 0);
+    if (total <= 0) issues.push('סכום ההצעה 0 ₪');
+  }
+  return issues;
+}
+// מחזיר true אם אפשר להמשיך (אין בעיות, או שהמשתמש אישר למרות האזהרה)
+function _confirmQuoteIssues(q) {
+  var issues = _quoteIssues(q);
+  if (!issues.length) return true;
+  return confirm('⚠️ שים לב — נמצאו פרטים חסרים או לא הגיוניים בהצעה:\n\n• ' + issues.join('\n• ') + '\n\nלהמשיך בכל זאת?');
+}
+
 function saveQuote() {
   const q = _buildQuoteObj();
+  if (!_confirmQuoteIssues(q)) return;
   if(!q.createdBy)q.createdBy=currentUser?currentUser.id:'admin';
   const idx = quotes.findIndex(x => x.id === q.id);
   if (idx >= 0) quotes[idx] = q; else quotes.push(q);
@@ -10187,6 +10284,7 @@ function saveQuote() {
 
 function saveAndSendQuote() {
   const q = _buildQuoteObj();
+  if (!_confirmQuoteIssues(q)) return;
   const idx = quotes.findIndex(x => x.id === q.id);
   if (idx >= 0) quotes[idx] = q; else quotes.push(q);
   _quoteEditId = q.id;
@@ -10275,6 +10373,7 @@ function emailQuoteDocOnly() {
 
 function saveAndPreviewQuote() {
   const q = _buildQuoteObj();
+  if (!_confirmQuoteIssues(q)) return;
   const idx = quotes.findIndex(x => x.id === q.id);
   if (idx >= 0) quotes[idx] = q; else quotes.push(q);
   _quoteEditId = q.id;
@@ -10331,7 +10430,8 @@ function renderQuotesList() {
 }
 
 function deleteQuote(id) {
-  if (!confirm('למחוק מסמך זה?')) return;
+  if (!confirm('למחוק מסמך זה לצמיתות?')) return;
+  _markDeleted('quotes', id);
   quotes = quotes.filter(q => q.id !== id);
   persist();
   renderQuotesList();
@@ -10813,7 +10913,13 @@ async function _fbPollAll() {
     // כרטיסים
     var v = await window._fbGet('cards');
     if (v !== null && !(_pend.cards > 0)) {
-      cards = Array.isArray(v) ? v : Object.values(v);
+      var _incCards = _filterDeleted('cards', Array.isArray(v) ? v : Object.values(v));
+      if (_incCards.length === 0 && cards.length > 0) {
+        // הגנה: השרת ריק אך מקומית יש כרטיסים — לא דורסים; דוחפים את המקומי לענן
+        window._fbPut('cards', _filterDeleted('cards', cards));
+        updateFBStatus(true); _fbConnected = true;
+      } else {
+      cards = _incCards;
       localStorage.setItem('solanCards', JSON.stringify(cards));
       window._fbSnapshot.cards = JSON.stringify(cards);
       updateBadge(); updateFBStatus(true); _fbConnected = true;
@@ -10822,22 +10928,33 @@ async function _fbPollAll() {
       // עדכון כרטיסים שהגיע מ-Firebase (למשל ע"י עובד אחר) חייב גם לרענן את הדאשבורד
       // אם הוא פתוח כרגע — אחרת "עומס מכונות" וחלוניות נוספות נשארות עם נתונים ישנים
       if (document.getElementById('view-dashboard') && document.getElementById('view-dashboard').style.display!=='none' && typeof renderDashboard==='function') renderDashboard();
+      }
     }
     // הזמנות
     var ov = await window._fbGet('orders');
     if (ov !== null && !(_pend.orders > 0)) {
-      orders = Array.isArray(ov) ? ov : Object.values(ov);
-      localStorage.setItem('solanOrders', JSON.stringify(orders));
-      window._fbSnapshot.orders = JSON.stringify(orders);
-      if (document.getElementById('view-orders') && document.getElementById('view-orders').style.display!=='none') renderOrders();
+      var _incOrders = _filterDeleted('orders', Array.isArray(ov) ? ov : Object.values(ov));
+      if (_incOrders.length === 0 && orders.length > 0) {
+        window._fbPut('orders', _filterDeleted('orders', orders)); // הגנה מפני דריסה ע"י שרת ריק
+      } else {
+        orders = _incOrders;
+        localStorage.setItem('solanOrders', JSON.stringify(orders));
+        window._fbSnapshot.orders = JSON.stringify(orders);
+        if (document.getElementById('view-orders') && document.getElementById('view-orders').style.display!=='none') renderOrders();
+      }
     }
     // מלאי — לא דורסים אם יש PUT באוויר (זה מה שגרם לתעודות/הורדות מלאי "להתאפס")
     var inv = await window._fbGet('inventory');
     if (inv !== null && !(_pend.inventory > 0)) {
-      inventory = Array.isArray(inv) ? inv : Object.values(inv);
+      var _incInv = Array.isArray(inv) ? inv : Object.values(inv);
+      if (_incInv.length === 0 && inventory.length > 0) {
+        window._fbPut('inventory', inventory); // הגנה מפני דריסה ע"י שרת ריק
+      } else {
+      inventory = _incInv;
       localStorage.setItem('solanInventory', JSON.stringify(inventory));
       window._fbSnapshot.inventory = JSON.stringify(inventory);
       if (document.getElementById('view-inventory').style.display!=='none') renderInventory();
+      }
     }
     // עיתונים
     var nv = await window._fbGet('newspapers');
@@ -10858,9 +10975,33 @@ async function _fbPollAll() {
     // הצעות מחיר
     var qv = await window._fbGet('quotes');
     if (qv !== null && !(_pend.quotes > 0)) {
-      quotes = Array.isArray(qv) ? qv : Object.values(qv);
-      localStorage.setItem('solanQuotes', JSON.stringify(quotes));
-      window._fbSnapshot.quotes = JSON.stringify(quotes);
+      var _incQuotes = _filterDeleted('quotes', Array.isArray(qv) ? qv : Object.values(qv));
+      if (_incQuotes.length === 0 && quotes.length > 0) {
+        window._fbPut('quotes', _filterDeleted('quotes', quotes)); // הגנה מפני דריסה ע"י שרת ריק
+      } else {
+        quotes = _incQuotes;
+        localStorage.setItem('solanQuotes', JSON.stringify(quotes));
+        window._fbSnapshot.quotes = JSON.stringify(quotes);
+      }
+    }
+    // מזהים שנמחקו לצמיתות — מיזוג (איחוד) כדי שמחיקה מכל מכשיר תחול בכל המכשירים
+    var delv = await window._fbGet('deletedIds');
+    if (delv !== null && typeof delv === 'object' && !(_pend.deletedIds > 0)) {
+      var changed = false;
+      Object.keys(delv).forEach(function(coll){
+        var incoming = delv[coll] || [];
+        if (!Array.isArray(incoming)) return;
+        deletedIds[coll] = deletedIds[coll] || [];
+        incoming.forEach(function(idv){ if (deletedIds[coll].indexOf(idv) === -1) { deletedIds[coll].push(idv); changed = true; } });
+      });
+      localStorage.setItem('solanDeletedIds', JSON.stringify(deletedIds));
+      window._fbSnapshot.deletedIds = JSON.stringify(deletedIds);
+      // החל tombstones חדשים שהגיעו ממכשיר אחר על הנתונים המקומיים
+      if (changed) {
+        cards  = _filterDeleted('cards', cards);
+        orders = _filterDeleted('orders', orders);
+        quotes = _filterDeleted('quotes', quotes);
+      }
     }
     // תעריפי תמחור עיתון/חוברת
     var qpv = await window._fbGet('quotePricing');
