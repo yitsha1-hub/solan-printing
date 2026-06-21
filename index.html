@@ -12495,17 +12495,23 @@ function _renderOperatorScreen() {
     active.forEach(function(e, idx) {
       var c = (cards||[]).find(function(x){ return String(x.id) === String(e.cardId); });
       var name = c ? (c.name || c.customer || 'ללא שם') : '(לא נמצא)';
-      var runLabel = '';
-      if (e.runIdx >= 0 && c && c.runs && c.runs[e.runIdx]) {
-        runLabel = c.runs[e.runIdx].label || ('ריצה ' + (e.runIdx+1));
-      }
+      var run = (e.runIdx >= 0 && c && c.runs && c.runs[e.runIdx]) ? c.runs[e.runIdx] : null;
+      var runLabel = run ? (run.label || ('ריצה ' + (e.runIdx+1))) : '';
+      var paper = (run && run.paper) || (c && c.paper) || '';
+      var copies = (run && (run.copies || run.sheets)) || (c && c.copies) || '';
+      var isTumble = run ? !!run.tumble : false;
       var qidS = JSON.stringify(String(e.qid));
       html += '<div style="background:#1e293b;border-radius:12px;margin-bottom:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;border:1.5px solid #334155">'
         + '<div style="background:#2d3561;color:#93c5fd;font-size:1.3rem;font-weight:900;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:8px;flex-shrink:0">' + (idx+1) + '</div>'
         + '<div style="flex:1;min-width:0">'
         + '<div style="color:#f1f5f9;font-size:.98rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(name) + '</div>'
-        + (runLabel ? '<div style="color:#64748b;font-size:.78rem;margin-top:2px">' + escHtml(runLabel) + '</div>' : '')
-        + (e.estMinutes ? '<div style="color:#60a5fa;font-size:.75rem;margin-top:3px">⏱ ' + _fmtMins(e.estMinutes) + '</div>' : '')
+        + (runLabel ? '<div style="color:#64748b;font-size:.75rem;margin-top:2px">' + escHtml(runLabel) + '</div>' : '')
+        + '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:5px">'
+        + (paper ? '<span style="font-size:.73rem;color:#94a3b8;background:#0f172a;border-radius:5px;padding:2px 7px">📄 ' + escHtml(paper) + '</span>' : '')
+        + (copies ? '<span style="font-size:.73rem;color:#94a3b8;background:#0f172a;border-radius:5px;padding:2px 7px">🖨️ ' + parseInt(copies).toLocaleString() + '</span>' : '')
+        + (isTumble ? '<span style="font-size:.73rem;color:#60a5fa;background:#1e3a5f;border:1px solid #2563eb;border-radius:5px;padding:2px 7px;font-weight:700">🔄 מתהפך</span>' : '')
+        + (e.estMinutes ? '<span style="font-size:.73rem;color:#60a5fa;background:#0f172a;border-radius:5px;padding:2px 7px">⏱ ' + _fmtMins(e.estMinutes) + '</span>' : '')
+        + '</div>'
         + '</div>'
         + '<button onclick="_operatorMarkDone(' + qidS + ')" style="background:#16a34a;color:white;border:none;border-radius:10px;padding:13px 20px;font-family:Heebo,sans-serif;font-size:.92rem;font-weight:900;cursor:pointer;white-space:nowrap;flex-shrink:0;min-width:85px;-webkit-tap-highlight-color:transparent">✓ הודפס</button>'
         + '</div>';
@@ -12514,17 +12520,21 @@ function _renderOperatorScreen() {
 
   if (done.length) {
     html += '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #1e293b">'
-      + '<div style="color:#334155;font-size:.78rem;font-weight:700;margin-bottom:8px">✓ הושלמו</div>';
-    done.slice(0, 15).forEach(function(e) {
+      + '<div style="color:#475569;font-size:.78rem;font-weight:700;margin-bottom:8px">היסטוריית הושלמו</div>';
+    done.slice(0, 20).forEach(function(e) {
       var c = (cards||[]).find(function(x){ return String(x.id) === String(e.cardId); });
       var name = c ? (c.name || c.customer || 'ללא שם') : '(לא נמצא)';
-      var runSuffix = (e.runIdx >= 0 && c && c.runs && c.runs[e.runIdx])
-        ? ' · ' + (c.runs[e.runIdx].label || ('ריצה ' + (e.runIdx+1))) : '';
+      var run = (e.runIdx >= 0 && c && c.runs && c.runs[e.runIdx]) ? c.runs[e.runIdx] : null;
+      var runSuffix = run ? (' · ' + (run.label || ('ריצה ' + (e.runIdx+1)))) : '';
       var doneTime = e.doneAt ? new Date(e.doneAt).toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
-      html += '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #1e293b">'
+      var qidS = JSON.stringify(String(e.qid));
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #1e293b">'
         + '<span style="color:#16a34a;font-size:.85rem;flex-shrink:0">✓</span>'
-        + '<div style="flex:1;min-width:0;color:#475569;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(name + runSuffix) + '</div>'
-        + '<span style="color:#334155;font-size:.7rem;flex-shrink:0">' + doneTime + '</span>'
+        + '<div style="flex:1;min-width:0">'
+        + '<div style="color:#64748b;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(name + runSuffix) + '</div>'
+        + (doneTime ? '<div style="color:#334155;font-size:.68rem">' + doneTime + '</div>' : '')
+        + '</div>'
+        + '<button onclick="_operatorUnmarkDone(' + qidS + ')" style="font-size:.72rem;padding:4px 10px;border:1px solid #334155;background:#1e293b;color:#94a3b8;border-radius:6px;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent">↩ בטל</button>'
         + '</div>';
     });
     html += '</div>';
@@ -12541,6 +12551,15 @@ function _operatorMarkDone(qid) {
   e.doneAt = new Date().toISOString();
   e.doneBy = _machineViewOpName;
   e.doneByName = _machineViewOpName;
+  localStorage.setItem('solanMachineQueue', JSON.stringify(machineQueue));
+  if (window._fbPut) window._fbPut('machineQueue', machineQueue);
+  _renderOperatorScreen();
+}
+
+function _operatorUnmarkDone(qid) {
+  var e = (machineQueue||[]).find(function(x){ return String(x.qid) === String(qid); });
+  if (!e) return;
+  e.done = false; e.doneAt = null; e.doneBy = null; e.doneByName = null;
   localStorage.setItem('solanMachineQueue', JSON.stringify(machineQueue));
   if (window._fbPut) window._fbPut('machineQueue', machineQueue);
   _renderOperatorScreen();
