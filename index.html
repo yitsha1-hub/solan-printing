@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782062686';
+window.APP_VERSION = '1782063492';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -2533,6 +2533,18 @@ function applyPermissionsToUI() {
       }
     } catch(e) {}
   }
+
+  // שחזר את הטאב האחרון שבו המשתמש היה לפני הריענון — פעם אחת בלבד
+  if (!window._tabRestored) {
+    window._tabRestored = true;
+    try {
+      var _savedTab = localStorage.getItem('solanActiveTab');
+      var _hasOpenCard = new URLSearchParams(location.search).get('openCard');
+      if (_savedTab && _savedTab !== 'dashboard' && !_hasOpenCard) {
+        switchTab(_savedTab);
+      }
+    } catch(e) {}
+  }
 }
 
 // ---- ניהול משתמשים (מהגדרות) ----
@@ -2923,6 +2935,19 @@ function switchTab(tab) {
   if (tab==='templates') renderTemplates();
   if (tab==='worklist')  renderWorkList();
   if (tab==='agent')     renderAgentTab();
+  // שמור את הטאב הפעיל כדי שריענון יחזיר לאותו מסך
+  window._activeTab = tab;
+  try { localStorage.setItem('solanActiveTab', tab); } catch(e){}
+}
+
+// _getActiveTab — מזהה איזה טאב מוצג כרגע (לפי ה-view הגלוי)
+function _getActiveTab() {
+  var tabs = ['dashboard','week','new','recurring','saved','papers','inventory','quotes','orders','queue','templates','worklist','agent'];
+  for (var i=0;i<tabs.length;i++){
+    var v=document.getElementById('view-'+tabs[i]);
+    if (v && v.style.display !== 'none') return tabs[i];
+  }
+  return window._activeTab || 'dashboard';
 }
 
 
@@ -5690,6 +5715,9 @@ function _fallbackDownload(pdf, fileName, subject, mailBody, recipient) {
 function showPriceOrHide(val){if(!currentUser||currentUser.isAdmin)return val;if((currentUser.permissions||{}).prices===false)return '●●●';return val;}
 
 function showPrintModal(card) {
+  // זכור מאיפה נפתח הכרטיס — טאב נוכחי + מיקום הגלילה — כדי לחזור לשם בסגירה
+  window._modalReturnTab = _getActiveTab();
+  window._modalReturnScrollY = window.scrollY || window.pageYOffset || 0;
   document.getElementById('print-card-content').innerHTML = buildPrintCard(card);
   document.getElementById('print-modal-save-btn').style.display = 'none';
   document.getElementById('print-modal').classList.add('open');
@@ -5728,9 +5756,15 @@ function saveFromPreview() {
 }
 function closePrintModal() {
   document.getElementById('print-modal').classList.remove('open');
-  const card = window._pendingDeduct;
   window._pendingDeduct = null;
-  switchTab('saved');
+  // חזור לטאב שממנו נפתח הכרטיס (לא תמיד "כרטיסים") ושחזר את מיקום הגלילה
+  var rt = window._modalReturnTab || 'saved';
+  var ry = window._modalReturnScrollY || 0;
+  switchTab(rt);
+  requestAnimationFrame(function(){
+    window.scrollTo(0, ry);
+    setTimeout(function(){ window.scrollTo(0, ry); }, 80);
+  });
 }
 function _recordPrintHistory(card) {
   if (!card) return;
