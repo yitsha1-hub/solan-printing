@@ -1376,7 +1376,13 @@ window._fbSnapshot = {};
         background:#eef2ff;color:var(--press);font-family:Heebo,sans-serif;font-size:.84rem;font-weight:700;cursor:pointer;margin-bottom:8px">🧮 מחשבון תמחור עיתון/חוברת</button>
 
       <button onclick="openFlatProd()" style="width:100%;padding:9px;border:1.5px solid #7c3aed;border-radius:7px;
-        background:#f6f1ff;color:#6d28d9;font-family:Heebo,sans-serif;font-size:.84rem;font-weight:700;cursor:pointer;margin-bottom:14px">📄 מוצר שטוח (פוסטר / פלאייר / פלייסמנט)</button>
+        background:#f6f1ff;color:#6d28d9;font-family:Heebo,sans-serif;font-size:.84rem;font-weight:700;cursor:pointer;margin-bottom:8px">📄 מוצר שטוח (פוסטר / פלאייר / פלייסמנט)</button>
+
+      <button onclick="toggleFlyerPanel()" style="width:100%;padding:9px;border:1.5px solid #0891b2;border-radius:7px;
+        background:#ecfeff;color:#0e7490;font-family:Heebo,sans-serif;font-size:.84rem;font-weight:700;cursor:pointer;margin-bottom:8px">📋 מחירון פלאיירים — גרפיקה</button>
+      <div id="flyer-panel" style="display:none;margin-bottom:14px;border:1.5px solid #a5f3fc;border-radius:8px;overflow:hidden">
+        <div id="flyer-panel-inner"></div>
+      </div>
 
       <div style="background:#f8f9ff;border-radius:8px;padding:12px 16px;font-size:.88rem">
         <div style="display:flex;justify-content:space-between;margin-bottom:6px">
@@ -2546,6 +2552,24 @@ var DEFAULT_OFFSET_PRICING = {
   papers: [],            // [{name, sheet:'70×100', sheetW:70, sheetH:100, gram, tonPrice}]
   flatRates: {}          // מוצרים שטוחים — { <id>: { per1000, foldPer1000 } } לפי FLAT_PRODUCTS
 };
+// ── מחירון פלאיירים — מחלקת גרפיקה (נייר 135 גרם מט, לא כולל מע"מ) ──
+var FLYER_CATALOG = [
+  { name: 'A3 מקופל',      p: [1700,2400,null,null,null] },
+  { name: 'A4',             p: [800, 1400,2500,2800,null] },
+  { name: 'A4 מקופל',      p: [1000,1600,2700,3400,null] },
+  { name: '30×10 / A5',    p: [400, 700, 1400,2100,null] },
+  { name: '30×10 מקופל',   p: [600, 1100,1600,2400,null] },
+  { name: '30×14',          p: [650, 1050,1750,2250,2650] },
+  { name: '30×14 מקופל',   p: [850, 1300,2200,2800,3300] },
+  { name: '20×10',          p: [350, 650, 1100,1450,1800] },
+  { name: '25×20',          p: [800, 1400,2100,2600,3100] },
+  { name: '20×20',          p: [750, 1000,1600,2200,2700] },
+  { name: '25×30',          p: [1450,2000,2800,3400,3900] },
+  { name: '10×15',          p: [350, 650, 900, 1150,1400] },
+];
+var FLYER_CATALOG_QTYS = ['5,000','10,000','20,000','30,000','40,000'];
+var FLYER_CATALOG_NOTE = 'נייר 135 גרם מט · לא כולל מע"מ · לבדוק הובלה וגרפיקה לפני מתן הצעה';
+
 // מוצרים שטוחים בהצעת מחיר — תמחור פשוט לפי מחיר ל-1000 (+ תוספת קיפול לפלאיירים)
 var FLAT_PRODUCTS = [
   { id:'placement30x40', label:'פלייסמנט 30×40', fold:false },
@@ -9769,20 +9793,92 @@ function removeQuoteItem(i) {
 function renderQuoteItems() {
   const wrap = document.getElementById('q-items-wrap');
   if (!wrap) return;
-  const hdr = `<div style="display:grid;grid-template-columns:1fr 80px 100px 36px;gap:6px;margin-bottom:4px;font-size:.72rem;font-weight:700;color:#888;padding:0 2px">
+  // datalist מהמחירון — כל שילוב גודל+כמות
+  var _dlOpts = '';
+  FLYER_CATALOG.forEach(function(fc){ FLYER_CATALOG_QTYS.forEach(function(ql,qi){ if(fc.p[qi]!=null) _dlOpts+='<option value="פלאיירים '+fc.name+' – '+ql+' יח\'">'; }); });
+  const hdr = `<datalist id="flyer-catalog-dl">${_dlOpts}</datalist><div style="display:grid;grid-template-columns:1fr 80px 100px 36px;gap:6px;margin-bottom:4px;font-size:.72rem;font-weight:700;color:#888;padding:0 2px">
     <span>תיאור</span><span style="text-align:center">כמות</span><span style="text-align:center">מחיר יחידה (₪)</span><span></span>
   </div>`;
   const rows = _quoteItems.map((it, i) => `
     <div style="display:grid;grid-template-columns:1fr 80px 100px 36px;gap:6px;margin-bottom:6px">
       <input class="fi" value="${(it.desc||'').replace(/"/g,'&quot;')}" placeholder="תיאור שירות / מוצר"
-        oninput="_quoteItems[${i}].desc=this.value" style="margin:0;font-size:.84rem">
-      <input class="fi" type="number" value="${it.qty||1}" min="1"
+        list="flyer-catalog-dl" autocomplete="off"
+        oninput="_quoteItems[${i}].desc=this.value;_qiAutoPrice(${i},this.value)" style="margin:0;font-size:.84rem">
+      <input class="fi" type="number" id="q-item-qty-${i}" value="${it.qty||1}" min="1"
         oninput="_quoteItems[${i}].qty=parseFloat(this.value)||0;calcQuoteTotals()" style="margin:0;font-size:.84rem;text-align:center">
-      <input class="fi" type="number" value="${it.price||0}" min="0" step="0.01"
+      <input class="fi" type="number" id="q-item-price-${i}" value="${it.price||0}" min="0" step="0.01"
         oninput="_quoteItems[${i}].price=parseFloat(this.value)||0;calcQuoteTotals()" style="margin:0;font-size:.84rem;text-align:center">
       <button onclick="removeQuoteItem(${i})" style="background:none;border:none;color:#e07070;font-size:1.1rem;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center">✕</button>
     </div>`).join('');
   wrap.innerHTML = hdr + rows;
+}
+
+function toggleFlyerPanel() {
+  var panel = document.getElementById('flyer-panel');
+  if (!panel) return;
+  var inner = document.getElementById('flyer-panel-inner');
+  if (panel.style.display === 'none') {
+    // בניית טבלה
+    var th = '<tr style="background:#0e7490;color:white"><th style="padding:6px 10px;text-align:right;white-space:nowrap">גודל</th>';
+    FLYER_CATALOG_QTYS.forEach(function(q){ th += '<th style="padding:6px 8px;text-align:center;white-space:nowrap">'+q+'</th>'; });
+    th += '</tr>';
+    var rows = FLYER_CATALOG.map(function(fc, fi) {
+      var tds = FLYER_CATALOG_QTYS.map(function(q,qi) {
+        var p = fc.p[qi];
+        if (p == null) return '<td style="padding:5px 8px;text-align:center;color:#ccc;border-bottom:1px solid #e0f7fa">—</td>';
+        return '<td style="padding:5px 8px;text-align:center;border-bottom:1px solid #e0f7fa">' +
+          '<button onclick="addFlyerItem('+fi+','+qi+')" style="background:none;border:none;cursor:pointer;color:#0e7490;font-weight:700;font-size:.78rem;padding:2px 6px;border-radius:4px;white-space:nowrap" '+
+          'onmouseover="this.style.background=\'#ecfeff\'" onmouseout="this.style.background=\'none\'">'+
+          '₪'+p.toLocaleString('he-IL')+'</button></td>';
+      }).join('');
+      var bg = fi%2===0 ? 'white' : '#f0fdff';
+      return '<tr style="background:'+bg+'"><td style="padding:5px 10px;font-weight:700;border-bottom:1px solid #e0f7fa;white-space:nowrap">'+fc.name+'</td>'+tds+'</tr>';
+    }).join('');
+    inner.innerHTML =
+      '<div style="background:#ecfeff;padding:7px 12px;font-size:.72rem;color:#0e7490;font-weight:600">📌 '+FLYER_CATALOG_NOTE+'</div>'+
+      '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.78rem"><thead>'+th+'</thead><tbody>'+rows+'</tbody></table></div>';
+    panel.style.display = '';
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+function addFlyerItem(fi, qi) {
+  var fc = FLYER_CATALOG[fi];
+  if (!fc || fc.p[qi]==null) return;
+  var desc = 'פלאיירים '+fc.name+' – '+FLYER_CATALOG_QTYS[qi]+' יח\'';
+  if (_quoteItems.length===1 && !_quoteItems[0].desc && !_quoteItems[0].price) _quoteItems=[];
+  _quoteItems.push({ desc: desc, qty: 1, price: fc.p[qi] });
+  renderQuoteItemsUI();
+  calcQuoteTotals();
+  var notesEl = document.getElementById('q-notes');
+  if (notesEl && notesEl.value.indexOf('הובלה וגרפיקה')===-1)
+    notesEl.value = (notesEl.value ? notesEl.value+' · ' : '')+'לבדוק הובלה וגרפיקה';
+  showToast('✅ נוסף: '+desc);
+}
+
+// זיהוי בחירה מהמחירון → מילוי אוטומטי של מחיר
+function _qiAutoPrice(i, val) {
+  var v = (val||'').trim();
+  for (var fi=0; fi<FLYER_CATALOG.length; fi++) {
+    var fc = FLYER_CATALOG[fi];
+    for (var qi=0; qi<FLYER_CATALOG_QTYS.length; qi++) {
+      if (fc.p[qi]==null) continue;
+      if (v === 'פלאיירים '+fc.name+' – '+FLYER_CATALOG_QTYS[qi]+' יח\'') {
+        _quoteItems[i].price = fc.p[qi];
+        _quoteItems[i].qty   = 1;
+        var pEl = document.getElementById('q-item-price-'+i);
+        var qEl = document.getElementById('q-item-qty-'+i);
+        if (pEl) pEl.value = fc.p[qi];
+        if (qEl) qEl.value = 1;
+        calcQuoteTotals();
+        var notesEl = document.getElementById('q-notes');
+        if (notesEl && notesEl.value.indexOf('הובלה וגרפיקה')===-1)
+          notesEl.value = (notesEl.value ? notesEl.value+' · ' : '')+'לבדוק הובלה וגרפיקה';
+        return;
+      }
+    }
+  }
 }
 
 function calcQuoteTotals() {
