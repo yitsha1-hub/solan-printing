@@ -989,6 +989,7 @@ window._fbSnapshot = {};
   <div class="tab active" onclick="switchTab('dashboard')" id="tab-dashboard">🏠 דשבורד</div>
   <div class="tab"        onclick="switchTab('week')"  id="tab-week">📅 יומן שבועי</div>
   <div class="tab"        onclick="switchTab('new')"   id="tab-new">➕ כרטיס חדש</div>
+  <div class="tab"        onclick="switchTab('recurring')" id="tab-recurring">🔄 עבודות קבועות <span id="recurring-badge" style="display:none;background:#0891b2;color:white;border-radius:10px;padding:1px 6px;font-size:.7rem;font-weight:800"></span></div>
   <div class="tab"        onclick="switchTab('templates')" id="tab-templates">🗂️ תבניות</div>
   <div class="tab"        onclick="switchTab('saved')" id="tab-saved">📋 כרטיסים <span id="count-badge"></span></div>
   <div class="tab"        onclick="switchTab('papers')" id="tab-papers">📰 עיתונים</div>
@@ -1001,6 +1002,19 @@ window._fbSnapshot = {};
 </div>
 
 <div class="main">
+
+<!-- ===== RECURRING JOBS VIEW ===== -->
+<div id="view-recurring" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+    <h2 style="margin:0;font-size:1.3rem;color:var(--press)">🔄 עבודות קבועות</h2>
+    <button class="btn btn-primary" onclick="openRecurringModal()">➕ עבודה קבועה חדשה</button>
+  </div>
+  <div style="display:flex;gap:6px;margin-bottom:14px">
+    <button id="rectab-active" class="emp-tab active" onclick="switchRecurringTab('active')">📋 פעילות</button>
+    <button id="rectab-done"   class="emp-tab"        onclick="switchRecurringTab('done')">✅ הושלמו <span id="rectab-done-count" style="opacity:.75"></span></button>
+  </div>
+  <div id="recurring-list"></div>
+</div>
 
 <!-- ===== MACHINE QUEUE VIEW ===== -->
 <div id="view-queue" style="display:none">
@@ -1285,6 +1299,58 @@ window._fbSnapshot = {};
     <button class="emp-tab" onclick="setEmpFilter('איציק')" data-emp="איציק">👤 איציק</button>
   </div>
   <div id="quotes-list"></div>
+</div>
+
+<!-- ===== RECURRING JOBS MODAL ===== -->
+<div class="modal-overlay" id="recurring-modal">
+  <div class="modal-box" style="max-width:500px;width:95vw">
+    <div class="modal-header">
+      <span id="recurring-modal-title">עבודה קבועה חדשה</span>
+      <button class="modal-close" onclick="closeRecurringModal()">✕</button>
+    </div>
+    <div style="padding:20px;overflow-y:auto;max-height:75vh">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="grid-column:1/-1">
+          <label style="font-size:.72rem;font-weight:700;color:var(--gold)">שם עבודה *</label>
+          <input class="fi" id="rec-name" placeholder="שם העבודה / הפרסום" style="margin-top:4px">
+        </div>
+        <div style="grid-column:1/-1">
+          <label style="font-size:.72rem;font-weight:700;color:var(--gold)">לקוח</label>
+          <input class="fi" id="rec-customer" placeholder="שם הלקוח / חברה" style="margin-top:4px">
+        </div>
+        <div>
+          <label style="font-size:.72rem;font-weight:700;color:var(--gold)">📂 תאריך קבלת קבצים</label>
+          <input class="fi" type="date" id="rec-files-date" style="margin-top:4px">
+        </div>
+        <div>
+          <label style="font-size:.72rem;font-weight:700;color:var(--gold)">🖨️ תאריך הדפסה</label>
+          <input class="fi" type="date" id="rec-print-date" style="margin-top:4px">
+        </div>
+        <div>
+          <label style="font-size:.72rem;font-weight:700;color:var(--gold)">כמות</label>
+          <input class="fi" id="rec-copies" placeholder="לדוגמה: 3,000 עותקים" style="margin-top:4px">
+        </div>
+        <div>
+          <label style="font-size:.72rem;font-weight:700;color:var(--gold)">תדירות</label>
+          <select class="fi" id="rec-freq" style="margin-top:4px">
+            <option value="monthly">חודשית</option>
+            <option value="biweekly">דו-שבועית</option>
+            <option value="quarterly">רבעונית</option>
+            <option value="other">אחר</option>
+          </select>
+        </div>
+        <div style="grid-column:1/-1">
+          <label style="font-size:.72rem;font-weight:700;color:var(--gold)">הערות</label>
+          <textarea class="fi" id="rec-notes" placeholder="הערות נוספות (גודל, נייר, צבע...)" rows="3" style="margin-top:4px;resize:vertical"></textarea>
+        </div>
+      </div>
+      <input type="hidden" id="rec-editing-id">
+      <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+        <button class="btn btn-clear" onclick="closeRecurringModal()">ביטול</button>
+        <button class="btn btn-primary" onclick="saveRecurringJob()">💾 שמור</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ===== CUSTOMERS MODAL ===== -->
@@ -2117,6 +2183,7 @@ let _selectedPaperDay = null;
 let newspapers= JSON.parse(localStorage.getItem('solanNewspapers')|| '[]');
 let flyers    = JSON.parse(localStorage.getItem('solanFlyers')    || '[]');
 let weeklyJobs= JSON.parse(localStorage.getItem('solanWeeklyJobs')|| '[]');
+let recurringJobs = JSON.parse(localStorage.getItem('solanRecurringJobs') || '[]');
 let historyDB = JSON.parse(localStorage.getItem('solanHistory')   || '{}');
 let printLog  = JSON.parse(localStorage.getItem('solanPrintLog') || '[]');
 
@@ -2695,6 +2762,7 @@ function persist() {
   localStorage.setItem('solanNewspapers',          JSON.stringify(newspapers));
   localStorage.setItem('solanFlyers',             JSON.stringify(flyers));
   localStorage.setItem('solanWeeklyJobs',          JSON.stringify(weeklyJobs));
+  localStorage.setItem('solanRecurringJobs',       JSON.stringify(recurringJobs));
   localStorage.setItem('solanUsers',               JSON.stringify(solanUsers));
   if (apiKey) localStorage.setItem('solanApiKey', apiKey);
   updateBadge();
@@ -2708,7 +2776,7 @@ function persist() {
       inventoryPress: inventoryPress, inventoryDeductions: inventoryDeductions,
       inventoryHistory: inventoryHistory, invoiceLogs: invoiceLogs,
       quotes: _filterDeleted('quotes', quotes), customers: customers, orders: _filterDeleted('orders', orders),
-      weeklyJobs: weeklyJobs, quotePricing: quotePricing, documentPrices: documentPrices, deletedIds: deletedIds
+      weeklyJobs: weeklyJobs, recurringJobs: recurringJobs, quotePricing: quotePricing, documentPrices: documentPrices, deletedIds: deletedIds
     };
     _paths.cards = _filterDeleted('cards', cards);
     window._fbPendingPuts = window._fbPendingPuts || {};
@@ -2748,7 +2816,7 @@ function updateBadge() {
 // ========== TABS ==========
 function switchTab(tab) {
   if(currentUser&&!currentUser.isAdmin){var p=currentUser.permissions||{};if(tab==='inventory'&&p.inventory==='none'){showToast('🔒 אין הרשאה למלאי');return;}if(tab==='quotes'&&p.quotes==='none'){showToast('🔒 אין הרשאה להצעות מחיר');return;}if(tab==='papers'&&p.papers==='none'){showToast('🔒 אין הרשאה לניהול עיתונים');return;}if(tab==='new'&&p.createCard===false){showToast('🔒 אין הרשאה ליצירת כרטיס חדש');return;}if(tab==='week'&&p.weekView===false){showToast('🔒 אין הרשאה ליומן שבועי');return;}}
-  ['dashboard','week','new','saved','papers','inventory','quotes','orders','queue','templates','worklist','agent'].forEach(t => {
+  ['dashboard','week','new','recurring','saved','papers','inventory','quotes','orders','queue','templates','worklist','agent'].forEach(t => {
     const v = document.getElementById('view-'+t); if (v) v.style.display = t===tab ? '' : 'none';
     const tb = document.getElementById('tab-'+t); if (tb) tb.classList.toggle('active', t===tab);
   });
@@ -2761,11 +2829,156 @@ function switchTab(tab) {
   if (tab==='quotes')    renderQuotesList();
   if (tab==='orders')    renderOrders();
   if (tab==='queue')     renderMachineQueue();
+  if (tab==='recurring') renderRecurringJobs();
   if (tab==='templates') renderTemplates();
   if (tab==='worklist')  renderWorkList();
   if (tab==='agent')     renderAgentTab();
 }
 
+
+// ═══════════════════════════════════════════
+// RECURRING JOBS — עבודות קבועות/חודשיות
+// ═══════════════════════════════════════════
+
+var _recurringTab = 'active';
+var _FREQ_LABELS = { monthly:'חודשית', biweekly:'דו-שבועית', quarterly:'רבעונית', other:'אחר' };
+
+function switchRecurringTab(t) {
+  _recurringTab = t;
+  var ba = document.getElementById('rectab-active'), bd = document.getElementById('rectab-done');
+  if (ba) { ba.classList.toggle('active', t==='active'); }
+  if (bd) { bd.classList.toggle('active', t==='done'); }
+  renderRecurringJobs();
+}
+
+function renderRecurringJobs() {
+  var list = document.getElementById('recurring-list');
+  if (!list) return;
+  var doneCount = recurringJobs.filter(function(j){ return j.status==='done'; }).length;
+  var badge = document.getElementById('rectab-done-count');
+  if (badge) badge.textContent = doneCount ? '('+doneCount+')' : '';
+  var rbadge = document.getElementById('recurring-badge');
+  var activeCount = recurringJobs.filter(function(j){ return j.status!=='done'; }).length;
+  if (rbadge) { rbadge.textContent = activeCount||''; rbadge.style.display = activeCount ? '' : 'none'; }
+
+  var jobs = recurringJobs.filter(function(j){ return _recurringTab==='done' ? j.status==='done' : j.status!=='done'; });
+  jobs.sort(function(a,b){ return (a.printDate||'9999') < (b.printDate||'9999') ? -1 : 1; });
+
+  if (!jobs.length) {
+    list.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#9ca3af"><div style="font-size:3rem;margin-bottom:12px">🔄</div><div style="font-size:1rem;font-weight:700;color:#374151;margin-bottom:6px">'+(
+      _recurringTab==='done' ? 'אין עבודות שהושלמו' : 'אין עבודות קבועות עדיין'
+    )+'</div><div style="font-size:.85rem">הוסף עבודה קבועה עם הכפתור למעלה</div></div>';
+    return;
+  }
+
+  var today = new Date().toISOString().slice(0,10);
+  var html = '';
+  jobs.forEach(function(j) {
+    var done = j.status === 'done';
+    var filesUrgent = !done && j.filesDate && j.filesDate <= today;
+    var printUrgent = !done && j.printDate && j.printDate <= today;
+    var border = printUrgent ? '#ef4444' : filesUrgent ? '#f59e0b' : done ? '#16a34a' : '#e5e7eb';
+    var bg     = printUrgent ? '#fff5f5' : filesUrgent ? '#fffbeb' : done ? '#f0fdf4' : 'white';
+
+    html += '<div style="border:1.5px solid '+border+';border-radius:10px;padding:14px 16px;margin-bottom:10px;background:'+bg+'">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">';
+    html += '<div style="flex:1;min-width:0">';
+    html += '<div style="font-weight:800;font-size:1.05rem;color:var(--press)">'+_esc(j.name||'—')+'</div>';
+    if (j.customer) html += '<div style="color:#374151;font-size:.88rem;margin-top:2px">👤 '+_esc(j.customer)+'</div>';
+    html += '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px">';
+    if (j.filesDate) html += '<div style="font-size:.82rem;'+(filesUrgent&&!done?'color:#d97706;font-weight:700':'color:#555')+'">📂 קבלת קבצים: <strong>'+j.filesDate+'</strong>'+(filesUrgent&&!done?' ⚠️':'')+'</div>';
+    if (j.printDate)  html += '<div style="font-size:.82rem;'+(printUrgent&&!done?'color:#dc2626;font-weight:700':'color:#555')+'">🖨️ הדפסה: <strong>'+j.printDate+'</strong>'+(printUrgent&&!done?' 🔴':'')+'</div>';
+    if (j.copies)  html += '<div style="font-size:.82rem;color:#555">📦 '+_esc(j.copies)+'</div>';
+    if (j.freq && j.freq!=='other') html += '<div style="font-size:.75rem;background:#e0f2fe;color:#0369a1;padding:2px 8px;border-radius:12px;font-weight:700">'+(_FREQ_LABELS[j.freq]||j.freq)+'</div>';
+    html += '</div>';
+    if (j.notes) html += '<div style="color:#6b7280;font-size:.8rem;margin-top:6px;border-top:1px solid #f3f4f6;padding-top:5px">'+_esc(j.notes)+'</div>';
+    html += '</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end">';
+    html += '<span style="background:'+(done?'#d1fae5':printUrgent?'#fee2e2':filesUrgent?'#fef3c7':'#e0f2fe')+';color:'+(done?'#065f46':printUrgent?'#991b1b':filesUrgent?'#92400e':'#0369a1')+';padding:3px 10px;border-radius:999px;font-size:.75rem;font-weight:700;white-space:nowrap">'+(done?'✅ הושלמה':printUrgent?'🔴 דחוף':filesUrgent?'⚠️ קבצים':'📋 פעילה')+'</span>';
+    html += '</div></div>';
+    html += '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">';
+    if (!done) html += '<button onclick="markRecurringDone(\''+j.id+'\')" style="padding:5px 12px;font-size:.82rem;border:none;border-radius:6px;background:#065f46;color:white;cursor:pointer">✅ הושלם</button>';
+    else       html += '<button onclick="reactivateRecurring(\''+j.id+'\')" style="padding:5px 12px;font-size:.82rem;border:none;border-radius:6px;background:#0891b2;color:white;cursor:pointer">🔄 הפעל מחדש</button>';
+    html += '<button onclick="editRecurring(\''+j.id+'\')" style="padding:5px 12px;font-size:.82rem;border:1px solid #d1d5db;border-radius:6px;background:white;cursor:pointer">✏️ ערוך</button>';
+    html += '<button onclick="duplicateRecurring(\''+j.id+'\')" style="padding:5px 12px;font-size:.82rem;border:1px solid #d1d5db;border-radius:6px;background:white;cursor:pointer">📋 שכפל</button>';
+    html += '<button onclick="deleteRecurring(\''+j.id+'\')" style="padding:5px 12px;font-size:.82rem;border:none;border-radius:6px;background:#fee2e2;color:#991b1b;cursor:pointer">🗑️ מחק</button>';
+    html += '</div>';
+    html += '<div style="font-size:.72rem;color:#9ca3af;margin-top:5px">נוצר: '+(j.createdAt?j.createdAt.slice(0,10):'')+'</div>';
+    html += '</div>';
+  });
+  list.innerHTML = html;
+}
+
+function openRecurringModal(prefill) {
+  document.getElementById('rec-name').value       = (prefill&&prefill.name)     || '';
+  document.getElementById('rec-customer').value   = (prefill&&prefill.customer) || '';
+  document.getElementById('rec-files-date').value = (prefill&&prefill.filesDate)|| '';
+  document.getElementById('rec-print-date').value = (prefill&&prefill.printDate)|| '';
+  document.getElementById('rec-copies').value     = (prefill&&prefill.copies)   || '';
+  document.getElementById('rec-freq').value       = (prefill&&prefill.freq)     || 'monthly';
+  document.getElementById('rec-notes').value      = (prefill&&prefill.notes)    || '';
+  document.getElementById('rec-editing-id').value = (prefill&&prefill.id)       || '';
+  document.getElementById('recurring-modal-title').textContent = (prefill&&prefill.id) ? 'עריכת עבודה קבועה' : 'עבודה קבועה חדשה';
+  document.getElementById('recurring-modal').classList.add('open');
+}
+
+function closeRecurringModal() {
+  document.getElementById('recurring-modal').classList.remove('open');
+}
+
+function saveRecurringJob() {
+  var name = document.getElementById('rec-name').value.trim();
+  if (!name) { showToast('⚠️ חובה להזין שם עבודה'); return; }
+  var editId = document.getElementById('rec-editing-id').value;
+  var job = {
+    id:         editId || 'rec_'+Date.now(),
+    name:       name,
+    customer:   document.getElementById('rec-customer').value.trim(),
+    filesDate:  document.getElementById('rec-files-date').value,
+    printDate:  document.getElementById('rec-print-date').value,
+    copies:     document.getElementById('rec-copies').value.trim(),
+    freq:       document.getElementById('rec-freq').value,
+    notes:      document.getElementById('rec-notes').value.trim(),
+    status:     'active',
+    createdAt:  new Date().toISOString(),
+  };
+  if (editId) {
+    var idx = recurringJobs.findIndex(function(j){ return j.id===editId; });
+    if (idx !== -1) { job.status = recurringJobs[idx].status; job.createdAt = recurringJobs[idx].createdAt; recurringJobs[idx] = job; }
+    else recurringJobs.push(job);
+  } else {
+    recurringJobs.push(job);
+  }
+  persist(); closeRecurringModal(); renderRecurringJobs();
+  showToast('✅ נשמר');
+}
+
+function editRecurring(id) {
+  var j = recurringJobs.find(function(x){ return x.id===id; });
+  if (j) openRecurringModal(j);
+}
+
+function markRecurringDone(id) {
+  var j = recurringJobs.find(function(x){ return x.id===id; });
+  if (j) { j.status='done'; persist(); renderRecurringJobs(); showToast('✅ סומן כהושלם'); }
+}
+
+function reactivateRecurring(id) {
+  var j = recurringJobs.find(function(x){ return x.id===id; });
+  if (j) { j.status='active'; persist(); renderRecurringJobs(); showToast('🔄 הועבר לפעילות'); }
+}
+
+function duplicateRecurring(id) {
+  var j = recurringJobs.find(function(x){ return x.id===id; });
+  if (!j) return;
+  openRecurringModal(Object.assign({}, j, { id:'', name: j.name+' (עותק)', filesDate:'', printDate:'' }));
+}
+
+function deleteRecurring(id) {
+  if (!confirm('למחוק עבודה קבועה זו?')) return;
+  recurringJobs = recurringJobs.filter(function(j){ return j.id!==id; });
+  persist(); renderRecurringJobs(); showToast('🗑️ נמחק');
+}
 
 // ═══════════════════════════════════════════
 // ORDERS — הזמנות מלקוחות
@@ -11172,6 +11385,14 @@ async function _fbPollAll() {
       localStorage.setItem('solanWeeklyJobs', JSON.stringify(weeklyJobs));
       window._fbSnapshot.weeklyJobs = JSON.stringify(weeklyJobs);
       if (document.getElementById('view-week') && document.getElementById('view-week').style.display!=='none') renderWeek();
+    }
+    // עבודות קבועות
+    var rjv = await window._fbGet('recurringJobs');
+    if (rjv !== null && !(_pend.recurringJobs > 0)) {
+      recurringJobs = Array.isArray(rjv) ? rjv : Object.values(rjv);
+      localStorage.setItem('solanRecurringJobs', JSON.stringify(recurringJobs));
+      window._fbSnapshot.recurringJobs = JSON.stringify(recurringJobs);
+      if (document.getElementById('view-recurring') && document.getElementById('view-recurring').style.display!=='none') renderRecurringJobs();
     }
     if (typeof _autoCompleteWeeklyJobs === 'function') _autoCompleteWeeklyJobs();
     // הצעות מחיר
