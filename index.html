@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782061143';
+window.APP_VERSION = '1782062084';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -7914,6 +7914,21 @@ function renderWorkList() {
 
   // sq(v) — wraps value in single-quotes safe for use inside onclick="..." attributes
   var sq = function(v) { return "'" + String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'"; };
+  // fmtQty — format a copies/quantity value with thousands separators
+  var fmtQty = function(n){ var x = parseInt(n,10); return isNaN(x) ? String(n||'') : x.toLocaleString(); };
+  // infoBadges — paper-type + print-quantity chips
+  var infoBadges = function(paper, copies){
+    var h = '';
+    if (paper)  h += '<span style="font-size:.63rem;color:#475569;background:#f1f5f9;border:1px solid #e5e7eb;border-radius:4px;padding:1px 5px;white-space:nowrap">📄 ' + escHtml(paper) + '</span>';
+    if (copies) h += '<span style="font-size:.63rem;color:#475569;background:#f1f5f9;border:1px solid #e5e7eb;border-radius:4px;padding:1px 5px;white-space:nowrap">🖨️ ' + escHtml(fmtQty(copies)) + '</span>';
+    return h;
+  };
+  // openBtn — small icon that opens the work card
+  var openBtn = function(cardIdSq, sz){
+    return '<button onclick="_queueOpenCard(' + cardIdSq + ')" title="פתח כרטיס עבודה" '
+      + 'style="background:none;border:none;cursor:pointer;font-size:' + (sz||'.95rem') + ';flex-shrink:0;padding:0 2px;line-height:1" '
+      + 'onmouseover="this.style.transform=\'scale(1.2)\'" onmouseout="this.style.transform=\'scale(1)\'">📋</button>';
+  };
 
   if (!poolCards.length) {
     poolHtml += '<div style="color:#9ca3af;font-size:.8rem;padding:10px 0">אין עבודות פתוחות</div>';
@@ -7934,7 +7949,11 @@ function renderWorkList() {
         + '<div style="font-weight:700;font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
         + escHtml(c.name || 'ללא שם') + (isWeekly ? ' <span style="font-size:.65rem;color:#9ca3af">שב\'</span>' : '') + '</div>';
       if (c.customer) poolHtml += '<div style="font-size:.68rem;color:#6b7280">' + escHtml(c.customer) + '</div>';
+      // paper + (for single-run cards) copies badges
+      var cardBadges = infoBadges(c.paper, hasMultiRuns ? null : c.copies);
+      if (cardBadges) poolHtml += '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px">' + cardBadges + '</div>';
       poolHtml += '</div>';
+      poolHtml += openBtn(cIdSq);
       if (!wholeInQueue && !hasMultiRuns) {
         var cardMachines = c.machine ? [c.machine] : MACHINES;
         cardMachines.forEach(function(m) {
@@ -7950,10 +7969,12 @@ function renderWorkList() {
       if (hasMultiRuns) {
         c.runs.forEach(function(r, ri) {
           var runInQueue = activeEntries.some(function(e){ return e.runIdx === ri; });
-          var runLabel = r.label || ('ריצה ' + (ri+1));
-          poolHtml += '<div style="padding:4px 9px 4px 20px;border-top:1px solid #f3f4f6;display:flex;align-items:center;gap:4px;'
+          var runLabel = r.label || ('ריצה ' + (r.num || (ri+1)));
+          poolHtml += '<div style="padding:4px 9px 4px 20px;border-top:1px solid #f3f4f6;display:flex;align-items:center;gap:4px;flex-wrap:wrap;'
             + (runInQueue ? 'opacity:.4">' : 'cursor:grab" draggable="true" ondragstart="_queueDragStart(event,' + cIdSq + ',' + ri + ')">')
-            + '<span style="font-size:.7rem;color:#9ca3af;flex:1">↳ ' + escHtml(runLabel) + (r.machine ? ' · ' + escHtml(r.machine) : '') + '</span>';
+            + '<span style="font-size:.7rem;color:#9ca3af;flex:1;min-width:60px">↳ ' + escHtml(runLabel) + (r.machine ? ' · ' + escHtml(r.machine) : '') + '</span>';
+          var runBadges = infoBadges(null, r.copies);
+          if (runBadges) poolHtml += runBadges;
           if (!runInQueue) {
             var runMachines = r.machine ? [r.machine] : MACHINES;
             runMachines.forEach(function(m) {
@@ -8003,10 +8024,10 @@ function renderWorkList() {
       active.forEach(function(e, idx) {
         var c = allCards.find(function(x){ return String(x.id) === String(e.cardId); });
         var name = c ? (c.name || c.customer || 'ללא שם') : '(נמחק)';
-        var runLabel = '';
-        if (e.runIdx >= 0 && c && c.runs && c.runs[e.runIdx]) {
-          runLabel = c.runs[e.runIdx].label || ('ריצה ' + (e.runIdx+1));
-        }
+        var run = (e.runIdx >= 0 && c && c.runs && c.runs[e.runIdx]) ? c.runs[e.runIdx] : null;
+        var runLabel = run ? (run.label || ('ריצה ' + (run.num || (e.runIdx+1)))) : '';
+        var ePaper = (c && c.paper) || '';
+        var eCopies = run ? run.copies : (c && c.copies);
         var qidSq = sq(e.qid);
         var rowBg = idx % 2 ? 'background:#fafafa;' : '';
         machinesHtml += '<div style="' + rowBg + 'border-bottom:1px solid #f3f4f6;padding:8px 12px;display:flex;align-items:center;gap:7px">';
@@ -8017,7 +8038,9 @@ function renderWorkList() {
         machinesHtml += '<div style="flex:1;min-width:0">'
           + '<div style="font-weight:700;font-size:.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(name) + '</div>'
           + (runLabel ? '<div style="font-size:.7rem;color:#6b7280">' + escHtml(runLabel) + '</div>' : '')
+          + (infoBadges(ePaper, eCopies) ? '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px">' + infoBadges(ePaper, eCopies) + '</div>' : '')
           + '</div>';
+        if (c) machinesHtml += openBtn(sq(e.cardId), '1rem');
         var estLabel = e.estMinutes ? _fmtMins(e.estMinutes) : '⏱';
         machinesHtml += '<button onclick="_queueSetEstTime(' + qidSq + ')" title="זמן משוער" '
           + 'style="font-size:.7rem;padding:2px 7px;border:1px solid #d1d5db;background:#f9fafb;border-radius:5px;cursor:pointer;color:'
@@ -8390,6 +8413,11 @@ function _queueRender() {
   if (qEl  && qEl.style.display  !== 'none') renderMachineQueue();
 }
 
+function _queueOpenCard(cardId) {
+  var c = (cards||[]).find(function(x){ return String(x.id) === String(cardId); });
+  if (c && typeof showPrintModal === 'function') showPrintModal(c);
+}
+
 function _queueAddEntry(cardId, runIdx, machine) {
   var c = (cards||[]).find(function(x){ return String(x.id) === String(cardId); });
   if (!c) return;
@@ -8397,6 +8425,15 @@ function _queueAddEntry(cardId, runIdx, machine) {
     return String(e.cardId)===String(cardId) && e.runIdx===runIdx && !e.done;
   });
   if (already) { showToast('⚠️ כבר בתור'); return; }
+  // אם העבודה/ריצה כבר משויכת למכונה אחרת — בקש אישור והחלף את המכונה בכרטיס
+  var run = (runIdx >= 0 && c.runs && c.runs[runIdx]) ? c.runs[runIdx] : null;
+  var assigned = run ? run.machine : c.machine;
+  if (assigned && assigned !== machine) {
+    var what = run ? ('הריצה "' + (run.label || ('ריצה ' + (run.num || (runIdx+1)))) + '"') : 'העבודה';
+    if (!confirm(what + ' משויכת ל־' + assigned + '.\nלשלוח ל־' + machine + ' במקום?\n\nאישור יעדכן גם את המכונה בכרטיס העבודה.')) return;
+    if (run) run.machine = machine; else c.machine = machine;
+    c.lastUpdatedBy = currentUser ? currentUser.id : 'admin';
+  }
   var order = (machineQueue||[]).filter(function(e){ return e.machine===machine && !e.done; }).length;
   machineQueue.push({
     qid: String(Date.now()) + String(Math.floor(Math.random()*9999)),
