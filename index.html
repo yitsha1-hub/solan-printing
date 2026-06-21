@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782063978';
+window.APP_VERSION = '1782075542';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -446,6 +446,15 @@ textarea.fi{resize:none;min-height:52px;}
 @keyframes undoProgress{from{width:100%}to{width:0%}}
 #inv-print-area{display:none;}
 
+/* רשימת עבודות — במסך צר מערימים את בריכת העבודות מעל המכונות */
+@media(max-width:760px){
+  .wl-split{flex-direction:column !important;gap:14px !important;}
+  .wl-pool{flex:none !important;width:100% !important;min-width:0 !important;
+    max-height:42vh !important;border-left:none !important;border-bottom:2px solid #e5e7eb;
+    padding-left:0 !important;padding-bottom:10px;}
+  .wl-machines{max-height:none !important;}
+}
+
 /* ══════════════════════════════════════════
    MOBILE — FULL REDESIGN
    ══════════════════════════════════════════ */
@@ -453,16 +462,21 @@ textarea.fi{resize:none;min-height:52px;}
 
   /* ── כותרת קומפקטית ── */
   header{padding:8px 12px;gap:6px;}
-  header h1{font-size:.95rem;}
+  header h1{font-size:1rem;white-space:nowrap;}
   header h1 span{display:none;}
-  /* הסתר כפתורי ניהול עיתונים + שם משתמש מהכותרת */
-  header .btn-outline-w[onclick*="papers"]{display:none !important;}
-  header .btn-outline-w[onclick*="settings"] > *,
-  header .btn-outline-w[onclick*="logout"] > *{display:none;}
-  header .btn-outline-w[onclick*="openSettings"]{font-size:1.1rem;padding:6px 10px;min-width:36px;}
-  header .btn-outline-w[onclick*="logoutUser"]{font-size:1.1rem;padding:6px 10px;min-width:36px;}
   #header-username{display:none;}
-  #fb-status{font-size:.65rem;padding:2px 7px;}
+  #fb-status{font-size:.6rem;padding:2px 6px;flex-shrink:0;}
+  /* הסתר ניהול עיתונים מהכותרת (נגיש מתפריט "עוד") */
+  header .btn-outline-w[onclick*="papers"]{display:none !important;}
+  /* שורת הכפתורים — שורה אחת, ללא גלישה */
+  .header-top > div:last-child{flex-wrap:nowrap !important;gap:5px !important;flex-shrink:0;}
+  /* כפתורי פעולה כאייקונים בלבד — מונע גלישת טקסט וכותרת גבוהה */
+  #push-toggle-btn{font-size:0 !important;padding:6px 9px !important;flex-shrink:0;line-height:1;}
+  #push-toggle-btn::before{content:"🔔";font-size:1.15rem;}
+  header .btn-outline-w[onclick*="openSettings"]{font-size:0 !important;padding:6px 9px !important;min-width:auto;flex-shrink:0;line-height:1;}
+  header .btn-outline-w[onclick*="openSettings"]::before{content:"⚙️";font-size:1.15rem;}
+  header .btn-outline-w[onclick*="logoutUser"]{font-size:0 !important;padding:6px 9px !important;min-width:auto;flex-shrink:0;line-height:1;}
+  header .btn-outline-w[onclick*="logoutUser"]::before{content:"🚪";font-size:1.15rem;}
 
   /* ── שורת חיפוש בכותרת ── */
   #header-search-row{margin-top:6px;padding-top:6px;}
@@ -470,6 +484,9 @@ textarea.fi{resize:none;min-height:52px;}
 
   /* ── הסתר sidebar/tabs עליונות ── */
   .tabs{display:none !important;}
+
+  /* כפתור "רשימת עבודות" בכותרת תופס מקום במובייל — נגיש דרך תפריט "עוד" */
+  #header-worklist-btn{display:none !important;}
 
   /* ── תוכן ── */
   .app-layout{flex-direction:column;}
@@ -2239,6 +2256,7 @@ window._fbSnapshot = {};
   <div class="mob-more-item" onclick="mobNav('papers');toggleMobMore()">  <span class="mi-icon">📰</span>עיתונים ועלונים</div>
   <div class="mob-more-item" onclick="mobNav('quotes');toggleMobMore()">  <span class="mi-icon">💰</span>הצעות מחיר</div>
   <div class="mob-more-item" onclick="mobNav('orders');toggleMobMore()">  <span class="mi-icon">🛒</span>הזמנות</div>
+  <div class="mob-more-item" onclick="mobNav('worklist');toggleMobMore()"><span class="mi-icon">📋</span>רשימת עבודות</div>
   <div class="mob-more-item" onclick="mobNav('queue');toggleMobMore()">   <span class="mi-icon">🏭</span>תור מכונות</div>
 </div>
 
@@ -7950,7 +7968,7 @@ function renderWorkList() {
     return true;
   });
 
-  var poolHtml = '<div style="flex:0 0 270px;min-width:220px;border-left:2px solid #e5e7eb;padding-left:14px;overflow-y:auto;max-height:calc(100vh - 160px)">';
+  var poolHtml = '<div class="wl-pool" style="flex:0 0 270px;min-width:220px;border-left:2px solid #e5e7eb;padding-left:14px;overflow-y:auto;max-height:calc(100vh - 160px)">';
   poolHtml += '<div style="font-weight:900;font-size:.82rem;color:#374151;padding:6px 0 8px;display:flex;align-items:center;gap:6px;position:sticky;top:0;background:white;z-index:1">';
   poolHtml += '📋 עבודות זמינות';
   poolHtml += '<button onclick="window._queueShowWeekly=!window._queueShowWeekly;renderWorkList()" '
@@ -8041,7 +8059,7 @@ function renderWorkList() {
 
   // ── RIGHT PANEL — מכונות ────────────────────────────────
   var colorMap = {'מכונה 4 צבעים':'#dbeafe','מכונה 8 צבעים':'#d1fae5'};
-  var machinesHtml = '<div style="flex:1;min-width:0;overflow-y:auto;max-height:calc(100vh - 160px)">';
+  var machinesHtml = '<div class="wl-machines" style="flex:1;min-width:0;overflow-y:auto;max-height:calc(100vh - 160px)">';
 
   MACHINES.forEach(function(machine, mi) {
     var bg = colorMap[machine] || '#f3f4f6';
@@ -8128,7 +8146,7 @@ function renderWorkList() {
   });
   machinesHtml += '</div>';
 
-  el.innerHTML = '<div style="display:flex;gap:0;padding:10px 2px;direction:rtl">' + poolHtml + machinesHtml + '</div>';
+  el.innerHTML = '<div class="wl-split" style="display:flex;gap:0;padding:10px 2px;direction:rtl">' + poolHtml + machinesHtml + '</div>';
 }
 
 function _loadTemplates() {
