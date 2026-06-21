@@ -2796,7 +2796,7 @@ function renderOrders() {
   if (!list) return;
 
   var filtered = orders.filter(function(o) {
-    if (_ordersFilter === 'pending') { if (o.status === 'done') return false; }
+    if (_ordersFilter === 'all' || _ordersFilter === 'pending') { if (o.status === 'done') return false; }
     else if (_ordersFilter === 'done') { if (o.status !== 'done') return false; }
     else if (_ordersFilter === 'urgent') { if (!isOrderOverdue(o)) return false; }
     if (_ordersAreaFilter !== 'all' && o.area !== _ordersAreaFilter) return false;
