@@ -12433,6 +12433,139 @@ function _autoCompleteWeeklyJobs() {
   });
 }
 
+// ═══════════════════════════════════════════════════════
+// MACHINE OPERATOR VIEW (?machineView=4 / ?machineView=8)
+// ═══════════════════════════════════════════════════════
+var _machineViewMachine = null;
+var _machineViewOpName  = sessionStorage.getItem('solanOperatorName') || '';
+
+function _initMachineViewMode() {
+  var params = new URLSearchParams(location.search);
+  var mv = params.get('machineView');
+  if (!mv) return false;
+  var machineMap = { '4': 'מכונה 4 צבעים', '8': 'מכונה 8 צבעים' };
+  _machineViewMachine = machineMap[mv] || ('מכונה ' + mv);
+
+  // Hide the entire normal app
+  document.querySelectorAll('body > *').forEach(function(el) {
+    if (el.id !== 'operator-screen') el.style.display = 'none';
+  });
+  document.body.style.cssText = 'margin:0;padding:0;background:#0f172a';
+
+  // Create operator screen container
+  var screen = document.createElement('div');
+  screen.id = 'operator-screen';
+  screen.style.cssText = 'position:fixed;inset:0;background:#0f172a;z-index:99999;display:flex;flex-direction:column;font-family:Heebo,sans-serif;direction:rtl;overflow:hidden';
+  document.body.appendChild(screen);
+
+  // Ask operator name once
+  if (!_machineViewOpName) {
+    var nm = prompt('שלום! מה שמך? (יופיע בסימון "הודפס")');
+    _machineViewOpName = (nm || '').trim() || 'מפעיל';
+    sessionStorage.setItem('solanOperatorName', _machineViewOpName);
+  }
+
+  // Connect Firebase and load data
+  connectFirebase();
+  // Fast poll every 10s for live updates
+  setTimeout(function() {
+    _opLoadAndRender();
+    window._opPollInterval = setInterval(_opLoadAndRender, 10000);
+  }, 1800);
+  return true;
+}
+
+function _opLoadAndRender() {
+  if (!window._fbGet) { _renderOperatorScreen(); return; }
+  Promise.all([
+    window._fbGet('machineQueue').catch(function(){ return null; }),
+    window._fbGet('cards').catch(function(){ return null; })
+  ]).then(function(res) {
+    if (res[0] && Array.isArray(res[0])) machineQueue = res[0];
+    if (res[1] && Array.isArray(res[1])) cards = res[1];
+    _renderOperatorScreen();
+  });
+}
+
+function _renderOperatorScreen() {
+  var screen = document.getElementById('operator-screen');
+  if (!screen || !_machineViewMachine) return;
+  var machine = _machineViewMachine;
+  var active = (machineQueue||[]).filter(function(e){ return e.machine === machine && !e.done; })
+    .sort(function(a,b){ return a.order - b.order; });
+  var done = (machineQueue||[]).filter(function(e){ return e.machine === machine && e.done; })
+    .sort(function(a,b){ return new Date(b.doneAt||0) - new Date(a.doneAt||0); });
+  var now = new Date().toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});
+
+  var html = '<div style="background:linear-gradient(135deg,#1e3a5f,#0f2744);padding:14px 18px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;box-shadow:0 2px 12px #00000050">'
+    + '<div>'
+    + '<div style="color:#e2e8f0;font-size:1.2rem;font-weight:900">🏭 ' + escHtml(machine) + '</div>'
+    + '<div style="color:#64748b;font-size:.75rem;margin-top:2px">' + active.length + ' בתור · עודכן ' + now + '</div>'
+    + '</div>'
+    + '<div style="text-align:left">'
+    + '<div style="color:#64748b;font-size:.7rem">מפעיל: ' + escHtml(_machineViewOpName) + '</div>'
+    + '<button onclick="sessionStorage.removeItem(\'solanOperatorName\');location.reload()" style="font-size:.62rem;padding:2px 7px;border:1px solid #334155;background:transparent;color:#64748b;border-radius:4px;cursor:pointer;margin-top:4px">שנה שם</button>'
+    + '</div>'
+    + '</div>'
+    + '<div style="flex:1;overflow-y:auto;padding:14px 16px">';
+
+  if (!active.length) {
+    html += '<div style="text-align:center;color:#334155;font-size:1.1rem;padding:60px 20px;line-height:2">✓<br>אין עבודות בתור</div>';
+  } else {
+    active.forEach(function(e, idx) {
+      var c = (cards||[]).find(function(x){ return String(x.id) === String(e.cardId); });
+      var name = c ? (c.name || c.customer || 'ללא שם') : '(לא נמצא)';
+      var runLabel = '';
+      if (e.runIdx >= 0 && c && c.runs && c.runs[e.runIdx]) {
+        runLabel = c.runs[e.runIdx].label || ('ריצה ' + (e.runIdx+1));
+      }
+      var qidS = JSON.stringify(String(e.qid));
+      html += '<div style="background:#1e293b;border-radius:12px;margin-bottom:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;border:1.5px solid #334155">'
+        + '<div style="background:#2d3561;color:#93c5fd;font-size:1.3rem;font-weight:900;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:8px;flex-shrink:0">' + (idx+1) + '</div>'
+        + '<div style="flex:1;min-width:0">'
+        + '<div style="color:#f1f5f9;font-size:.98rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(name) + '</div>'
+        + (runLabel ? '<div style="color:#64748b;font-size:.78rem;margin-top:2px">' + escHtml(runLabel) + '</div>' : '')
+        + (e.estMinutes ? '<div style="color:#60a5fa;font-size:.75rem;margin-top:3px">⏱ ' + _fmtMins(e.estMinutes) + '</div>' : '')
+        + '</div>'
+        + '<button onclick="_operatorMarkDone(' + qidS + ')" style="background:#16a34a;color:white;border:none;border-radius:10px;padding:13px 20px;font-family:Heebo,sans-serif;font-size:.92rem;font-weight:900;cursor:pointer;white-space:nowrap;flex-shrink:0;min-width:85px;-webkit-tap-highlight-color:transparent">✓ הודפס</button>'
+        + '</div>';
+    });
+  }
+
+  if (done.length) {
+    html += '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #1e293b">'
+      + '<div style="color:#334155;font-size:.78rem;font-weight:700;margin-bottom:8px">✓ הושלמו</div>';
+    done.slice(0, 15).forEach(function(e) {
+      var c = (cards||[]).find(function(x){ return String(x.id) === String(e.cardId); });
+      var name = c ? (c.name || c.customer || 'ללא שם') : '(לא נמצא)';
+      var runSuffix = (e.runIdx >= 0 && c && c.runs && c.runs[e.runIdx])
+        ? ' · ' + (c.runs[e.runIdx].label || ('ריצה ' + (e.runIdx+1))) : '';
+      var doneTime = e.doneAt ? new Date(e.doneAt).toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #1e293b">'
+        + '<span style="color:#16a34a;font-size:.85rem;flex-shrink:0">✓</span>'
+        + '<div style="flex:1;min-width:0;color:#475569;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(name + runSuffix) + '</div>'
+        + '<span style="color:#334155;font-size:.7rem;flex-shrink:0">' + doneTime + '</span>'
+        + '</div>';
+    });
+    html += '</div>';
+  }
+
+  html += '</div>';
+  screen.innerHTML = html;
+}
+
+function _operatorMarkDone(qid) {
+  var e = (machineQueue||[]).find(function(x){ return String(x.qid) === String(qid); });
+  if (!e) return;
+  e.done = true;
+  e.doneAt = new Date().toISOString();
+  e.doneBy = _machineViewOpName;
+  e.doneByName = _machineViewOpName;
+  localStorage.setItem('solanMachineQueue', JSON.stringify(machineQueue));
+  if (window._fbPut) window._fbPut('machineQueue', machineQueue);
+  _renderOperatorScreen();
+}
+
 // ========== INIT ==========
 updateBadge();
 renderDashboard();
@@ -12442,8 +12575,9 @@ setTimeout(checkLowInventory, 1000);
 setTimeout(autoBackup, 2000);
 setTimeout(_autoCompleteWeeklyJobs, 1500);
 setInterval(_autoCompleteWeeklyJobs, 5 * 60 * 1000);
-// אתחול לוגין
+// אתחול לוגין — אם זה מסך מפעיל, מדלגים על לוגין
 (function(){
+  if (_initMachineViewMode()) return;
   if(currentUser){applyPermissionsToUI();}
   else{setTimeout(function(){initLoginScreen();},50);}
 })();
