@@ -3434,7 +3434,7 @@ function calcRuns() {
   else { field.style.display='none'; currentRuns=[]; return; }
 
   // preserve machine + tumble + A+B + extras choices
-  const prev = {}, prevTumble = {}, prevAB = {}, prevExtras = {}, prevExtraSize = {}, prevManual = {}, prevUp = {};
+  const prev = {}, prevTumble = {}, prevAB = {}, prevExtras = {}, prevExtraSize = {}, prevManual = {}, prevUp = {}, prevPaper = {};
   document.querySelectorAll('.mach-sel').forEach(s=>{ if(s.dataset.run) prev[s.dataset.run]=s.value; });
   currentRuns.forEach(r=>{
     prevTumble[r.num]=r.tumble||false;
@@ -3443,6 +3443,7 @@ function calcRuns() {
     prevExtraSize[r.num] = r.abExtraCustomSize||'';
     prevManual[r.num] = r.manualExtra||'';
     if (r.upCount) prevUp[r.num] = r.upCount;
+    if (r.paper) prevPaper[r.num] = r.paper;
   });
   currentRuns = buildRuns(pages, copies, fs);
   currentRuns.forEach(r=>{
@@ -3452,6 +3453,7 @@ function calcRuns() {
     if (r.abEnabled && prevExtras[r.num] && prevExtras[r.num].length) r.abExtras = prevExtras[r.num].slice();
     if (r.abEnabled && prevExtraSize[r.num]) r.abExtraCustomSize = prevExtraSize[r.num];
     if (prevManual[r.num]) r.manualExtra = prevManual[r.num];
+    if (prevPaper[r.num]) r.paper = prevPaper[r.num];
     // שחזור "פעמים בגיליון" + עדכון כמות הגיליונות בהתאם
     if (prevUp[r.num] && r.abEligible) { r.upCount = prevUp[r.num]; r.copies = Math.ceil(copies / r.upCount); }
   });
@@ -3518,6 +3520,16 @@ function _renderCurrentRunsOutput() {
       }
       _abRow = '<tr><td colspan="6" style="padding:6px 10px;background:#faf8ff;border-top:1px dashed #e2e8f0">'+_upSel+_abToggle+_abExtras+'</td></tr>';
     }
+    // נייר לריצה — מאפשר לסמן נייר שונה לכל ריצה
+    var _paperNames = ((quotePricing && quotePricing.papers) || []).map(function(p){ return p.name; }).filter(Boolean);
+    var _dlId = 'rpaper-dl-' + i;
+    var _paperRow = '<tr><td colspan="6" style="padding:3px 10px 5px;background:#fafafa;border-top:1px dashed #eee">'+
+      '<label style="font-size:.74rem;color:#888">📄 נייר: </label>'+
+      '<input type="text" id="run-paper-inline-'+i+'" value="'+(r.paper||'').replace(/"/g,'&quot;')+'" '+
+      'oninput="currentRuns['+i+'].paper=this.value" list="'+_dlId+'" '+
+      'placeholder="סוג נייר (ריק = ברירת מחדל)" style="font-size:.76rem;padding:3px 8px;border:1px solid #cbd5e1;border-radius:5px;width:60%">'+
+      (_paperNames.length ? '<datalist id="'+_dlId+'">'+_paperNames.map(function(nm){ return '<option value="'+nm.replace(/"/g,'&quot;')+'">'; }).join('')+'</datalist>' : '')+
+    '</td></tr>';
     // מילוי ידני — גדלים נוספים להדפסה יחד עם הריצה (זמין תמיד, בכל ריצה)
     var _manualRow = '<tr><td colspan="6" style="padding:4px 10px;background:#fafafa;border-top:1px dashed #eee">'+
       '<label style="font-size:.74rem;color:#888">➕ גדלים נוספים להדפסה יחד: </label>'+
@@ -3550,7 +3562,7 @@ function _renderCurrentRunsOutput() {
         '</select>'+
         _tumbleBtn+
       '</td>'+
-    '</tr>'+_abRow+_manualRow;
+    '</tr>'+_abRow+_paperRow+_manualRow;
   }).join('');
 
   out.innerHTML='<div class="runs-box">'+
