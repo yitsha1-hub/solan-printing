@@ -1182,8 +1182,15 @@ window._fbSnapshot = {};
       </div>
 
       <div class="field">
-        <label>מס' עותקים</label>
-        <input class="fi" type="number" id="f-copies" placeholder="5000" min="1" oninput="calcRuns()">
+        <label id="f-copies-label">מס' עותקים</label>
+        <input class="fi" type="number" id="f-copies" placeholder="5000" min="1" oninput="calcRuns();updateSheetsCalc()">
+        <div id="f-sheets-mode-wrap" style="margin-top:5px">
+          <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:.82rem;color:#374151;background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:7px;padding:4px 10px">
+            <input type="checkbox" id="f-sheets-mode" onchange="toggleSheetsMode()" style="accent-color:#0284c7">
+            גיליונות (במקום עותקים)
+          </label>
+        </div>
+        <div id="f-sheets-calc" style="display:none;margin-top:6px;font-size:.8rem;line-height:1.6"></div>
       </div>
       <div class="field">
         <label>מס' עמודים</label>
@@ -1215,7 +1222,7 @@ window._fbSnapshot = {};
 
       <div class="field full">
         <label>הערות</label>
-        <textarea class="fi" id="f-notes" placeholder="כריכה, לכה, קיפול..."></textarea>
+        <textarea class="fi" id="f-notes" placeholder="כריכה, לכה, קיפול..." oninput="updateSheetsCalc()"></textarea>
       </div>
 
       <div class="field full">
@@ -1722,31 +1729,32 @@ window._fbSnapshot = {};
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
       <h2 style="font-size:1rem;font-weight:800;color:var(--press)">🏭 מלאי במחסן רונימאר</h2>
       <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
-        <label class="btn btn-tpl" style="cursor:pointer" title="טען קובץ xlsb/xlsx חודשי">
-          📥 עדכון חודשי (xlsb)
-          <input type="file" accept=".xlsb,.xlsx,.xls" onchange="loadInventoryXlsb(this)" style="display:none">
-        </label>
-        <button id="inv-undo-btn" class="btn btn-tpl" onclick="undoInventoryImport()" style="font-size:.8rem;display:none;background:#fff3e0;border-color:#ff9800;color:#e65100">↩️ בטל ייבוא</button>
-        <button id="inv-undo-stack-btn" class="btn btn-tpl" onclick="undoInventoryAction()" style="font-size:.8rem;display:none;background:#fef3c7;border-color:#d97706;color:#92400e">↩️ בטל פעולה</button>
-        <button class="btn btn-tpl" onclick="cleanupDoc171Once()" title="מזג שורות כפולות עם אותו תאריך" style="font-size:.8rem">🔧 מזג כפילויות</button>
-        <button class="btn btn-danger" onclick="clearInventory()" style="font-size:.8rem">🗑️ נקה מלאי</button>
-        <label class="btn btn-tpl" style="cursor:pointer" title="העלה חשבונית — מוסיף כמות למלאי">
-          📄 חשבונית
-          <input type="file" accept="image/*,.pdf" onchange="loadDeliveryDoc(this,'add')" style="display:none">
-        </label>
-        <label class="btn btn-gold" style="cursor:pointer;font-weight:800" title="צלם חשבונית — מוסיף כמות למלאי">
-          📷 צלם חשבונית
-          <input type="file" accept="image/*" capture="environment" onchange="loadDeliveryDoc(this,'add')" style="display:none">
+        <button class="btn btn-tpl" style="background:#fff3e0;border-color:#ff9800;color:#e65100" onclick="openManualDeductModal()" title="הורד ידנית ממלאי ללא סריקה">✏️ תעודה ידנית</button>
+        <label class="btn btn-tpl" style="cursor:pointer;background:#fff3e0;border-color:#ff9800;color:#e65100;font-weight:800" title="צלם תעודת משלוח — מוריד כמות מהמלאי">
+          📷 צלם תעודה
+          <input type="file" accept="image/*" capture="environment" onchange="loadDeliveryDoc(this,'deduct')" style="display:none">
         </label>
         <label class="btn btn-tpl" style="cursor:pointer;background:#fff3e0;border-color:#ff9800;color:#e65100" title="העלה תעודת משלוח — מוריד כמות מהמלאי">
           📤 תעודת משלוח
           <input type="file" accept="image/*,.pdf" onchange="loadDeliveryDoc(this,'deduct')" style="display:none">
         </label>
-        <label class="btn btn-tpl" style="cursor:pointer;background:#fff3e0;border-color:#ff9800;color:#e65100;font-weight:800" title="צלם תעודת משלוח — מוריד כמות מהמלאי">
-          📷 צלם תעודה
-          <input type="file" accept="image/*" capture="environment" onchange="loadDeliveryDoc(this,'deduct')" style="display:none">
+        <button class="btn btn-gold" onclick="openManualInvoiceModal()" title="מלא חשבונית ידנית — מוסיף כמות למלאי">✏️ מלא חשבונית ידנית</button>
+        <label class="btn btn-gold" style="cursor:pointer;font-weight:800" title="צלם חשבונית — מוסיף כמות למלאי">
+          📷 צלם חשבונית
+          <input type="file" accept="image/*" capture="environment" onchange="loadDeliveryDoc(this,'add')" style="display:none">
         </label>
-        <button class="btn btn-tpl" style="background:#fff3e0;border-color:#ff9800;color:#e65100" onclick="openManualDeductModal()" title="הורד ידנית ממלאי ללא סריקה">✏️ תעודה ידנית</button>
+        <label class="btn btn-tpl" style="cursor:pointer" title="העלה חשבונית — מוסיף כמות למלאי">
+          📄 חשבונית
+          <input type="file" accept="image/*,.pdf" onchange="loadDeliveryDoc(this,'add')" style="display:none">
+        </label>
+        <button class="btn btn-danger" onclick="clearInventory()" style="font-size:.8rem">🗑️ נקה מלאי</button>
+        <button class="btn btn-tpl" onclick="cleanupDoc171Once()" title="מזג שורות כפולות עם אותו תאריך" style="font-size:.8rem">🔧 מזג כפילויות</button>
+        <button id="inv-undo-stack-btn" class="btn btn-tpl" onclick="undoInventoryAction()" style="font-size:.8rem;display:none;background:#fef3c7;border-color:#d97706;color:#92400e">↩️ בטל פעולה</button>
+        <button id="inv-undo-btn" class="btn btn-tpl" onclick="undoInventoryImport()" style="font-size:.8rem;display:none;background:#fff3e0;border-color:#ff9800;color:#e65100">↩️ בטל ייבוא</button>
+        <label class="btn btn-tpl" style="cursor:pointer" title="טען קובץ xlsb/xlsx חודשי">
+          📥 עדכון חודשי (xlsb)
+          <input type="file" accept=".xlsb,.xlsx,.xls" onchange="loadInventoryXlsb(this)" style="display:none">
+        </label>
         <button class="btn btn-tpl" onclick="printInventoryWarehouse()" title="הורד קובץ מלאי להדפסה">⬇️ הורדה</button>
         <button class="btn btn-primary" onclick="addInventoryItem()">+ הוסף שורה</button>
       </div>
@@ -3664,10 +3672,12 @@ function calcRuns() {
   const size   = document.getElementById('f-size').value.trim().toLowerCase();
   const field  = document.getElementById('runs-field');
   const out    = document.getElementById('runs-output');
-  if (!copies||!pages) { field.style.display='none'; currentRuns=[]; return; }
   let fs=0, lbl='';
-  if (/70[\s×x*]?100|100[\s×x*]?70|16[.,]5[\s×x*]?24|24[\s×x*]?16|^a5$/.test(size)) { fs=32; lbl=(/a5/.test(size)?'A5':'70×100') + ' — 32 עמ\' לגיליון'; }
-  else if (/64[\s×x*]?90|90[\s×x*]?64|a4|240[\s×x*]?330|330[\s×x*]?240/.test(size)) { fs=16; lbl='64×90/A4/240×330 — 16 עמ\' לגיליון'; }
+  const _is32 = /70[\s×x*]?100|100[\s×x*]?70|16[.,]5[\s×x*]?24|24[\s×x*]?16|^a5$/.test(size);
+  const _is16 = /64[\s×x*]?90|90[\s×x*]?64|a4|240[\s×x*]?330|330[\s×x*]?240/.test(size);
+  if (!copies||!pages) { field.style.display='none'; currentRuns=[]; return; }
+  if (_is32) { fs=32; lbl=(/a5/.test(size)?'A5':'70×100') + ' — 32 עמ\' לגיליון'; }
+  else if (_is16) { fs=16; lbl='64×90/A4/240×330 — 16 עמ\' לגיליון'; }
   else { field.style.display='none'; currentRuns=[]; return; }
 
   // preserve machine + tumble + A+B + extras choices
@@ -3698,6 +3708,98 @@ function calcRuns() {
   _runsLabel = lbl; _runsPages = pages; _runsCopies = copies; _runsFs = fs;
   _renderCurrentRunsOutput();
   field.style.display='';
+}
+
+function toggleSheetsMode() {
+  var checked = (document.getElementById('f-sheets-mode')||{}).checked;
+  var lbl = document.getElementById('f-copies-label');
+  if (lbl) lbl.textContent = checked ? 'מס\' גיליונות' : 'מס\' עותקים';
+  var inp = document.getElementById('f-copies');
+  if (inp) inp.placeholder = checked ? '500' : '5000';
+  updateSheetsCalc();
+}
+
+// ── ניתוח הערות: סה"כ יחידות + כמה יחידות בגיליון ──
+function _parseSheetsInfo(notes) {
+  notes = notes || '';
+  var total = null, perSheet = null;
+  var mTotal = notes.match(/סה["'״׳]?\s*כ[\s:]*([\d][\d,\.]*)/);
+  if (mTotal) { var t = parseInt(mTotal[1].replace(/[,\.]/g,''),10); if (t) total = t; }
+  var mPer = notes.match(/(\d+)\s*(?:יח['׳]?|יחידות|פעמים)?\s*(?:ב|על\s*ה?)גיליון/);
+  if (mPer) { var p = parseInt(mPer[1],10); if (p) perSheet = p; }
+  return { total: total, perSheet: perSheet };
+}
+
+var SHEETS_SPARE_MIN = 50; // מינימום ספייר מקובל בגיליונות
+
+// ── הצגת חישוב חי מתחת לשדה הגיליונות ──
+function updateSheetsCalc() {
+  var box = document.getElementById('f-sheets-calc');
+  if (!box) return;
+  var smc = document.getElementById('f-sheets-mode');
+  if (!smc || !smc.checked) { box.style.display='none'; box.innerHTML=''; return; }
+  var info = _parseSheetsInfo((document.getElementById('f-notes')||{value:''}).value);
+  var entered = parseInt((document.getElementById('f-copies')||{value:''}).value)||0;
+  box.style.display = '';
+  // אין כמה-בגיליון בהערות — לא ניתן לחשב
+  if (!info.perSheet) {
+    box.innerHTML = '<span style="color:#9ca3af">💡 רשום בהערות "X יחידות בגיליון" כדי לחשב כמות גיליונות אוטומטית</span>';
+    return;
+  }
+  // יש כמה-בגיליון אבל אין סה"כ — נחשב סה"כ מהגיליונות שהוזנו
+  if (!info.total) {
+    if (!entered) { box.innerHTML = '<span style="color:#9ca3af">💡 ' + info.perSheet + ' בגיליון — הזן כמות גיליונות לחישוב סה"כ</span>'; return; }
+    box.innerHTML = '<span style="color:#0369a1;font-weight:600">📐 סה"כ מחושב: ' + (entered*info.perSheet).toLocaleString() + ' יח\' (' + entered.toLocaleString() + ' גיליונות × ' + info.perSheet + ')</span>';
+    return;
+  }
+  // יש גם סה"כ וגם כמה-בגיליון — חשב נדרש והשווה
+  var needed = Math.ceil(info.total / info.perSheet);
+  if (!entered) {
+    box.innerHTML = '<span style="color:#0369a1;font-weight:600">📐 נדרשים ' + needed.toLocaleString() + ' גיליונות</span> ' +
+      '<span style="color:#6b7280">(' + info.total.toLocaleString() + ' ÷ ' + info.perSheet + ')</span> ' +
+      '<button type="button" onclick="_fillNeededSheets(' + (needed+SHEETS_SPARE_MIN) + ')" style="margin-right:6px;font-size:.74rem;padding:2px 9px;border:1.5px solid #0284c7;background:#e0f2fe;color:#075985;border-radius:6px;cursor:pointer;font-family:Heebo,sans-serif">מלא ' + (needed+SHEETS_SPARE_MIN).toLocaleString() + ' (כולל ספייר)</button>';
+    return;
+  }
+  var produced = entered * info.perSheet;
+  var diff = entered - needed;
+  if (produced < info.total) {
+    // חוסר — אזהרה
+    box.innerHTML = '<span style="color:#b91c1c;font-weight:700">⚠️ חוסר: ' + (info.total-produced).toLocaleString() + ' יח\' (' + (needed-entered) + ' גיליונות)</span> ' +
+      '<span style="color:#6b7280">— נדרשים ' + needed.toLocaleString() + ', רשמת ' + entered.toLocaleString() + '</span> ' +
+      '<button type="button" onclick="_fillNeededSheets(' + (needed+SHEETS_SPARE_MIN) + ')" style="margin-right:6px;font-size:.74rem;padding:2px 9px;border:1.5px solid #b91c1c;background:#fee2e2;color:#7f1d1d;border-radius:6px;cursor:pointer;font-family:Heebo,sans-serif">תקן ל-' + (needed+SHEETS_SPARE_MIN).toLocaleString() + '</button>';
+  } else {
+    // מספיק — מציג ספייר
+    box.innerHTML = '<span style="color:#15803d;font-weight:600">✅ מכסה את ההזמנה</span> ' +
+      '<span style="color:#6b7280">— נדרשים ' + needed.toLocaleString() + ', רשמת ' + entered.toLocaleString() + ' (ספייר ' + diff.toLocaleString() + ' גיליונות / ' + (produced-info.total).toLocaleString() + ' יח\')</span>';
+  }
+}
+
+function _fillNeededSheets(n) {
+  var inp = document.getElementById('f-copies');
+  if (inp) { inp.value = n; calcRuns(); updateSheetsCalc(); }
+}
+
+// ── בדיקת סטייה לפני שמירה (בהזנת גיליונות) — מחזיר false אם המשתמש ביטל ──
+function _confirmSheetsDeviation() {
+  var smc = document.getElementById('f-sheets-mode');
+  if (!smc || !smc.checked) return true;
+  var info = _parseSheetsInfo((document.getElementById('f-notes')||{value:''}).value);
+  var entered = parseInt((document.getElementById('f-copies')||{value:''}).value)||0;
+  if (!info.perSheet || !info.total || !entered) return true; // אין מספיק מידע להערכה
+  var needed = Math.ceil(info.total / info.perSheet);
+  var produced = entered * info.perSheet;
+  if (produced < info.total) {
+    return confirm('⚠️ סטייה בכמות גיליונות — חוסר:\n\n' +
+      'לפי ההערות נדרשים ' + needed.toLocaleString() + ' גיליונות (' + info.total.toLocaleString() + ' ÷ ' + info.perSheet + ' בגיליון).\n' +
+      'רשמת ' + entered.toLocaleString() + ' גיליונות = ' + produced.toLocaleString() + ' יח\' — חוסר של ' + (info.total-produced).toLocaleString() + ' יח\' (' + (needed-entered) + ' גיליונות).\n\n' +
+      'בדרך כלל מדפיסים ספייר (לפחות ~' + SHEETS_SPARE_MIN + ' גיליונות עודף). לשמור בכל זאת?');
+  }
+  if (produced > info.total * 1.1) {
+    return confirm('⚠️ סטייה בכמות גיליונות — הרבה מעבר לנדרש:\n\n' +
+      'לפי ההערות נדרשים ' + needed.toLocaleString() + ' גיליונות (' + info.total.toLocaleString() + ' ÷ ' + info.perSheet + ' בגיליון).\n' +
+      'רשמת ' + entered.toLocaleString() + ' גיליונות = ' + produced.toLocaleString() + ' יח\' — עודף של ' + (produced-info.total).toLocaleString() + ' יח\'.\n\nלשמור בכל זאת?');
+  }
+  return true;
 }
 
 var _runsLabel='', _runsPages=0, _runsCopies=0, _runsFs=0;
@@ -4879,6 +4981,13 @@ function editCard(id) {
   // checkboxes
   if (document.getElementById('f-needs-folding')) document.getElementById('f-needs-folding').checked = !!c.needsFolding;
   if (document.getElementById('f-needs-binding')) document.getElementById('f-needs-binding').checked = !!c.needsBinding;
+  // sheets mode (התיבה זמינה תמיד — ברירת מחדל עותקים)
+  var _smcEdit = document.getElementById('f-sheets-mode');
+  var _sclEdit = document.getElementById('f-copies-label');
+  if (_smcEdit) _smcEdit.checked = !!c.sheetsMode;
+  if (_sclEdit) _sclEdit.textContent = c.sheetsMode ? 'מס\' גיליונות' : 'מס\' עותקים';
+  var _finpEdit = document.getElementById('f-copies'); if(_finpEdit) _finpEdit.placeholder = c.sheetsMode ? '500' : '5000';
+  setTimeout(updateSheetsCalc, 0);
   // color radio
   if (c.color) {
     var r = document.querySelector('input[name="color"][value="'+c.color+'"]');
@@ -4908,6 +5017,10 @@ function clearForm() {
   var _pdw=document.getElementById('placement-details-wrap'); if(_pdw)_pdw.style.display='none';
   var _plp=document.getElementById('placement-picker'); if(_plp)_plp.style.display='none';
   var _prp=document.getElementById('printer-paper-picker'); if(_prp)_prp.style.display='none';
+  var _smc=document.getElementById('f-sheets-mode'); if(_smc) _smc.checked=false;
+  var _scl=document.getElementById('f-copies-label'); if(_scl) _scl.textContent='מס\' עותקים';
+  var _finp=document.getElementById('f-copies'); if(_finp) _finp.placeholder='5000';
+  var _scb=document.getElementById('f-sheets-calc'); if(_scb){ _scb.style.display='none'; _scb.innerHTML=''; }
   currentRuns=[];
   manualRuns=[];
   renderManualRuns();
@@ -4926,6 +5039,7 @@ function saveCard() {
     if (existing) {
       var name = document.getElementById('f-name').value.trim();
       if (!name) { showToast('⚠️ חסר שם עבודה'); return; }
+      if (!_confirmSheetsDeviation()) return;
       var updated = buildTempCard();
       updated.id = existing.id;
       updated.status = existing.status;
@@ -4955,6 +5069,7 @@ function saveCard() {
 function _saveCardNew() {
   const name=document.getElementById('f-name').value.trim();
   if (!name) { showToast('⚠️ חסר שם עבודה'); return; }
+  if (!_confirmSheetsDeviation()) return;
   addHistory('f-name',  name);
   addHistory('f-type',  document.getElementById('f-type').value.trim());
   addHistory('f-paper', document.getElementById('f-paper').value.trim());
@@ -4966,6 +5081,7 @@ function _saveCardNew() {
     orderDate:    document.getElementById('f-order-date').value,
     deliveryDate: document.getElementById('f-delivery-date').value,
     copies:       document.getElementById('f-copies').value,
+    sheetsMode:   !!(document.getElementById('f-sheets-mode')&&document.getElementById('f-sheets-mode').checked),
     pages:        document.getElementById('f-pages').value,
     color:        getColor(),
     size:         document.getElementById('f-size').value.trim(),
@@ -5012,6 +5128,7 @@ function buildTempCard() {
     orderDate:    document.getElementById('f-order-date').value,
     deliveryDate: document.getElementById('f-delivery-date').value,
     copies:       document.getElementById('f-copies').value,
+    sheetsMode:   !!(document.getElementById('f-sheets-mode')&&document.getElementById('f-sheets-mode').checked),
     pages:        document.getElementById('f-pages').value,
     color:        getColor(),
     size:         document.getElementById('f-size').value.trim(),
@@ -5109,10 +5226,12 @@ function buildPrintCard(c) {
           (r.tumble?' <span style="font-size:.7rem;font-weight:700;color:#1d4ed8;background:#eff6ff;border:1.5px solid #93c5fd;border-radius:5px;padding:1px 6px;white-space:nowrap">מתהפך</span>':'')+
           ((r.paper||c.paper)?' <span style="font-size:.7rem;font-weight:600;color:#374151;background:#f3f4f6;border:1px solid #d1d5db;border-radius:5px;padding:1px 7px;white-space:nowrap">'+(r.paper||c.paper)+'</span>':'')+
         '</div>'; }).join('')
-    : '<span style="display:inline-block;min-width:170px;border-bottom:1.5px solid #999;height:1.5em"></span>';
+    : (c.sheetsMode && _copiesNum)
+      ? '<strong style="font-size:1.35rem;font-weight:900">'+_copiesNum.toLocaleString()+'</strong><span style="font-size:.9rem;color:#555;margin-right:6px"> גיליונות</span>'
+      : '<span style="display:inline-block;min-width:170px;border-bottom:1.5px solid #999;height:1.5em"></span>';
 
-  // "סה״כ עותקים" — יורד לחלק התחתון של הכרטיס כשאין ריצות מחושבות (במקום להיות מוצג כ"מס' גיליונות")
-  const _totalCopiesBottomRow = (!_hasRuns && _copiesNum)
+  // "סה״כ עותקים" — יורד לחלק התחתון של הכרטיס כשאין ריצות מחושבות ואין מצב גיליונות
+  const _totalCopiesBottomRow = (!_hasRuns && !c.sheetsMode && _copiesNum)
     ? '<strong style="font-size:1.35rem;font-weight:900">'+_copiesNum.toLocaleString()+'</strong>'
     : '';
 
@@ -5120,7 +5239,21 @@ function buildPrintCard(c) {
   const _copiesLine = (_hasRuns && _copiesNum)
     ? (_copiesNum.toLocaleString() + ' עותקים')
     : '';
-  const _notesVal = [c.notes||'', _copiesLine ? 'מספר עותקים: <strong>'+_copiesLine+'</strong>' : '']
+  // במצב גיליונות — מציגים סה"כ יחידות (מההערות, או מחושב גיליונות×כמה-בגיליון)
+  let _sheetsTotalLine = '';
+  if (c.sheetsMode) {
+    const _si = _parseSheetsInfo(c.notes);
+    if (_si.perSheet && _copiesNum) {
+      const _prod = _copiesNum * _si.perSheet;
+      _sheetsTotalLine = 'סה"כ: <strong>' + _prod.toLocaleString() + ' יח\'</strong> (' + _copiesNum.toLocaleString() + ' גיליונות × ' + _si.perSheet + ' בגיליון)';
+      if (_si.total && _si.total !== _prod) _sheetsTotalLine += ' · נדרש: ' + _si.total.toLocaleString();
+    } else if (_si.total) {
+      _sheetsTotalLine = 'סה"כ: <strong>' + _si.total.toLocaleString() + ' יח\'</strong>';
+    }
+  }
+  const _notesVal = [c.notes||'',
+      _copiesLine ? 'מספר עותקים: <strong>'+_copiesLine+'</strong>' : '',
+      _sheetsTotalLine]
     .filter(Boolean).join('<br>');
 
   const _fldRow = (lbl, val) => val ? `
@@ -6167,6 +6300,21 @@ function switchToManual() {
   document.getElementById("del-btn-manual").style.display = "none";
   document.getElementById("del-btn-ai").style.display = apiKey ? "inline-flex" : "none";
   buildDeliveryForm({}, _deliveryMode);
+}
+
+function openManualInvoiceModal() {
+  _deliveryMode = "add";
+  _deliveryImageB64 = null;
+  var modalTitle = document.querySelector("#delivery-modal .modal-header h3");
+  if (modalTitle) modalTitle.textContent = "📄 חשבונית — הוספה למלאי";
+  document.getElementById("delivery-modal").classList.add("open");
+  document.getElementById("del-btn-manual").style.display = "none";
+  document.getElementById("del-btn-ai").style.display = "none";
+  document.getElementById("delivery-confirm-btn").style.display = "none";
+  document.getElementById("delivery-price-only-wrap").style.display = "none";
+  var preview = document.getElementById("del-doc-preview");
+  if (preview) { preview.style.display = "none"; preview.innerHTML = ""; }
+  buildDeliveryForm({}, "add");
 }
 
 function retryAI() {
