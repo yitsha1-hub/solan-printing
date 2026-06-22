@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782132497';
+window.APP_VERSION = '1782133032';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -8866,6 +8866,9 @@ function _queueRender() {
   var qEl = document.getElementById('view-queue');
   if (qEl && qEl.style.display !== 'none') renderMachineQueue();
   renderWorkList(); // always — updates worklist tab AND dash-worklist mirror
+  // רענן את לוח הייצור אם הדאשבורד פתוח (כדי לשקף שינוי סטטוס מהמכונות)
+  var dv = document.getElementById('view-dashboard');
+  if (dv && dv.style.display !== 'none' && typeof renderDashBoard === 'function') renderDashBoard();
 }
 
 function _queueOpenCard(cardId) {
@@ -8918,6 +8921,32 @@ function _queueRemoveEntry(qid) {
   _queueRender();
 }
 
+// סנכרון סטטוס הכרטיס (ללוח הייצור) לפי מצב הריצות בתור המכונות.
+// מחזיר true אם הסטטוס שונה. לא קורא ל-persist/render — באחריות הקורא.
+function _syncCardStatusFromQueue(cardId) {
+  var c = (cards||[]).find(function(x){ return String(x.id) === String(cardId); });
+  if (!c || c.status === 'trash') return false;
+  var entries = _queueEntriesForCard(cardId);
+  var allDone = (c._wlDone === true) || (entries.length > 0 && entries.every(function(e){ return e.done; }));
+  var anyDone = entries.some(function(e){ return e.done; });
+  var changed = false;
+  if (allDone) {
+    if (c.status !== 'done') {
+      c.status = 'done';
+      c.printedAt = c.printedAt || new Date().toISOString();
+      c.lastUpdatedBy = currentUser ? currentUser.id : 'admin';
+      changed = true;
+    }
+  } else if (c.status === 'done') {
+    // בוטל סימון ההדפסה — החזר לסטטוס מתאים (בהדפסה אם חלק הודפס, אחרת ממתין)
+    c.status = anyDone ? 'inprogress' : 'pending';
+    delete c.printedAt;
+    c.lastUpdatedBy = currentUser ? currentUser.id : 'admin';
+    changed = true;
+  }
+  return changed;
+}
+
 function _queueMarkDone(qid) {
   var e = (machineQueue||[]).find(function(x){ return String(x.qid) === String(qid); });
   if (!e) return;
@@ -8925,6 +8954,7 @@ function _queueMarkDone(qid) {
   e.doneAt = new Date().toISOString();
   e.doneBy = currentUser ? currentUser.id : null;
   e.doneByName = currentUser ? (currentUser.name || _userName(currentUser.id) || 'לא ידוע') : 'לא ידוע';
+  _syncCardStatusFromQueue(e.cardId);
   persist();
   _queueRender();
   showToast('✅ הודפס!');
@@ -8934,6 +8964,7 @@ function _queueUnmarkDone(qid) {
   var e = (machineQueue||[]).find(function(x){ return String(x.qid) === String(qid); });
   if (!e) return;
   e.done = false; e.doneAt = null; e.doneBy = null; e.doneByName = null;
+  _syncCardStatusFromQueue(e.cardId);
   persist();
   _queueRender();
   showToast('↩ הוחזר לתור');
@@ -8951,6 +8982,7 @@ function _queueUnmarkDoneAll(cardId) {
   var c = (cards||[]).find(function(x){ return String(x.id) === String(cardId); });
   if (c && c._wlDone) { delete c._wlDone; delete c._wlDoneAt; delete c._wlDoneByName; changed = true; }
   if (!changed) return;
+  _syncCardStatusFromQueue(cardId);
   persist();
   _queueRender();
   showToast('↩ הוחזר לזמינות');
@@ -8972,6 +9004,7 @@ function _queueCompleteCard(cardId) {
   c._wlDone = true;
   c._wlDoneAt = new Date().toISOString();
   c._wlDoneByName = currentUser ? (currentUser.name || _userName(currentUser.id) || '') : '';
+  _syncCardStatusFromQueue(cardId);
   persist();
   _queueRender();
   showToast('✓ הועבר להושלמו');
@@ -13400,17 +13433,24 @@ function _opSetPrinting(machine, qid) {
 function _opStartPrinting(qid) {
   var machine = _machineViewMachine;
   var cur = _opGetPrinting(machine);
+  var _cardsChanged = false;
   if (cur && cur.qid) {
     var oldE = (machineQueue||[]).find(function(x){ return String(x.qid) === String(cur.qid); });
     if (oldE && !oldE.done) {
       oldE.done = true;
       oldE.doneAt = new Date().toISOString();
       if (cur.startAt) oldE.printDurationSec = Math.floor((Date.now() - cur.startAt) / 1000);
+      // סנכרן את סטטוס הכרטיס ללוח הייצור (אם כל הריצות הודפסו → הושלם)
+      if (typeof _syncCardStatusFromQueue === 'function' && _syncCardStatusFromQueue(oldE.cardId)) _cardsChanged = true;
     }
   }
   _opSetPrinting(machine, qid);
   localStorage.setItem('solanMachineQueue', JSON.stringify(machineQueue));
   if (window._fbPut) window._fbPut('machineQueue', machineQueue);
+  if (_cardsChanged) {
+    localStorage.setItem('solanCards', JSON.stringify(cards));
+    if (window._fbPut) window._fbPut('cards', cards);
+  }
   _renderOperatorScreen();
 }
 
