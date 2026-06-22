@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782119944';
+window.APP_VERSION = '1782120081';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -1233,6 +1233,13 @@ window._fbSnapshot = {};
             <button type="button" class="size-btn" onclick="pickSize('A3 קיפול ל-A4')">A3 קיפול ל-A4</button>
             <button type="button" class="size-btn" id="size-btn-placement" onclick="togglePlacementPicker()">🗂️ פלייסמנטים ▾</button>
             <button type="button" class="size-btn" id="size-btn-printer" onclick="togglePrinterPaperPicker()">🖨️ נייר מדפסת ▾</button>
+          </div>
+          <!-- A4/A5 per-sheet picker -->
+          <div id="a4a5-per-sheet-picker" style="display:none;margin-top:6px;padding:10px 14px;background:#f0fdf4;border-radius:8px;border:1.5px solid #86efac;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-size:.76rem;font-weight:700;color:#166534;white-space:nowrap">כמה בגיליון?</span>
+              <div id="a4a5-ps-btns" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+            </div>
           </div>
           <!-- Placement picker -->
           <div id="placement-picker" style="display:none;margin-top:6px;padding:10px 14px;background:#fdf6e3;border-radius:8px;border:1.5px solid #f0c040;flex-direction:column;gap:8px">
@@ -3587,8 +3594,52 @@ function pickSize(val) {
   if (plp) plp.style.display = 'none';
   var pdw = document.getElementById('placement-details-wrap');
   if (pdw) pdw.style.display = val.startsWith('פלייסמנטים') ? '' : 'none';
+  _updateA4A5Picker(val);
   syncSizeBtns(val);
   calcRuns();
+}
+
+var _A4A5_OPTIONS = {
+  'A4':      [2, 4, 8],
+  'A5':      [4, 8, 16],
+  '16.5×24': [4, 8, 16]
+};
+
+function _updateA4A5Picker(val) {
+  var picker = document.getElementById('a4a5-per-sheet-picker');
+  var btnsEl = document.getElementById('a4a5-ps-btns');
+  if (!picker || !btnsEl) return;
+  var opts = _A4A5_OPTIONS[val ? val.trim() : ''];
+  if (!opts) { picker.style.display = 'none'; return; }
+  picker.style.display = 'flex';
+  var curPs = parseInt((document.getElementById('f-per-sheet')||{value:'1'}).value)||1;
+  btnsEl.innerHTML = opts.map(function(n) {
+    var active = curPs === n ? 'background:var(--press);color:white;border-color:var(--press)' : '';
+    return '<button type="button" class="size-btn" id="a4a5-ps-btn-'+n+'" onclick="setA4A5PerSheet('+n+')" style="font-size:.85rem;'+active+'">'+n+' בגיליון</button>';
+  }).join('');
+}
+
+function setA4A5PerSheet(n) {
+  var ps = document.getElementById('f-per-sheet');
+  if (ps) { ps.value = String(n); }
+  // עדכן כפתורים
+  var btnsEl = document.getElementById('a4a5-ps-btns');
+  if (btnsEl) btnsEl.querySelectorAll('button').forEach(function(b) {
+    var bn = parseInt(b.textContent);
+    b.style.background = bn === n ? 'var(--press)' : '';
+    b.style.color = bn === n ? 'white' : '';
+    b.style.borderColor = bn === n ? 'var(--press)' : '';
+  });
+  // הפעל מצב גיליונות אוטומטית אם לא פעיל
+  var smc = document.getElementById('f-sheets-mode');
+  if (smc && !smc.checked) {
+    smc.checked = true;
+    toggleSheetsMode();
+  } else {
+    var psw = document.getElementById('f-per-sheet-wrap');
+    if (psw) psw.style.display = 'flex';
+    updateSheetsCalc();
+  }
 }
 function togglePlacementPicker() {
   var pp = document.getElementById('placement-picker');
@@ -3712,6 +3763,7 @@ function syncSizeBtns(val) {
   if (pb) pb.classList.toggle('active', val.startsWith('נייר מדפסת'));
   var plb = document.getElementById('size-btn-placement');
   if (plb) plb.classList.toggle('active', val.startsWith('פלייסמנטים'));
+  _updateA4A5Picker(val);
 }
 function pmPickSize(val) {
   document.getElementById('pm-size').value = val;
@@ -5158,6 +5210,7 @@ function editCard(id) {
   setVal('f-copies',        c.copies);
   setVal('f-pages',         c.pages);
   setVal('f-size',          c.size);
+  setTimeout(function(){ _updateA4A5Picker((document.getElementById('f-size')||{}).value||''); }, 0);
   setVal('f-paper',         c.paper);
   setVal('f-notes',         c.notes);
   setVal('f-internal-notes', c.internalNotes);
@@ -5218,6 +5271,7 @@ function clearForm() {
   var _ps=document.getElementById('f-per-sheet'); if(_ps) _ps.value='1';
   var _tw=document.getElementById('f-tumble-wrap'); if(_tw) _tw.style.display='none';
   var _tc=document.getElementById('f-tumble'); if(_tc) _tc.checked=false;
+  var _a4p=document.getElementById('a4a5-per-sheet-picker'); if(_a4p) _a4p.style.display='none';
   currentRuns=[];
   manualRuns=[];
   renderManualRuns();
