@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782133591';
+window.APP_VERSION = '1782134385';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -6957,7 +6957,7 @@ function renderGlobalSearch(q) {
       const badge = cnt > 1 ? (cnt + ' כרטיסים') : 'פתח';
       const action = cnt > 1
         ? `openJobHistory(${JSON.stringify(name)})`
-        : `switchTab('saved');showPrintModal(cards.find(function(x){return x.id===${JSON.stringify(latest.id)};}))`;
+        : `openCardById(${JSON.stringify(latest.id)})`;
       return row('📋', hl(name), sub, badge, action);
     }).join('');
   }
@@ -9626,6 +9626,14 @@ function openCustomerCards(customerName) {
   switchTab('saved');
 }
 
+// פתיחת כרטיס לפי id — השוואה עמידה (מספר/מחרוזת) כדי שתוצאות חיפוש ייפתחו תמיד
+function openCardById(id) {
+  var c = (cards||[]).find(function(x){ return String(x.id) === String(id); });
+  if (!c) { if (typeof showToast === 'function') showToast('⚠️ הכרטיס לא נמצא'); return; }
+  switchTab('saved');
+  if (typeof showPrintModal === 'function') showPrintModal(c);
+}
+
 // נקרא בלחיצה על "עבודה" בתוצאות החיפוש הכללי — פותח את כל העבודות הקשורות
 // לאותו חיפוש (לפי שם/לקוח/גודל/נייר/סוג/מכונה), במקום לפתוח כרטיס בודד
 function openSearchJobResults(query) {
@@ -9678,7 +9686,7 @@ function openJobHistory(jobName) {
       var meta = [cust, paper, size, machine].filter(Boolean).join(' · ');
       var delivStr = deliv ? (' | אספקה: ' + deliv) : '';
 
-      html += '<div onclick="closeJobHistory();switchTab(\'saved\');showPrintModal(cards.find(function(x){return x.id===' + JSON.stringify(c.id) + ';}))"' +
+      html += '<div onclick="closeJobHistory();openCardById(' + JSON.stringify(c.id) + ')"' +
         ' style="padding:13px 20px;cursor:pointer;border-bottom:1px solid #f3f4f6;display:flex;align-items:flex-start;gap:12px"' +
         ' onmouseover="this.style.background=\'#f8faff\'" onmouseout="this.style.background=\'\'">' +
         '<div style="flex:1;min-width:0">' +
@@ -9850,9 +9858,9 @@ function renderCards() {
   displayCards    = displayCards.filter(function(c){ return c.status !== 'trash'; });
   var activeCards = displayCards.filter(function(c){ return c.status !== 'done'; });
   var doneCards   = displayCards.filter(function(c){ return c.status === 'done'; });
-  if (_dashCardFilter) {
-    // בלחיצה על חלונית מהדאשבורד מציגים את כל הכרטיסים שתואמים ברשימה אחת
-    // (גם אם חלקם בסטטוס "הושלם"), בלי לפצל לאקטיביים/הושלמו
+  if (_dashCardFilter || _cardFilterQ) {
+    // בלחיצה על חלונית מהדאשבורד או בסינון חיפוש — מציגים את כל הכרטיסים התואמים
+    // ברשימה אחת (כולל "הושלם"), אחרת עבודות שהושלמו מסוננות החוצה ולא נפתחות
     activeCards = displayCards;
     doneCards = [];
   }
