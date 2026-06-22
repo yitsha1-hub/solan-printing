@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782120295';
+window.APP_VERSION = '1782121069';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -1155,11 +1155,7 @@ window._fbSnapshot = {};
       </div>
     </div>
     <div class="dash-kpis" id="dash-kpis"></div>
-    <div class="dash-grid-3">
-      <div class="dash-card" id="dash-m4"></div>
-      <div class="dash-card" id="dash-m8"></div>
-      <div class="dash-card" id="dash-pool"></div>
-    </div>
+    <div class="dash-card" id="dash-worklist" style="padding:0;overflow:hidden"></div>
     <div class="dash-card" id="dash-board"></div>
     <div class="dash-card" id="dash-dept-schedule"></div>
     <div class="dash-card" id="dash-activity"></div>
@@ -8347,7 +8343,10 @@ function renderWorkList() {
   });
   machinesHtml += '</div>';
 
-  el.innerHTML = '<div class="wl-split" style="display:flex;gap:0;padding:10px 2px;direction:rtl">' + poolHtml + machinesHtml + '</div>';
+  var wlHtml = '<div class="wl-split" style="display:flex;gap:0;padding:10px 2px;direction:rtl">' + poolHtml + machinesHtml + '</div>';
+  el.innerHTML = wlHtml;
+  var dashEl = document.getElementById('dash-worklist');
+  if (dashEl) dashEl.innerHTML = wlHtml;
 }
 
 function _loadTemplates() {
@@ -12696,8 +12695,7 @@ function renderDashboard() {
   }
   _safe('renderDashKPIs', renderDashKPIs);
   _safe('renderDashBoard', renderDashBoard);
-  _safe('renderDashMachinePanel', function(){ renderDashMachinePanel('מכונה 4 צבעים','dash-m4'); renderDashMachinePanel('מכונה 8 צבעים','dash-m8'); });
-  _safe('renderDashPool', renderDashPool);
+  _safe('renderWorkList', renderWorkList);
   _safe('renderDeptSchedule', function(){ DEPARTMENTS.forEach(function(d){ renderDeptSchedule(d); }); });
   _safe('renderActivityFeed', renderActivityFeed);
 }
