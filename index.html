@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782121310';
+window.APP_VERSION = '1782121361';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -8288,7 +8288,7 @@ function renderWorkList() {
 
   // ── RIGHT PANEL — מכונות ────────────────────────────────
   var colorMap = {'מכונה 4 צבעים':'#dbeafe','מכונה 8 צבעים':'#d1fae5'};
-  var machinesHtml = '<div class="wl-machines" style="flex:1;min-width:0;overflow-y:auto;max-height:calc(100vh - 160px)">';
+  var machinesHtml = '<div class="wl-machines" style="flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;overflow-y:auto;max-height:calc(100vh - 160px)">';
 
   MACHINES.forEach(function(machine, mi) {
     var bg = colorMap[machine] || '#f3f4f6';
