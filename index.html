@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782111067';
+window.APP_VERSION = '1782112336';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -7584,17 +7584,18 @@ function printWorkList(machine, withSpacing) {
 
     var copiesHtml = '';
     if (isGrouped) {
-      // מספר גיליונות לכל ריצה בנפרד
+      // שם ריצה בעמודת שם, כמות ריצה בעמודת כמות — מיושרים
       var runLines = g.runs.map(function(r) {
-        var lbl  = r.run ? (r.run.label || ('ריצה ' + (r.run.num || (r.e.runIdx+1)))) : '';
-        var cop  = r.run ? r.run.copies : c.copies;
+        var lbl    = r.run ? (r.run.label || ('ריצה ' + (r.run.num || (r.e.runIdx+1)))) : '';
         var tumble = r.run ? !!r.run.tumble : false;
-        return (lbl ? escHtml(lbl) : '') + (tumble ? ' 🔄' : '') + (cop ? ': <b>' + parseInt(cop).toLocaleString() + '</b>' : '');
+        return escHtml(lbl) + (tumble ? ' 🔄' : '');
       }).join('<br>');
-      nameHtml += '<br><span style="font-size:11px;color:#2563eb;font-weight:600;line-height:1.7">' + runLines + '</span>';
-      // סכום גיליונות
-      var total = g.runs.reduce(function(s,r){ return s + (parseInt((r.run ? r.run.copies : c.copies)||0)||0); }, 0);
-      copiesHtml = '<span style="font-size:11px;color:#6b7280">סה"כ</span><br><b>' + (total ? total.toLocaleString() : '—') + '</b>';
+      nameHtml += '<br><span style="font-size:11px;color:#2563eb;font-weight:600;line-height:1.9">' + runLines + '</span>';
+      var copiesLines = g.runs.map(function(r) {
+        var cop = r.run ? r.run.copies : c.copies;
+        return cop ? '<b>' + parseInt(cop).toLocaleString() + '</b>' : '—';
+      }).join('<br>');
+      copiesHtml = '<span style="font-size:11px;line-height:1.9">' + copiesLines + '</span>';
     } else {
       var r0  = g.runs[0];
       var run = r0.run;
