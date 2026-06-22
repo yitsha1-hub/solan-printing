@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782075542';
+window.APP_VERSION = '1782110683';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -2109,6 +2109,20 @@ window._fbSnapshot = {};
       <button class="btn btn-clear" onclick="closePaperModal()">סגור</button>
       <button class="btn btn-primary" onclick="savePaper()">💾 שמור עיתון</button>
     </div>
+  </div>
+</div>
+
+<!-- ===== JOB HISTORY MODAL ===== -->
+<div id="job-history-modal" style="display:none;position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:16px;box-sizing:border-box">
+  <div style="background:white;border-radius:14px;width:100%;max-width:640px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);direction:rtl">
+    <div style="padding:18px 20px 14px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div>
+        <div id="jhm-title" style="font-size:1.15rem;font-weight:800;color:#111"></div>
+        <div id="jhm-sub" style="font-size:.78rem;color:#6b7280;margin-top:2px"></div>
+      </div>
+      <button onclick="closeJobHistory()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#6b7280;line-height:1;padding:4px 8px">✕</button>
+    </div>
+    <div id="jhm-body" style="overflow-y:auto;flex:1;padding:8px 0"></div>
   </div>
 </div>
 
@@ -6752,10 +6766,17 @@ function renderGlobalSearch(q) {
   });
   const custList = Object.entries(custMap).sort((a,b)=>b[1]-a[1]).slice(0,6);
 
-  // ── עבודות (שם עבודה) ───────────────────────────────────
-  const jobHits = (cards||[]).filter(c =>
-    (c.name||'').toLowerCase().includes(lq) && c.name
-  ).slice(0,5);
+  // ── עבודות (שם עבודה) — מקובצות לפי שם ───────────────────
+  const jobNameMap = {};
+  (cards||[]).forEach(c => {
+    if (!(c.name||'').toLowerCase().includes(lq) || !c.name) return;
+    const n = c.name.trim();
+    if (!jobNameMap[n]) jobNameMap[n] = [];
+    jobNameMap[n].push(c);
+  });
+  const jobHits = Object.entries(jobNameMap)
+    .sort((a,b) => b[1].length - a[1].length)
+    .slice(0,6);
 
   // ── הזמנות ─────────────────────────────────────────────
   const orderHits = (orders||[]).filter(o =>
@@ -6799,10 +6820,18 @@ function renderGlobalSearch(q) {
 
   if (jobHits.length) {
     html += section('עבודות');
-    html += jobHits.map(c =>
-      row('📋', hl(c.name||''), [c.customer,c.size].filter(Boolean).join(' · '), 'פתח',
-        `switchTab('saved');showPrintModal(cards.find(function(x){return x.id===${JSON.stringify(c.id)};}))`)
-    ).join('');
+    html += jobHits.map(([name, cardsArr]) => {
+      const cnt = cardsArr.length;
+      const latest = cardsArr.slice().sort((a,b) => new Date(b.createdAt||0)-new Date(a.createdAt||0))[0];
+      const sub = cnt > 1
+        ? (cnt + ' כרטיסים · אחרון: ' + (latest.createdAt||'').slice(0,10))
+        : ([latest.customer, latest.size].filter(Boolean).join(' · '));
+      const badge = cnt > 1 ? (cnt + ' כרטיסים') : 'פתח';
+      const action = cnt > 1
+        ? `openJobHistory(${JSON.stringify(name)})`
+        : `switchTab('saved');showPrintModal(cards.find(function(x){return x.id===${JSON.stringify(latest.id)};}))`;
+      return row('📋', hl(name), sub, badge, action);
+    }).join('');
   }
 
   if (orderHits.length) {
@@ -9151,6 +9180,82 @@ function openSearchJobResults(query) {
   _dashCardFilter = null;
   switchTab('saved');
 }
+
+// ══════════════════════════════════════════════════════════
+// JOB HISTORY MODAL — כל הכרטיסים לאותו שם עבודה
+// ══════════════════════════════════════════════════════════
+function openJobHistory(jobName) {
+  var modal = document.getElementById('job-history-modal');
+  var titleEl = document.getElementById('jhm-title');
+  var subEl   = document.getElementById('jhm-sub');
+  var bodyEl  = document.getElementById('jhm-body');
+  if (!modal) return;
+
+  var hits = (cards||[]).filter(function(c){ return (c.name||'').trim() === jobName.trim(); });
+  hits.sort(function(a,b){
+    return new Date(b.createdAt||0) - new Date(a.createdAt||0);
+  });
+
+  titleEl.textContent = jobName;
+  subEl.textContent   = hits.length + ' כרטיסים בהיסטוריה';
+
+  var statusLabel = { 'done':'הושלם', 'active':'פעיל', 'pending':'ממתין', 'cancelled':'בוטל' };
+  var statusColor = { 'done':'#dcfce7;color:#166534', 'active':'#dbeafe;color:#1e40af', 'pending':'#fef9c3;color:#854d0e', 'cancelled':'#fee2e2;color:#991b1b' };
+
+  if (!hits.length) {
+    bodyEl.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af">לא נמצאו כרטיסים</div>';
+  } else {
+    var html = '';
+    hits.forEach(function(c) {
+      var st = c.status || 'active';
+      var stLbl  = statusLabel[st] || st;
+      var stClr  = statusColor[st] || '##f3f4f6;color:#374151';
+      var date   = c.createdAt ? c.createdAt.slice(0,10) : '—';
+      var deliv  = c.deliveryDate || '';
+      var paper  = c.paper || '';
+      var size   = c.size  || '';
+      var cust   = c.customer || '';
+      var machine= c.machine  || '';
+      var runs   = c.runs || [];
+      var totalSheets = 0;
+      runs.forEach(function(r){ totalSheets += parseInt(r.copies||r.sheets||0,10)||0; });
+      if (!totalSheets && c.copies) totalSheets = parseInt(c.copies,10)||0;
+
+      var meta = [cust, paper, size, machine].filter(Boolean).join(' · ');
+      var delivStr = deliv ? (' | אספקה: ' + deliv) : '';
+
+      html += '<div onclick="closeJobHistory();switchTab(\'saved\');showPrintModal(cards.find(function(x){return x.id===' + JSON.stringify(c.id) + ';}))"' +
+        ' style="padding:13px 20px;cursor:pointer;border-bottom:1px solid #f3f4f6;display:flex;align-items:flex-start;gap:12px"' +
+        ' onmouseover="this.style.background=\'#f8faff\'" onmouseout="this.style.background=\'\'">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+            '<span style="font-size:.82rem;font-weight:700;color:#374151">📅 ' + escHtml(date) + escHtml(delivStr) + '</span>' +
+            '<span style="font-size:.72rem;padding:2px 9px;border-radius:10px;background:' + stClr + ';font-weight:700">' + escHtml(stLbl) + '</span>' +
+          '</div>' +
+          '<div style="font-size:.8rem;color:#6b7280;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(meta) + '</div>' +
+          (totalSheets ? '<div style="font-size:.75rem;color:#9ca3af;margin-top:2px">' + totalSheets.toLocaleString() + ' גיליונות</div>' : '') +
+        '</div>' +
+        '<div style="font-size:.7rem;color:#9ca3af;flex-shrink:0;padding-top:2px">#' + escHtml(String(c.id)) + '</div>' +
+      '</div>';
+    });
+    bodyEl.innerHTML = html;
+  }
+
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeJobHistory() {
+  var modal = document.getElementById('job-history-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+// סגירה בלחיצה על הרקע
+document.addEventListener('click', function(e) {
+  var modal = document.getElementById('job-history-modal');
+  if (modal && modal.style.display === 'flex' && e.target === modal) closeJobHistory();
+});
 
 // נקרא בלחיצה על חלונית KPI בדאשבורד — פותח את רשימת העבודות מסוננת לפי הסטטוס הרלוונטי
 function openDashFilter(type, label) {
