@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782112696';
+window.APP_VERSION = '1782112854';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -7584,20 +7584,20 @@ function printWorkList(machine, withSpacing) {
 
     var copiesHtml = '';
     if (isGrouped) {
-      // שם ריצה בעמודת שם, כמות ריצה בעמודת כמות — מיושרים
+      // כל ריצה: שם ריצה ··· כמות — הכל בתוך עמודת שם, עם קו מנוקד ביניהם
       var runLines = g.runs.map(function(r) {
         var lbl    = r.run ? (r.run.label || ('ריצה ' + (r.run.num || (r.e.runIdx+1)))) : '';
         var tumble = r.run ? !!r.run.tumble : false;
-        return escHtml(lbl) + (tumble ? ' 🔄' : '');
-      }).join('<br>');
-      nameHtml += '<br><span style="font-size:11px;color:#2563eb;font-weight:600;line-height:1.9">' + runLines + '</span>';
-      var copiesLines = g.runs.map(function(r) {
-        var cop = r.run ? r.run.copies : c.copies;
-        return cop ? '<b>' + parseInt(cop).toLocaleString() + '</b>' : '—';
-      }).join('<br>');
-      // שורה ריקה ראשונה מיושרת מול שם העבודה; הכמויות מתחת — מול הריצות
-      copiesHtml = '<span style="font-size:13px;line-height:1.5;display:block">&nbsp;</span>'
-                 + '<span style="font-size:11px;line-height:1.9">' + copiesLines + '</span>';
+        var cop    = r.run ? r.run.copies : c.copies;
+        var copStr = cop ? '<b style="white-space:nowrap">' + parseInt(cop).toLocaleString() + ' גיל\'</b>' : '<b>—</b>';
+        return '<div style="display:flex;align-items:baseline;gap:3px;direction:rtl;margin-top:2px">'
+          + '<span style="white-space:nowrap;color:#2563eb;font-weight:700">↳ ' + escHtml(lbl) + (tumble ? ' 🔄' : '') + '</span>'
+          + '<span style="flex:1;border-bottom:1.5px dotted #94a3b8;margin:0 5px 3px"></span>'
+          + copStr
+          + '</div>';
+      }).join('');
+      nameHtml += '<div style="margin-top:3px">' + runLines + '</div>';
+      copiesHtml = '&nbsp;';
     } else {
       var r0  = g.runs[0];
       var run = r0.run;
