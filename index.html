@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782121361';
+window.APP_VERSION = '1782121586';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -2173,6 +2173,7 @@ window._fbSnapshot = {};
         <button class="btn" style="background:#6366f1;color:white;border-color:#6366f1" onclick="emailCard()">✉️ מייל</button>
         <button class="btn" style="background:#475569;color:white;border-color:#475569" onclick="downloadCardPdf()">⬇️ הורדה</button>
         <button class="btn btn-primary" id="print-modal-save-btn" onclick="saveFromPreview()" style="display:none">💾 שמור כרטיס</button>
+        <button class="btn" id="print-modal-delete-btn" onclick="softDeleteCard(window._printModalCardId)" style="background:#991b1b;color:white;border-color:#991b1b;display:none">🗑️ מחק</button>
         <button class="btn btn-outline-w" onclick="closePrintModal()">סגור</button>
       </div>
     </div>
@@ -2975,7 +2976,7 @@ function addHistory(key, val) {
 
 function updateBadge() {
   const b = document.getElementById('count-badge');
-  const active = cards.filter(c => c.status !== 'done').length;
+  const active = cards.filter(c => c.status !== 'done' && c.status !== 'trash').length;
   b.textContent = active ? '('+active+')' : '';
   const mb = document.getElementById('mob-badge');
   if (mb) mb.textContent = active ? active : '';
@@ -5868,6 +5869,9 @@ function showPrintModal(card) {
   window._modalReturnScrollY = window.scrollY || window.pageYOffset || 0;
   document.getElementById('print-card-content').innerHTML = buildPrintCard(card);
   document.getElementById('print-modal-save-btn').style.display = 'none';
+  var _delBtn = document.getElementById('print-modal-delete-btn');
+  if (_delBtn) _delBtn.style.display = (card.id && card.id !== 'preview') ? 'inline-block' : 'none';
+  window._printModalCardId = card.id;
   document.getElementById('print-modal').classList.add('open');
   // card שמגיע לכאן הוא כרטיס שכבר שמור (id אמיתי) — יש לשמור את הרפרנס אליו
   // כדי שלחיצה על "הדפס" תוך כדי הצפייה תרשום printedAt/היסטוריית הדפסה כראוי
@@ -8158,7 +8162,7 @@ function renderWorkList() {
 
   // ── LEFT PANEL — בריכת עבודות ──────────────────────────
   var poolCards = allCards.filter(function(c){
-    if (c.status === 'done') return false;
+    if (c.status === 'done' || c.status === 'trash') return false;
     if (!_showWeekly && _isWeeklySourceCard(c)) return false;
     return true;
   });
@@ -9307,6 +9311,30 @@ function checkLowInventory() {
   document.body.prepend(banner);
 }
 
+function softDeleteCard(id) {
+  if (!id || id === 'preview') return;
+  var c = cards.find(function(x){ return String(x.id) === String(id); });
+  if (!c) return;
+  if (!confirm('להעביר "' + (c.name || 'ללא שם') + '" לרשימת נמחקו?')) return;
+  c.status = 'trash';
+  c.deletedAt = new Date().toISOString();
+  persist();
+  closePrintModal();
+  renderCards();
+  if (typeof renderWorkList === 'function') renderWorkList();
+  showToast('🗑️ הועבר לנמחקו');
+}
+
+function restoreCard(id) {
+  var c = cards.find(function(x){ return String(x.id) === String(id); });
+  if (!c) return;
+  c.status = 'pending';
+  delete c.deletedAt;
+  persist();
+  renderCards();
+  showToast('↩ כרטיס שוחזר');
+}
+
 function deleteCard(id) {
   const item = cards.find(c=>c.id===id);
   if (!item) return;
@@ -9612,6 +9640,8 @@ function renderCards() {
       '<span style="font-size:.9rem;font-weight:700;color:#c2410c;flex:1">📊 ' + escHtml(_dashCardFilter.label) + ' (' + displayCards.length + ')</span>' +
       '<button onclick="clearCardFilter()" style="background:none;border:none;cursor:pointer;color:#6b7280;font-size:1rem;font-weight:700;padding:0 4px">✕ הצג הכל</button></div>';
   }
+  var trashCards  = displayCards.filter(function(c){ return c.status === 'trash'; });
+  displayCards    = displayCards.filter(function(c){ return c.status !== 'trash'; });
   var activeCards = displayCards.filter(function(c){ return c.status !== 'done'; });
   var doneCards   = displayCards.filter(function(c){ return c.status === 'done'; });
   if (_dashCardFilter) {
@@ -9636,6 +9666,34 @@ function renderCards() {
     ? activeCards.map(_jobCardHtml).join('')
     : '<div style="text-align:center;padding:40px 20px;color:#9ca3af"><div style="font-size:2.4rem;margin-bottom:10px">🎉</div><div style="font-size:1rem;font-weight:700;color:#374151">אין עבודות פעילות כרגע</div></div>');
   _updateCompletedCardsSection(doneCards);
+  // קטע נמחקו
+  var trashEl = document.getElementById('cards-trash-section');
+  if (!trashEl) {
+    trashEl = document.createElement('div');
+    trashEl.id = 'cards-trash-section';
+    el.parentNode.insertBefore(trashEl, el.nextSibling);
+  }
+  if (trashCards.length) {
+    var sq2 = function(v){ return "'" + String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'"; };
+    var trashHtml = '<details style="margin:10px 0 4px"><summary style="cursor:pointer;font-size:.8rem;font-weight:700;color:#991b1b;padding:6px 2px;list-style:none;user-select:none">🗑️ נמחקו (' + trashCards.length + ')</summary>'
+      + '<div style="margin-top:6px;display:flex;flex-direction:column;gap:6px">';
+    trashCards.forEach(function(c) {
+      var delDate = c.deletedAt ? new Date(c.deletedAt).toLocaleDateString('he-IL') : '';
+      trashHtml += '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#fff5f5;border:1px solid #fecaca;border-radius:8px">'
+        + '<div style="flex:1;min-width:0">'
+        + '<div style="font-size:.85rem;font-weight:700;color:#7f1d1d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(c.name || 'ללא שם') + '</div>'
+        + (delDate ? '<div style="font-size:.7rem;color:#9ca3af">נמחק ' + delDate + '</div>' : '')
+        + '</div>'
+        + '<button onclick="restoreCard(' + sq2(c.id) + ')" style="font-size:.72rem;padding:3px 9px;border:1px solid #fca5a5;background:white;color:#991b1b;border-radius:6px;cursor:pointer;white-space:nowrap">↩ שחזר</button>'
+        + '<button onclick="deleteCard(' + sq2(c.id) + ')" style="font-size:.72rem;padding:3px 9px;border:1px solid #ef4444;background:#ef4444;color:white;border-radius:6px;cursor:pointer;white-space:nowrap">מחק לצמיתות</button>'
+        + '</div>';
+    });
+    trashHtml += '</div></details>';
+    trashEl.innerHTML = trashHtml;
+    trashEl.style.display = '';
+  } else {
+    trashEl.style.display = 'none';
+  }
   // כפתור היסטוריית הדפסות אם יש רשומות
   if (printLog.length) {
     el.insertAdjacentHTML('afterend',
