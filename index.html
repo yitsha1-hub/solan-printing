@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782215649';
+window.APP_VERSION = '1782215851';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -4892,6 +4892,32 @@ function _rmUpdateTumble(idx, machine, canTumble) {
   var show = canTumble && machine === 'מכונה 4 צבעים';
   btn.style.display = show ? 'inline-flex' : 'none';
   if (!show) { currentRuns[idx].tumble = false; }
+}
+
+// ── צירוף פרופר ישירות מרשימת הכרטיסים (ללא פתיחת עריכה) ──
+function _cardListProofPick(cardId) {
+  var inp = document.getElementById('cl-proof-input');
+  if (!inp) {
+    inp = document.createElement('input');
+    inp.type = 'file'; inp.id = 'cl-proof-input';
+    inp.accept = 'application/pdf,image/*';
+    inp.style.display = 'none';
+    inp.onchange = function() { _onCardListProofPicked(this); };
+    document.body.appendChild(inp);
+  }
+  inp.dataset.cardId = String(cardId);
+  inp.value = '';
+  inp.click();
+}
+function _onCardListProofPicked(input) {
+  var file = input.files && input.files[0];
+  var cardId = input.dataset.cardId;
+  input.value = '';
+  if (!file || !cardId) return;
+  _readProofFile(file, function(proof) {
+    _saveProofFor(cardId, proof);
+    showToast('📄 פרופר נשמר');
+  });
 }
 
 function _toggleSplitRun(idx) {
@@ -9990,16 +10016,9 @@ function _jobCardHtml(c) {
       ${c.internalNotes?'<div style="padding:7px 16px;font-size:.84rem;background:#fffbeb;border-bottom:1px solid #fde68a;color:#92400e"><strong>🔒 פנימי:</strong> '+escHtml(c.internalNotes)+'</div>':''}
       ${(c.runs&&c.runs.length)?'<div class="jc-runs">'+c.runs.map(r=>'<span class="run-chip">ריצה '+r.num+': '+r.pages+' עמ\' · '+r.copies.toLocaleString()+' יח\''+(r.machine?' · '+r.machine:'')+'</span>').join('')+'</div>':''}
       <div class="jc-actions">
-        <select style="font-family:Heebo,sans-serif;font-weight:600;font-size:.82rem;padding:4px 8px;border:1.5px solid #ccc;border-radius:5px;background:white;cursor:pointer"
-          onchange="setStatus(${c.id},this.value)">
-          <option value="pending"    ${c.status==='pending'?'selected':''}>ממתין</option>
-          <option value="inprogress" ${c.status==='inprogress'?'selected':''}>בדפוס</option>
-          <option value="done"       ${c.status==='done'?'selected':''}>הושלם</option>
-        </select>
         <button class="btn btn-sm" style="background:#f0f4ff;color:#2d3561;border:1.5px solid #c0ccf0" onclick="editCard(${c.id})">✏️ ערוך</button>
         <button class="btn btn-sm" style="background:#f0fdf4;color:#0f6347;border:1.5px solid #6ee7b7" onclick="showPrintModal(cards.find(c=>c.id===${c.id}))">👁️ צפה</button>
-        <button class="btn btn-sm btn-gold" onclick="doPrintCard(${c.id})">🖨️ הדפס</button>
-        <button class="btn btn-sm" style="background:#0d6efd;color:white;border-color:#0d6efd" onclick="emailCardDirectToPP(${c.id})">📧 קדם דפוס</button>
+        <button class="btn btn-sm" style="background:${c.hasProof?'#ede9fe':'#f5f3ff'};color:#5b21b6;border:1.5px solid #ddd6fe" onclick="_cardListProofPick(${c.id})">${c.hasProof?'📄 עדכן פרופר':'📎 הוסף פרופר'}</button>
         <button class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1.5px solid #25D366" onclick="whatsappCard(${c.id})">📱 וואטסאפ</button>
         <button class="btn btn-sm" style="background:#eef2ff;color:#4338ca;border:1.5px solid #c7d2fe" onclick="emailCard(${c.id})">✉️ מייל</button>
         <button class="btn btn-sm" style="background:#f1f5f9;color:#334155;border:1.5px solid #cbd5e1" onclick="downloadCardPdf(${c.id})">⬇️ הורדה</button>
