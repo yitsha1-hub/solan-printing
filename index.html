@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782213696';
+window.APP_VERSION = '1782213973';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -13794,6 +13794,7 @@ function _renderOperatorScreen() {
           + '<div style="background:#1a1a4e;border-radius:10px;padding:14px 16px"><div style="font-size:.7rem;color:rgba(255,255,255,.55);font-weight:600;letter-spacing:.04em">כמות גיליונות</div><div style="font-size:1.1rem;font-weight:700;color:white;margin-top:4px">' + (pi.copies ? parseInt(pi.copies).toLocaleString() : '—') + '</div></div>'
           + '</div>'
           + (pi.tumble ? '<div style="margin-top:10px;font-size:.82rem;color:#1d4ed8;font-weight:700">🔄 גיליון מתהפך</div>' : '')
+          + (pi.c && pi.c.hasProof ? '<button onclick="_viewProof(' + pi.c.id + ')" style="width:100%;margin-top:12px;padding:13px;border-radius:10px;border:none;background:#7c3aed;color:white;font-size:.95rem;font-weight:900;cursor:pointer;font-family:Heebo,sans-serif;letter-spacing:.01em">📄 פרופר / פריסת העיתון</button>' : '')
           + (nextEntry
             ? '<button onclick="_opStartPrinting(' + sq(nextEntry.qid) + ')" style="width:100%;margin-top:16px;padding:14px;border-radius:10px;border:none;background:#16a34a;color:white;font-size:1rem;font-weight:900;cursor:pointer;font-family:Heebo,sans-serif;-webkit-tap-highlight-color:transparent">✓ הושלם — התחל הבא</button>'
             : '<button onclick="_opStartPrinting(null);_operatorMarkDone(' + qSq + ')" style="width:100%;margin-top:16px;padding:14px;border-radius:10px;border:none;background:#16a34a;color:white;font-size:1rem;font-weight:900;cursor:pointer;font-family:Heebo,sans-serif">✓ סיים עבודה אחרונה</button>')
