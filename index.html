@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782221717';
+window.APP_VERSION = '1782222106';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -5496,16 +5496,156 @@ function _dataUrlToBlob(dataUrl) {
   return new Blob([u8], { type: mime });
 }
 
+// ── PDF page-count estimator (works for most non-compressed PDFs) ──────────
+function _countPdfPages(dataUrl) {
+  try {
+    var b64 = (dataUrl + '').replace(/^data:[^,]+,/, '');
+    var bin = atob(b64);
+    // /Count N in Pages dict — take the maximum (root value = total)
+    var counts = [];
+    var re = /\/Count\s+(\d+)/g, m;
+    while ((m = re.exec(bin)) !== null) counts.push(parseInt(m[1]));
+    if (counts.length) return Math.max.apply(null, counts);
+    // fallback: literal /Type /Page (not /Pages) tags
+    return (bin.match(/\/Type\s*\/Page[\s\n\r\/\[<]/g) || []).length || null;
+  } catch(e) { return null; }
+}
+
+// ── build warnings + checklist for a proof ────────────────────────────────
+function _getProofAnalysis(card, pdfPageCount) {
+  var runs = (card && card.runs && card.runs.length) ? card.runs : [];
+  var totalPages = runs.reduce(function(s,r){ return s + (parseInt(r.pages)||0); }, 0);
+  if (!totalPages && card) totalPages = parseInt(card.pages) || 0;
+
+  // Determine method per run (or card-level machine)
+  var runInfos = runs.map(function(r, i) {
+    var m = (r.machine || card.machine || '').trim();
+    var is8 = /8/.test(m);
+    var is4 = !is8 && /4/.test(m);
+    return { num: r.num || (i+1), pages: parseInt(r.pages)||0, machine: m, is8: is8, is4: is4 };
+  });
+
+  var errors = [], warnings = [], infos = [], checklist = [];
+
+  // 1. page divisibility per run
+  runInfos.forEach(function(r) {
+    if (!r.pages) return;
+    if (r.pages % 4 !== 0) {
+      errors.push('ריצה ' + r.num + ' (' + r.machine + '): ' + r.pages + ' עמ\' — לא מתחלק ב-4, לא ניתן לאגד לגיליון שלם.');
+    } else if (r.is8 && r.pages % 8 !== 0) {
+      warnings.push('ריצה ' + r.num + ' — פרפקטור עם ' + r.pages + ' עמ\' לא מתחלק ב-8 (בדוק שהאגד נכון לשני צדדים).');
+    }
+  });
+
+  // 2. PDF page count vs expected
+  if (pdfPageCount) {
+    var expected = totalPages;
+    var spreads  = Math.ceil(totalPages / 2);
+    var ok = (pdfPageCount === expected) || (pdfPageCount === spreads)
+          || (totalPages > 0 && totalPages % pdfPageCount === 0);
+    if (!ok && totalPages > 0) {
+      warnings.push('קובץ הפרופר מכיל ' + pdfPageCount + ' עמ\' — העבודה כוללת ' + totalPages + ' עמ\'. בדוק שכל העמודים כלולים.');
+    } else if (totalPages > 0) {
+      infos.push('מספר עמודים בקובץ: ' + pdfPageCount + ' ✓');
+    }
+  }
+
+  // 3. method-specific checklists
+  var hasPerfector = runInfos.some(function(r){ return r.is8; });
+  var hasTumble    = runInfos.some(function(r){ return r.is4; });
+
+  if (hasPerfector) {
+    var n = totalPages || '?';
+    checklist.push({
+      label: '🖨️ פרפקטור (8 צבעים)',
+      items: [
+        'עמ\' 1 מול עמ\' ' + n + ', עמ\' 2 מול עמ\' ' + (parseInt(n)-1 || '?') + ' וכן הלאה',
+        'הדפסה דו-צדדית בו-זמנית — וודא שהאגד לפי שיטת פרפקטור',
+        'גב הגיליון הפוך ביחס לפנים — לא ראי ולא מתהפך',
+        'בדוק מיקום גרד/מרכז בשני הצדדים'
+      ]
+    });
+  }
+  if (hasTumble) {
+    checklist.push({
+      label: '🔄 מתהפך (4 צבעים)',
+      items: [
+        'הגיליון מסתובב על הציר הקצר (Tumble) — לא הארוך',
+        'וודא שהפריסה הפוכה בצד ב\' על אותו מרכז כמו צד א\'',
+        'חלקה תחתונה בצד א\' = חלקה עליונה בצד ב\'',
+        'בדוק שסדר העמודים מתאים לאגד מתהפך'
+      ]
+    });
+  }
+
+  return { errors: errors, warnings: warnings, infos: infos, checklist: checklist, totalPages: totalPages };
+}
+
+// ── modal that shows analysis and lets user open the proof ─────────────────
+function _showProofAnalysisModal(analysis, cardName, onOpen) {
+  var hasErrors = analysis.errors.length > 0;
+  var hasIssues = hasErrors || analysis.warnings.length > 0;
+
+  var badge = hasErrors   ? { bg:'#991b1b', text:'⚠️ בעיות חמורות בפרופר — יש לתקן לפני הדפסה' }
+            : hasIssues   ? { bg:'#92400e', text:'⚠️ הערות לפני פתיחת הפרופר' }
+            : { bg:'#1e3a5f', text:'📋 בדיקת פרופר לפני פתיחה' };
+
+  function row(icon, color, border, txt) {
+    return '<div style="background:' + color + ';border:1px solid ' + border + ';border-radius:8px;padding:9px 12px;margin-bottom:7px;font-size:.84rem;line-height:1.5;color:#1e293b">' + icon + ' ' + txt + '</div>';
+  }
+
+  var body = '';
+  analysis.errors.forEach(function(t)  { body += row('🔴','#fef2f2','#fca5a5',t); });
+  analysis.warnings.forEach(function(t){ body += row('🟡','#fffbeb','#fde68a',t); });
+  analysis.infos.forEach(function(t)   { body += row('✅','#f0fdf4','#86efac',t); });
+
+  if (analysis.checklist.length) {
+    analysis.checklist.forEach(function(cl) {
+      body += '<div style="margin-top:10px;margin-bottom:4px;font-size:.82rem;font-weight:800;color:#374151">' + cl.label + '</div>';
+      cl.items.forEach(function(item, i) {
+        body += '<label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:5px;cursor:pointer">'
+          + '<input type="checkbox" id="pc-' + i + '" style="margin-top:3px;flex-shrink:0">'
+          + '<span style="font-size:.82rem;color:#374151">' + item + '</span></label>';
+      });
+    });
+  }
+
+  var html = '<div id="proof-analysis-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px">'
+    + '<div style="background:white;border-radius:14px;max-width:480px;width:100%;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.45);font-family:Heebo,sans-serif">'
+    + '<div style="background:' + badge.bg + ';color:white;padding:13px 18px;border-radius:14px 14px 0 0;font-weight:800;font-size:.95rem">' + badge.text + '</div>'
+    + (cardName ? '<div style="padding:10px 18px 0;font-size:.82rem;color:#64748b;font-weight:600">עבודה: ' + cardName + '</div>' : '')
+    + '<div style="padding:14px 18px">' + body + '</div>'
+    + '<div style="padding:12px 18px;border-top:1px solid #e2e8f0;display:flex;gap:8px;justify-content:flex-end">'
+    + '<button onclick="document.getElementById(\'proof-analysis-overlay\').remove()" style="padding:9px 18px;border:1.5px solid #e2e8f0;background:white;border-radius:8px;cursor:pointer;font-weight:700;font-family:Heebo,sans-serif">סגור</button>'
+    + '<button id="proof-analysis-open-btn" style="padding:9px 20px;border:none;background:#7c3aed;color:white;border-radius:8px;cursor:pointer;font-weight:800;font-family:Heebo,sans-serif">📄 פתח פרופר</button>'
+    + '</div></div></div>';
+
+  var div = document.createElement('div');
+  div.innerHTML = html;
+  document.body.appendChild(div.firstElementChild);
+  document.getElementById('proof-analysis-open-btn').onclick = function() {
+    document.getElementById('proof-analysis-overlay').remove();
+    onOpen();
+  };
+}
+
 function _viewProof(cardId) {
   if (!cardId || cardId === 'preview') return;
   showToast('📄 טוען פרופר...');
+  var card = (cards||[]).find(function(c){ return String(c.id) === String(cardId); });
   window._fbGet('proofs/' + cardId).then(function(p) {
     if (!p || !p.data) { showToast('⚠️ אין פרופר מצורף לכרטיס זה'); return; }
     try {
-      var url = URL.createObjectURL(_dataUrlToBlob(p.data));
-      var w = window.open(url, '_blank');
-      if (!w) { showToast('יש לאפשר חלונות קופצים בדפדפן'); return; }
-      setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+      var pdfCount = (p.type === 'application/pdf') ? _countPdfPages(p.data) : null;
+      var analysis = _getProofAnalysis(card, pdfCount);
+      var doOpen = function() {
+        var url = URL.createObjectURL(_dataUrlToBlob(p.data));
+        var w = window.open(url, '_blank');
+        if (!w) { showToast('יש לאפשר חלונות קופצים בדפדפן'); return; }
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+      };
+      // Always show the analysis modal (checklist is always useful)
+      _showProofAnalysisModal(analysis, card && (card.name||card.customer), doOpen);
     } catch(e) { showToast('⚠️ שגיאה בטעינת הפרופר'); }
   });
 }
