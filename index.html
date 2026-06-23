@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782220029';
+window.APP_VERSION = '1782221717';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -13825,9 +13825,8 @@ function _renderOperatorScreen() {
           + '</div>'
           + (pi.tumble ? '<div style="margin-top:10px;font-size:.82rem;color:#1d4ed8;font-weight:700">🔄 גיליון מתהפך</div>' : '')
           + (pi.c && pi.c.hasProof ? '<button onclick="_viewProof(' + pi.c.id + ')" style="width:100%;margin-top:12px;padding:13px;border-radius:10px;border:none;background:#7c3aed;color:white;font-size:.95rem;font-weight:900;cursor:pointer;font-family:Heebo,sans-serif;letter-spacing:.01em">📄 פרופר / פריסת העיתון</button>' : '')
-          + (nextEntry
-            ? '<button onclick="_opStartPrinting(' + sq(nextEntry.qid) + ')" style="width:100%;margin-top:16px;padding:14px;border-radius:10px;border:none;background:#16a34a;color:white;font-size:1rem;font-weight:900;cursor:pointer;font-family:Heebo,sans-serif;-webkit-tap-highlight-color:transparent">✓ הושלם — התחל הבא</button>'
-            : '<button onclick="_opStartPrinting(null);_operatorMarkDone(' + qSq + ')" style="width:100%;margin-top:16px;padding:14px;border-radius:10px;border:none;background:#16a34a;color:white;font-size:1rem;font-weight:900;cursor:pointer;font-family:Heebo,sans-serif">✓ סיים עבודה אחרונה</button>')
+          + '<button onclick="_opReturnToPrintQueue()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;border:1.5px solid #fbbf24;background:#fffbeb;color:#92400e;font-size:.85rem;font-weight:700;cursor:pointer;font-family:Heebo,sans-serif;-webkit-tap-highlight-color:transparent">↩ החזר לתור</button>'
+          + '<button onclick="_opStartPrinting(null)" style="width:100%;margin-top:8px;padding:14px;border-radius:10px;border:none;background:#16a34a;color:white;font-size:1rem;font-weight:900;cursor:pointer;font-family:Heebo,sans-serif;-webkit-tap-highlight-color:transparent">✓ סיים עבודה</button>'
           + '</div>';
       }
     } else if (active.length) {
@@ -13998,6 +13997,11 @@ function _operatorMarkDone(qid) {
   e.doneByName = _machineViewOpName;
   localStorage.setItem('solanMachineQueue', JSON.stringify(machineQueue));
   if (window._fbPut) window._fbPut('machineQueue', machineQueue);
+  _renderOperatorScreen();
+}
+
+function _opReturnToPrintQueue() {
+  _opSetPrinting(_machineViewMachine, null);
   _renderOperatorScreen();
 }
 
