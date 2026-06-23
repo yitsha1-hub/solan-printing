@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782214704';
+window.APP_VERSION = '1782215649';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -5408,10 +5408,10 @@ function _onProofPicked(input) {
   input.value = '';
   if (!file) return;
   _readProofFile(file, function(proof) {
-    if (window._editingCardId) { _saveProofFor(window._editingCardId, proof); window._formProof = null; }
-    else { window._formProof = proof; }
+    // שמור תמיד ב-_formProof — הפרופר יועלה לכרטיס רק בשמירה (מניעת renderCards באמצע עריכה)
+    window._formProof = proof;
     _updateProofFormStatus();
-    showToast('📄 פרופר נטען');
+    showToast('📄 פרופר נטען — ייאוחסן בשמירת הכרטיס');
   });
 }
 
@@ -5442,7 +5442,8 @@ function _clearFormProof() {
     var c = (cards||[]).find(function(x){ return String(x.id) === String(window._editingCardId); });
     if (c && c.hasProof) {
       if (window._fbPut) window._fbPut('proofs/' + c.id, null);
-      c.hasProof = false; delete c.proofName; delete c.proofType; persist(); if (typeof renderCards==='function') renderCards();
+      c.hasProof = false; delete c.proofName; delete c.proofType;
+      // persist + renderCards יקראו בשמירת הכרטיס — לא כאן כדי לא לאפס את הטופס
     }
   }
   _updateProofFormStatus();
@@ -5503,6 +5504,14 @@ function saveCard() {
       updated.proofName = existing.proofName;
       updated.proofType = existing.proofType;
       Object.assign(existing, updated);
+      // פרופר חדש שנבחר בזמן עריכה — שמור עכשיו (לא מוקדם יותר כדי לא לאפס טופס)
+      if (window._formProof) {
+        existing.hasProof = true;
+        existing.proofName = window._formProof.name;
+        existing.proofType = window._formProof.type;
+        if (window._fbPut) window._fbPut('proofs/' + existing.id, window._formProof);
+        window._formProof = null;
+      }
       // עריכה מחדש של הכרטיס היא פעולה מפורשת — אם הוא הוסר בעבר מרשימת מכונה כלשהי, אפשר שיופיע בה שוב
       _loadWorkOrder();
       WORKLIST_MACHINES.forEach(function(m){
