@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782306115';
+window.APP_VERSION = '1782306878';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -550,6 +550,21 @@ textarea.fi{resize:none;min-height:52px;}
   .print-modal-bar{border-radius:18px 18px 0 0;}
   .pma{flex-wrap:wrap;gap:6px;}
   .pma .btn{flex:1;min-width:0;font-size:.78rem;padding:10px 5px;}
+
+  /* ── כרטיס עבודה (צפה) — התאמה למובייל ── */
+  .print-card-wrap{padding:8px;}
+  .print-card{font-size:.9rem;}
+  .pc-title{padding:10px 12px;}
+  .pc-title h2{font-size:1.05rem;}
+  .pc-title small{font-size:.68rem;}
+  .pc-row{min-height:30px;}
+  .pc-row-tall{min-height:46px;}
+  .pc-label{width:92px;min-width:92px;padding:6px 8px;font-size:.7rem;}
+  .pc-value{padding:6px 9px;font-size:.84rem;}
+  /* טבלת ריצות ותכנים רחבים — גלילה אופקית במקום חיתוך */
+  .print-card-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .print-card table{font-size:.7rem !important;}
+  .print-card table th,.print-card table td{padding:4px 5px !important;}
 
   /* ── מלאי ── */
   #inventory-table-wrap{display:none !important;}
@@ -12905,10 +12920,24 @@ function _playNewCardSound() {
 document.addEventListener('visibilitychange', function(){ if (!document.hidden) _stopFlashWindow(); });
 window.addEventListener('focus', _stopFlashWindow);
 
+// האם המשתמש מקליד/עורך שדה כרגע — אם כן, אסור לדרוס את ה-DOM ולגנוב פוקוס
+function _isUserEditing() {
+  var el = document.activeElement;
+  if (!el) return false;
+  var tag = (el.tagName||'').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable) return true;
+  // טופס כרטיס פתוח (יצירה/עריכה) — אל תרענן אפילו אם הפוקוס לרגע מחוץ לשדה
+  var vn = document.getElementById('view-new');
+  if (vn && vn.style.display !== 'none') return true;
+  return false;
+}
+
 async function _fbPollAll() {
   // אם הייתה כתיבה מקומית בשניות האחרונות (למשל מחיקת כרטיס) — דלג על הסבב הזה
   // כדי שלא נמשוך מהשרת נתון ישן (לפני שהכתיבה שלנו הגיעה) וננטרל את השינוי המקומי
   if (Date.now() - (window._lastLocalWriteAt||0) < 4000) return;
+  // אם המשתמש מקליד/עורך כרטיס כרגע — דלג כדי לא לדרוס את הטופס ולגנוב פוקוס
+  if (_isUserEditing()) return;
   try {
     var _pend = window._fbPendingPuts || {};
     // כרטיסים
