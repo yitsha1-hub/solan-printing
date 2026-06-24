@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782319588';
+window.APP_VERSION = '1782321318';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -5657,6 +5657,7 @@ function saveCard() {
         if (_workOrderExcluded[m]) _workOrderExcluded[m] = _workOrderExcluded[m].filter(function(id){ return id !== existing.id; });
       });
       _saveWorkOrder();
+      _autoQueueAssignedRuns(existing); // ריצות ששויכו למכונה — הכנס אוטומטית לתור המכונה
       persist();
       renderCards();
       window._editingCardId = null;
@@ -5708,6 +5709,7 @@ function _saveCardNew() {
     showCardValidationModal(warns, function() {
       _attachPendingProof(card);
       cards.unshift(card);
+      _autoQueueAssignedRuns(card);
       persist();
       _logActivity('🆕', 'עבודה "'+card.name+'" נוצרה');
       showPrintModal(card);
@@ -5718,6 +5720,7 @@ function _saveCardNew() {
   }
   _attachPendingProof(card);
   cards.unshift(card);
+  _autoQueueAssignedRuns(card);
   persist();
   _logActivity('🆕', 'עבודה "'+card.name+'" נוצרה');
   showPrintModal(card);
@@ -8780,7 +8783,7 @@ function renderWorkList() {
   if (!el) return;
   var MACHINES = ['מכונה 4 צבעים','מכונה 8 צבעים'];
   var allCards = cards || [];
-  var _showWeekly = window._queueShowWeekly || false;
+  var _showWeekly = (window._queueShowWeekly !== false); // ברירת מחדל: מציג גם עבודות שבועיות ברשימת הזמינות
 
   // ── LEFT PANEL — בריכת עבודות ──────────────────────────
   var poolCards = allCards.filter(function(c){
@@ -9462,6 +9465,33 @@ function _queueAddEntry(cardId, runIdx, machine) {
   _queueRender();
   var label = runIdx >= 0 && c.runs && c.runs[runIdx] ? (c.runs[runIdx].label||('ריצה '+(runIdx+1))) : (c.name||'');
   showToast('✅ "' + label + '" נוסף לתור ' + machine);
+}
+
+// הוספה אוטומטית ושקטה לתור המכונות לכל ריצה ששויכה למכונה (ללא טוסט/אישור).
+// נקרא בשמירת/יצירת כרטיס — כך שעבודה שנבחרה לה מכונה לכל ריצה נכנסת לבד לרשימת המכונה.
+function _autoQueueAssignedRuns(card) {
+  if (!card || card.status === 'done' || card.status === 'trash') return false;
+  var changed = false;
+  function addIfNeeded(runIdx, machine) {
+    if (!machine) return;
+    // אל תוסיף אם כבר קיים רישום (פעיל או שהושלם) לאותה עבודה+ריצה — מונע כפילויות והחזרה של עבודות שהוסרו/הושלמו
+    var exists = (machineQueue||[]).some(function(e){ return String(e.cardId)===String(card.id) && e.runIdx===runIdx; });
+    if (exists) return;
+    var order = (machineQueue||[]).filter(function(e){ return e.machine===machine && !e.done; }).length;
+    machineQueue.push({
+      qid: String(Date.now()) + String(Math.floor(Math.random()*9999)),
+      cardId: String(card.id), runIdx: runIdx, machine: machine, order: order,
+      estMinutes: null, done: false, doneAt: null, doneBy: null, doneByName: null,
+      addedAt: new Date().toISOString(), addedBy: (currentUser ? currentUser.id : null)
+    });
+    changed = true;
+  }
+  if (card.runs && card.runs.length) {
+    card.runs.forEach(function(r, i){ if (r && r.machine) addIfNeeded(i, r.machine); });
+  } else if (card.machine) {
+    addIfNeeded(-1, card.machine);
+  }
+  return changed;
 }
 
 function _queueRemoveEntry(qid) {
