@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782317743';
+window.APP_VERSION = '1782318179';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -7767,8 +7767,8 @@ function _renderDeptEntry(dept, entry, idx, total) {
       + '<span class="dept-sched-item-idx">'+(idx+1)+'.</span>'
       + movesHtml
       + '<input type="text" class="dept-sched-manual-input" placeholder="תיאור עבודה להשלמה ידנית..." value="'+escHtml(entry.label||'')+'" '
-      + 'oninput="_setManualLabelLive(\''+dSafe+'\','+JSON.stringify(String(entry.id))+',this.value)" '
-      + 'onchange="updateManualDeptSlotLabel(\''+dSafe+'\','+JSON.stringify(String(entry.id))+',this.value)">'
+      + 'oninput="_setManualLabelLive(\''+dSafe+'\',\''+entry.id+'\',this.value)" '
+      + 'onchange="updateManualDeptSlotLabel(\''+dSafe+'\',\''+entry.id+'\',this.value)">'
       + '<span class="dept-sched-item-badge dept-sched-badge-manual">✏️ ריק</span>'
       + '<button class="dept-sched-item-rm" title="הסר" onclick="removeDeptItem(\''+dSafe+'\',\''+keySafe+'\')">🗑️</button>'
       + '</div>';
