@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782308416';
+window.APP_VERSION = '1782309222';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -9302,7 +9302,17 @@ function _queueUnmarkCardDone(cardId, runIdx, machine) {
 // ═══════════════════════════════════════════════════════
 
 function _isWeeklySourceCard(card) {
-  return (weeklyJobs||[]).some(function(w){ return String(w.cardCreated) === String(card.id); });
+  if (!card) return false;
+  if (card._weeklySource) return true;
+  if ((weeklyJobs||[]).some(function(w){ return String(w.cardCreated) === String(card.id); })) return true;
+  // כל עבודה ששמה תואם פריט ביומן השבועי (עיתון/עלון/עבודה שבועית) — שייכת ליומן,
+  // ולכן מוצגת רק ב"עבודות להיום" ולא ברשימת העבודות הזמינות
+  var nm = (card.name||'').trim();
+  if (!nm) return false;
+  if ((newspapers||[]).some(function(n){ return (n.name||'').trim() === nm; })) return true;
+  if ((flyers||[]).some(function(f){ return (f.name||'').trim() === nm; })) return true;
+  if ((weeklyJobs||[]).some(function(w){ return (w.name||'').trim() === nm; })) return true;
+  return false;
 }
 
 function _queueEntriesForCard(cardId) {
@@ -13237,6 +13247,18 @@ async function _fbPollAll() {
     // סידור מחלקות (קיפול/כריכייה)
     var dov = await window._fbGet('deptOrder');
     if (dov !== null && typeof dov === 'object' && !(_pend.deptOrder > 0)) {
+      // מיזוג: שמר עבודות ידניות מקומיות שאינן בנתון מהשרת — כדי שסנכרון לא ימחק עבודה שהוקלדה ידנית
+      try {
+        DEPARTMENTS.forEach(function(d){
+          var incoming = Array.isArray(dov[d]) ? dov[d] : [];
+          var incIds = {};
+          incoming.forEach(function(e){ if (e && e.type==='manual') incIds[String(e.id)] = true; });
+          (_deptOrder[d]||[]).forEach(function(e){
+            if (e && e.type==='manual' && !incIds[String(e.id)]) incoming.push(e);
+          });
+          dov[d] = incoming;
+        });
+      } catch(e){}
       _deptOrder = dov;
       localStorage.setItem('solanDeptOrder', JSON.stringify(_deptOrder));
       window._fbSnapshot.deptOrder = JSON.stringify(_deptOrder);
@@ -13692,6 +13714,7 @@ function _dashEnsureCardForItem(it) {
     needsBinding: it.needsBinding || false,
     status: 'pending',
     createdAt: new Date().toLocaleDateString('he-IL'),
+    _weeklySource: true,
     runs: []
   };
   cards.unshift(card);
