@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782304327';
+window.APP_VERSION = '1782305280';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -1752,7 +1752,8 @@ window._fbSnapshot = {};
         <div class="oc-row"><label>פחת לכל ריצה (גיליונות)</label><input class="fi oc-in" id="ps_waste" type="number" min="0"></div>
         <div class="oc-row"><label>מספר צבעים ברירת מחדל</label><input class="fi oc-in" id="ps_colors" type="number" min="1"></div>
         <div class="oc-row"><label>מחיר ללוח (₪)</label><input class="fi oc-in" id="ps_plate" type="number" min="0"></div>
-        <div class="oc-row"><label>הדפסה — אלף ראשון (₪)</label><input class="fi oc-in" id="ps_firstK" type="number" min="0"></div>
+        <div class="oc-row"><label>הדפסה — אלף ראשון גיליון (₪)</label><input class="fi oc-in" id="ps_firstK" type="number" min="0"></div>
+        <div class="oc-row"><label>הדפסה — אלף ראשון מתהפך חצי (₪)</label><input class="fi oc-in" id="ps_firstKTurn" type="number" min="0"></div>
         <div class="oc-row"><label>הדפסה — אלף רץ (₪)</label><input class="fi oc-in" id="ps_runK" type="number" min="0"></div>
       </div>
 
@@ -1772,6 +1773,12 @@ window._fbSnapshot = {};
         <div style="display:flex;flex-direction:column;gap:2px"><label style="font-size:.72rem;color:#777">4</label><input class="fi" id="ps_bind4" type="number" min="0" style="margin:0"></div>
         <div style="display:flex;flex-direction:column;gap:2px"><label style="font-size:.72rem;color:#777">5</label><input class="fi" id="ps_bind5" type="number" min="0" style="margin:0"></div>
         <div style="display:flex;flex-direction:column;gap:2px"><label style="font-size:.72rem;color:#777">6</label><input class="fi" id="ps_bind6" type="number" min="0" style="margin:0"></div>
+      </div>
+
+      <div style="font-weight:800;color:var(--press);margin:16px 0 6px;font-size:.86rem">כריכה — מינימום לאלף הראשון (₪) · מעבר לכך לפי המחירון</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="display:flex;flex-direction:column;gap:2px"><label style="font-size:.72rem;color:#777">5 תחנות — מינימום אלף ראשון</label><input class="fi" id="ps_bindMin5" type="number" min="0" style="margin:0"></div>
+        <div style="display:flex;flex-direction:column;gap:2px"><label style="font-size:.72rem;color:#777">6 תחנות — מינימום אלף ראשון</label><input class="fi" id="ps_bindMin6" type="number" min="0" style="margin:0"></div>
       </div>
 
       <div style="font-weight:800;color:var(--press);margin:16px 0 6px;font-size:.86rem">מוצרים שטוחים — מחיר ל-1000 (פוסטר / פלאייר / פלייסמנט)</div>
@@ -2809,10 +2816,12 @@ var DEFAULT_OFFSET_PRICING = {
   wastePerRun: 250,      // פחת בגיליונות לכל ריצה
   colors: 4,             // מספר צבעים ברירת מחדל (ריצה רגילה = צבעים×2 לוחות, מתהפכת = צבעים×1)
   platePrice: 0,         // מחיר ללוח
-  printFirstK: 0,        // הדפסה — 'אלף ראשון' (פיקס לכל ריצה)
+  printFirstK: 0,        // הדפסה — 'אלף ראשון גיליון' (פיקס לכל ריצה רגילה)
+  printFirstKTurn: 0,    // הדפסה — 'אלף ראשון מתהפך חצי' (פיקס לכל ריצה מתהפכת)
   printRunningK: 0,      // הדפסה — 'אלף רץ' נוסף
   foldRates: { '4':0, '3':0, '2':0, '1':0 },           // קיפול — מחיר ל-1000 לפי מס' קיפולים
   bindRates: { '1':0, '2':0, '3':0, '4':0, '5':0, '6':0 }, // כריכה — מחיר ל-1000 לפי מס' תחנות (ריצות)
+  bindFirstKMin: { '5':500, '6':600 }, // כריכה — מינימום לאלף הראשון לפי מס' תחנות
   papers: [],            // [{name, sheet:'70×100', sheetW:70, sheetH:100, gram, tonPrice}]
   flatRates: {}          // מוצרים שטוחים — { <id>: { per1000, foldPer1000 } } לפי FLAT_PRODUCTS
 };
@@ -4291,6 +4300,11 @@ function renderManualRuns() {
         <option value="מכונה 8 צבעים" ${r.machine==='מכונה 8 צבעים'?'selected':''}>מכונה 8 צבעים</option>
 
       </select>
+      <label onclick="manualRuns[${i}].tumble=!manualRuns[${i}].tumble;renderManualRuns()"
+        style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:.82rem;font-weight:700;white-space:nowrap;
+          padding:6px 10px;border-radius:6px;border:1.5px solid ${r.tumble?'#2563eb':'#cbd5e1'};
+          background:${r.tumble?'#eff6ff':'#f8fafc'};color:${r.tumble?'#1d4ed8':'#64748b'}">
+        🔄 מתהפך${r.tumble?' ✓':''}</label>
       <button onclick="removeManualRun(${r.id})"
         style="background:none;border:none;color:#ccc;font-size:1.1rem;cursor:pointer;padding:0 2px"
         onmouseover="this.style.color='#c62828'" onmouseout="this.style.color='#ccc'">✕</button>
@@ -4318,7 +4332,8 @@ function getEffectiveRuns() {
         folds: '',
         pageRange: pageRange,
         machine: r.machine,
-        paper: r.paper||''
+        paper: r.paper||'',
+        tumble: !!r.tumble
       };
     });
   }
@@ -5368,7 +5383,7 @@ function editCard(id) {
   }
   // runs
   if (c.runs && c.runs.length) {
-    manualRuns = c.runs.map(function(r){ return { id: Date.now()+Math.random(), pages: r.pages||'', copies: r.copies||'', machine: r.machine||'' }; });
+    manualRuns = c.runs.map(function(r){ return { id: Date.now()+Math.random(), pages: r.pages||'', copies: r.copies||'', machine: r.machine||'', paper: r.paper||'', tumble: !!r.tumble }; });
     renderManualRuns();
   }
   // mark as editing
@@ -11804,9 +11819,9 @@ function computeOffsetQuote(){
     r._isTurn = isTurn;
     r._plates = colors * (isTurn ? 1 : 2);    // רגילה=צבעים×2, מתהפכת=צבעים×1
     plates += r._plates;
-    // הדפסה: לכל ריצה — אלף ראשון פיקס + אלף רץ לכל 1000 מעבר ל-1000 (לפי גיליונות הריצה)
+    // הדפסה: לכל ריצה — אלף ראשון פיקס (גיליון רגיל / מתהפך חצי) + אלף רץ לכל 1000 מעבר ל-1000
     if (rc > 0) {
-      printCost += (pr.printFirstK||0);
+      printCost += isTurn ? (pr.printFirstKTurn||0) : (pr.printFirstK||0);
       if (rc > 1000) printCost += Math.ceil((rc - 1000)/1000) * (pr.printRunningK||0);
     }
     // קיפול: לפי מס' העותקים (לא לפי גיליונות הריצה!), בתעריף לפי מס' הקיפולים של הריצה.
@@ -11819,9 +11834,17 @@ function computeOffsetQuote(){
   });
   var platesCost = plates * (pr.platePrice||0);
 
-  // כריכה: לפי מספר התחנות (=מספר הריצות), בתעריף ל-1000
+  // כריכה: לפי מספר התחנות (=מספר הריצות), בתעריף ל-1000.
+  // לאלף הראשון יש מינימום לפי מס' תחנות (למשל 5 תחנות=500, 6=600); מעבר לאלף הראשון לפי המחירון.
   var stations = runs.length;
-  var bindCost = Math.ceil(copies/1000) * (((pr.bindRates||{})[String(stations)])||0);
+  var bindRate = ((pr.bindRates||{})[String(stations)])||0;
+  var bindMinFirstK = ((pr.bindFirstKMin||DEFAULT_OFFSET_PRICING.bindFirstKMin)[String(stations)])||0;
+  var bindCost = 0;
+  if (copies > 0 && (bindRate > 0 || bindMinFirstK > 0)) {
+    var bindUnits = Math.ceil(copies/1000);
+    var firstKCost = Math.max(bindRate, bindMinFirstK); // אלף ראשון = הגבוה מבין התעריף למינימום
+    bindCost = firstKCost + Math.max(0, bindUnits - 1) * bindRate;
+  }
 
   // הובלה (אופציונלי) + הערות ידניות
   var shipInc   = document.getElementById('oc_ship_inc').checked;
@@ -12012,9 +12035,11 @@ function openOffsetPricing(){
   document.getElementById('ps_colors').value = p.colors || 4;
   document.getElementById('ps_plate').value  = p.platePrice || 0;
   document.getElementById('ps_firstK').value = p.printFirstK || 0;
+  document.getElementById('ps_firstKTurn').value = p.printFirstKTurn || 0;
   document.getElementById('ps_runK').value   = p.printRunningK || 0;
   ['4','3','2','1'].forEach(function(k){ document.getElementById('ps_fold'+k).value = (p.foldRates||{})[k] || 0; });
   ['1','2','3','4','5','6'].forEach(function(k){ document.getElementById('ps_bind'+k).value = (p.bindRates||{})[k] || 0; });
+  ['5','6'].forEach(function(k){ document.getElementById('ps_bindMin'+k).value = (p.bindFirstKMin||DEFAULT_OFFSET_PRICING.bindFirstKMin)[k] || 0; });
   _psPapers = JSON.parse(JSON.stringify(p.papers || []));
   renderPricingPapers();
   renderPricingFlat();
@@ -12077,9 +12102,11 @@ function saveOffsetPricing(){
     colors: _psVal('ps_colors') || 4,
     platePrice: _psVal('ps_plate'),
     printFirstK: _psVal('ps_firstK'),
+    printFirstKTurn: _psVal('ps_firstKTurn'),
     printRunningK: _psVal('ps_runK'),
     foldRates: { '4':_psVal('ps_fold4'), '3':_psVal('ps_fold3'), '2':_psVal('ps_fold2'), '1':_psVal('ps_fold1') },
     bindRates: { '1':_psVal('ps_bind1'), '2':_psVal('ps_bind2'), '3':_psVal('ps_bind3'), '4':_psVal('ps_bind4'), '5':_psVal('ps_bind5'), '6':_psVal('ps_bind6') },
+    bindFirstKMin: { '5':_psVal('ps_bindMin5'), '6':_psVal('ps_bindMin6') },
     papers: _psPapers.filter(function(p){ return p.name || p.gram || p.tonPrice; }),
     flatRates: (function(){
       var fr = {};
