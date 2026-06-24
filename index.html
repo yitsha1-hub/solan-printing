@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782307941';
+window.APP_VERSION = '1782308416';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -7648,11 +7648,22 @@ function removeDeptItem(dept, entryKey) {
 }
 
 function addManualDeptSlot(dept, label) {
-  _loadDeptOrder();
+  // לא טוענים מחדש מ-localStorage כאן — היה דורס טקסט שהוקלד בשורה קודמת וטרם נשמר (=מחיקת עבודה ידנית)
   if (!_deptOrder[dept]) _deptOrder[dept] = [];
   _deptOrder[dept].push({ type: 'manual', id: Date.now() + Math.random(), label: label || '' });
   _saveDeptOrder();
   if (typeof renderDeptSchedule === 'function') renderDeptSchedule(dept);
+}
+
+// עדכון "חי" בזמן הקלדה — שומר לזיכרון + localStorage (בלי דחיפה ל-Firebase בכל תו)
+// כדי שריענון/סנכרון לא יאבד טקסט שהוקלד אך טרם איבד פוקוס
+function _setManualLabelLive(dept, entryId, label) {
+  var order = _deptOrder[dept];
+  if (!order) return;
+  var entry = order.find(function(e){ return e.type === 'manual' && String(e.id) === String(entryId); });
+  if (!entry) return;
+  entry.label = label;
+  localStorage.setItem('solanDeptOrder', JSON.stringify(_deptOrder));
 }
 
 function updateManualDeptSlotLabel(dept, entryId, label) {
@@ -7665,7 +7676,7 @@ function updateManualDeptSlotLabel(dept, entryId, label) {
 }
 
 function addWeeklyJobToDept(dept, weeklyJobId) {
-  _loadDeptOrder();
+  // לא טוענים מחדש מ-localStorage — שלא לדרוס טקסט ידני שטרם נשמר
   var w = (weeklyJobs||[]).find(function(x){ return x.id === weeklyJobId; });
   if (!w) return;
   if (w.cardCreated) { if (typeof showToast === 'function') showToast('⚠️ לעבודה הזו כבר נוצר כרטיס'); return; }
@@ -7757,6 +7768,7 @@ function _renderDeptEntry(dept, entry, idx, total) {
       + '<span class="dept-sched-item-idx">'+(idx+1)+'.</span>'
       + movesHtml
       + '<input type="text" class="dept-sched-manual-input" placeholder="תיאור עבודה להשלמה ידנית..." value="'+escHtml(entry.label||'')+'" '
+      + 'oninput="_setManualLabelLive(\''+dSafe+'\','+JSON.stringify(String(entry.id))+',this.value)" '
       + 'onchange="updateManualDeptSlotLabel(\''+dSafe+'\','+JSON.stringify(String(entry.id))+',this.value)">'
       + '<span class="dept-sched-item-badge dept-sched-badge-manual">✏️ ריק</span>'
       + '<button class="dept-sched-item-rm" title="הסר" onclick="removeDeptItem(\''+dSafe+'\',\''+keySafe+'\')">🗑️</button>'
