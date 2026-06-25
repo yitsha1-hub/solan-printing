@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782374383';
+window.APP_VERSION = '1782376352';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -7509,6 +7509,29 @@ function saveMachineSpeed(machine, val) {
   if (typeof renderDashMachines === 'function' && document.getElementById('dash-machines')) renderDashMachines();
   if (typeof showToast === 'function') showToast('⚙️ מהירות המכונה עודכנה');
 }
+
+// זמן החלפת פלטות (דקות) לכל מכונה — נוסף בין עבודה לעבודה בחישוב זמן התור
+var _defaultPlateChange = { 'מכונה 4 צבעים': 15, 'מכונה 8 צבעים': 15 };
+var machinePlateChange = (function(){
+  try {
+    var raw = JSON.parse(localStorage.getItem('solanPlateChange') || 'null');
+    return Object.assign({}, _defaultPlateChange, raw || {});
+  } catch(e) { return Object.assign({}, _defaultPlateChange); }
+})();
+function _machinePlateChangeMin(machine) {
+  var v = machinePlateChange && machinePlateChange[machine];
+  return (v != null && v >= 0) ? parseFloat(v) : (_defaultPlateChange[machine] || 0);
+}
+function savePlateChange(machine, val) {
+  var n = parseFloat(val);
+  if (isNaN(n) || n < 0) return;
+  machinePlateChange[machine] = n;
+  localStorage.setItem('solanPlateChange', JSON.stringify(machinePlateChange));
+  if (window._fbConnected && window._fbPut) window._fbPut('plateChange', machinePlateChange);
+  if (typeof renderWorkList === 'function') renderWorkList();
+  if (typeof showToast === 'function') showToast('⚙️ זמן החלפת פלטות עודכן');
+}
+
 var _workOrder = {};  // { machine: [cardId, ...] }
 var _workOrderExcluded = {};  // { machine: [cardId, ...] } — כרטיסים שהוסרו ידנית מרשימת המכונה ולא יוחזרו אוטומטית ע"י _syncWorkOrder
 
@@ -7573,6 +7596,8 @@ function _applyAutoDeptFlags(card) {
   var pages = parseInt(card.pages) || 0;
   if (!isPlacement && !noFold) card.needsFolding = true;
   if (pages > 4) card.needsBinding = true;
+  // שיוך חד-פעמי לסידור המחלקות (רק ביצירה — _syncDeptOrder כבר לא מוסיף אוטומטית)
+  if (typeof _enrollCardInDepts === 'function') _enrollCardInDepts(card);
 }
 
 function _deptEntryKey(entry) {
@@ -7628,29 +7653,38 @@ function _syncDeptOrder(dept) {
   var eligibleCards = (cards||[]).filter(function(c){ return c.status !== 'done' && c[needsKey]; });
   var eligibleIds = eligibleCards.map(function(c){ return c.id; });
 
-  // נקה ערכים לא תקפים
+  // נקה ערכים לא תקפים. אין הוספה אוטומטית כאן — השיוך מתבצע פעם אחת ביצירת הכרטיס
+  // (_enrollCardInDepts), כדי שלא ייווצרו "המון עבודות אוטומטית" ושעבודה שנמחקה לא תחזור.
   var kept = order.filter(function(entry){
+    var key = _deptEntryKey(entry);
+    if (excluded.indexOf(key) >= 0) return false; // הוסר ידנית — אל תשאיר, גם אם חזר מהשרת
     if (entry.type === 'card') {
       return eligibleIds.indexOf(entry.cardId) >= 0;
     }
     if (entry.type === 'weekly') {
       var w = (weeklyJobs||[]).find(function(x){ return x.id === entry.weeklyId; });
-      // אם נוצר כרטיס אמיתי לעבודה השבועית הזו — מסירים את ה-placeholder (הכרטיס האמיתי יוצג דרך הסעיף 'card' אם זכאי)
+      // אם נוצר כרטיס אמיתי לעבודה השבועית הזו — מסירים את ה-placeholder
       if (!w || w.cardCreated) return false;
       return true;
     }
     return true; // manual — תמיד נשאר עד הסרה ידנית
   });
 
-  // הוסף כרטיסים זכאים חדשים שלא ברשימה ולא הוסרו ידנית
-  eligibleCards.forEach(function(c){
-    var key = 'card:' + c.id;
-    if (excluded.indexOf(key) >= 0) return;
-    var already = kept.some(function(e){ return e.type === 'card' && e.cardId === c.id; });
-    if (!already) kept.push({ type: 'card', cardId: c.id });
-  });
-
   _deptOrder[dept] = kept;
+  _saveDeptOrder();
+}
+
+// שיוך חד-פעמי של כרטיס לסידור המחלקות (קיפול/כריכה) לפי הדגלים — נקרא ביצירת הכרטיס בלבד
+function _enrollCardInDepts(card) {
+  if (!card || !String(card.name||'').trim()) return; // לא לשייך כרטיסים ללא שם (מונע "עבודות ללא תיאור")
+  DEPARTMENTS.forEach(function(dept){
+    if (!card[_deptNeedsKey(dept)]) return;
+    var key = 'card:' + card.id;
+    if ((_deptExcluded[dept]||[]).indexOf(key) >= 0) return; // הוסר ידנית בעבר — לא לשייך מחדש
+    if (!_deptOrder[dept]) _deptOrder[dept] = [];
+    if (_deptOrder[dept].some(function(e){ return e.type==='card' && e.cardId===card.id; })) return;
+    _deptOrder[dept].push({ type:'card', cardId: card.id });
+  });
   _saveDeptOrder();
 }
 
@@ -8940,7 +8974,18 @@ function renderWorkList() {
       .sort(function(a,b){ return a.order - b.order; });
     var done = (machineQueue||[]).filter(function(e){ return e.machine === machine && e.done; })
       .sort(function(a,b){ return new Date(b.doneAt||0) - new Date(a.doneAt||0); });
-    var totalMins = active.reduce(function(s,e){ return s + _entryEstMinutes(e); }, 0);
+    // חישוב מצטבר: זמן הדפסה לכל עבודה + זמן החלפת פלטות בין עבודה לעבודה.
+    // בונה מפת זמני-סיום משוערים (שעון) לכל פריט, וסה"כ זמן לכל התור.
+    var _plateMin = _machinePlateChangeMin(machine);
+    var _finishByQid = {};
+    var _cum = 0;
+    active.forEach(function(e, i){
+      if (i > 0) _cum += _plateMin;          // החלפת פלטות מעבודה לעבודה
+      _cum += _entryEstMinutes(e);            // זמן הדפסת העבודה
+      _finishByQid[e.qid] = _cum;
+    });
+    var totalMins = _cum;
+    var _overallFinish = totalMins ? _fmtEndTime(totalMins/60) : '';
     var machineSafeHdr = machine.replace(/'/g, "\\'");
 
     machinesHtml += '<div ondragover="_queueDragOver(event)" ondrop="_queueDrop(event,' + sq(machine) + ')" '
@@ -8952,7 +8997,7 @@ function renderWorkList() {
       + '<div style="font-weight:900;font-size:.9rem">' + escHtml(machine) + '</div>'
       + '<div style="display:flex;align-items:center;gap:6px">'
       + '<span style="font-size:.76rem;color:#374151;font-weight:700">' + active.length + ' בתור'
-      + (totalMins ? ' · ' + _fmtMins(totalMins) : '') + '</span>'
+      + (totalMins ? ' · ' + _fmtMins(totalMins) + ' · סיום ~' + _overallFinish : '') + '</span>'
       + '<button onclick="showPrintReorderModal(' + mSq + ')" '
       + 'style="background:#2d3561;color:white;border:none;border-radius:6px;padding:4px 10px;font-family:Heebo,sans-serif;font-size:.72rem;font-weight:700;cursor:pointer">🖨️ הדפס</button>'
       + '<button onclick="showPrintReorderModal(' + mSq + ',true)" '
@@ -8995,8 +9040,11 @@ function renderWorkList() {
             + 'style="font-size:.65rem;padding:2px 6px;border:1.5px solid #1a1a4e;border-radius:5px;cursor:pointer;background:white;color:#1a1a4e;white-space:nowrap;flex-shrink:0">⬆ ראשון</button>';
         }
         var _effMin = _entryEstMinutes(e);
-        var estLabel = _effMin ? _fmtMins(_effMin) + (e.estMinutes ? '' : '≈') : '⏱';
-        machinesHtml += '<button onclick="_queueSetEstTime(' + qidSq + ')" title="זמן הדפסה משוער (לחץ לעריכה ידנית)" '
+        var _finMin = _finishByQid[e.qid];
+        var estLabel = _effMin
+          ? _fmtMins(_effMin) + (e.estMinutes ? '' : '≈') + (_finMin ? ' · ⏲' + _fmtEndTime(_finMin/60) : '')
+          : '⏱';
+        machinesHtml += '<button onclick="_queueSetEstTime(' + qidSq + ')" title="זמן הדפסה משוער + שעת סיום משוערת (לחץ לעריכה ידנית)" '
           + 'style="font-size:.7rem;padding:2px 7px;border:1px solid #d1d5db;background:#f9fafb;border-radius:5px;cursor:pointer;color:'
           + (_effMin ? '#0369a1' : '#9ca3af') + ';white-space:nowrap;flex-shrink:0">' + estLabel + '</button>';
         machinesHtml += '<button onclick="_queueRemoveEntry(' + qidSq + ')" title="הסר" '
@@ -12992,9 +13040,12 @@ function renderMachineSpeedsSettings() {
     return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
       + '<span style="flex:1;font-size:.85rem;font-weight:700">'+escHtml(m)+'</span>'
       + '<input type="number" id="'+id+'" min="1" step="100" value="'+v+'" '
-      + 'style="width:110px;padding:7px 9px;border:1.5px solid var(--line);border-radius:6px;font-family:Heebo,sans-serif;font-size:.85rem;text-align:center">'
+      + 'style="width:90px;padding:7px 9px;border:1.5px solid var(--line);border-radius:6px;font-family:Heebo,sans-serif;font-size:.85rem;text-align:center">'
       + '<span style="font-size:.78rem;color:#888">גיל\'/שעה</span>'
-      + '<button class="btn btn-tpl" style="padding:6px 12px;font-size:.78rem" onclick=\'saveMachineSpeed('+JSON.stringify(m)+',document.getElementById("'+id+'").value)\'>שמור</button>'
+      + '<input type="number" id="'+id+'-pc" min="0" step="1" value="'+_machinePlateChangeMin(m)+'" title="זמן החלפת פלטות (דקות)" '
+      + 'style="width:60px;padding:7px 9px;border:1.5px solid var(--line);border-radius:6px;font-family:Heebo,sans-serif;font-size:.85rem;text-align:center">'
+      + '<span style="font-size:.78rem;color:#888">דק\' פלטות</span>'
+      + '<button class="btn btn-tpl" style="padding:6px 12px;font-size:.78rem" onclick=\'saveMachineSpeed('+JSON.stringify(m)+',document.getElementById("'+id+'").value);savePlateChange('+JSON.stringify(m)+',document.getElementById("'+id+'-pc").value)\'>שמור</button>'
       + '</div>';
   }).join('') || '<div style="font-size:.82rem;color:#888">אין מכונות מוגדרות</div>';
 }
@@ -13375,6 +13426,13 @@ async function _fbPollAll() {
       localStorage.setItem('solanMachineSpeeds', JSON.stringify(machineSpeeds));
       if (document.getElementById('settings-modal') && document.getElementById('settings-modal').style.display !== 'none') renderMachineSpeedsSettings();
       if (typeof renderDashMachines === 'function' && document.getElementById('dash-machines')) renderDashMachines();
+    }
+    // זמן החלפת פלטות לכל מכונה
+    var pcv = await window._fbGet('plateChange');
+    if (pcv !== null && typeof pcv === 'object') {
+      machinePlateChange = Object.assign({}, _defaultPlateChange, pcv);
+      localStorage.setItem('solanPlateChange', JSON.stringify(machinePlateChange));
+      if (document.getElementById('settings-modal') && document.getElementById('settings-modal').style.display !== 'none') renderMachineSpeedsSettings();
     }
     // תור מכונות
     var mqv = await window._fbGet('machineQueue');
@@ -13958,7 +14016,13 @@ function renderDashTodayWeekly() {
       var runsHtml = runs
         ? runs.map(function(r,ri){ return _runMachineSelect(card.id, ri, r.machine||'', 'ריצה ' + (r.num||(ri+1)) + ' · ' + (r.pages||'?') + ' עמ\''); }).join('')
         : _runMachineSelect(card.id, -1, card.machine||'', 'מכונה');
-      body = '<div style="font-size:.66rem;font-weight:800;color:#15803d;margin-top:5px">✅ יש כרטיס</div>' + runsHtml;
+      var viewEdit = '<div style="display:flex;gap:4px;margin-top:6px">'
+        + '<button onclick="showPrintModal(cards.find(function(c){return c.id===' + card.id + '}))" '
+        + 'style="flex:1;font-size:.66rem;padding:4px 0;border:1.5px solid #6ee7b7;border-radius:6px;cursor:pointer;background:#f0fdf4;color:#0f6347;font-weight:800;font-family:Heebo,sans-serif">👁️ צפה</button>'
+        + '<button onclick="editCard(' + card.id + ')" '
+        + 'style="flex:1;font-size:.66rem;padding:4px 0;border:1.5px solid #c0ccf0;border-radius:6px;cursor:pointer;background:#f0f4ff;color:#2d3561;font-weight:800;font-family:Heebo,sans-serif">✏️ ערוך</button>'
+        + '</div>';
+      body = '<div style="font-size:.66rem;font-weight:800;color:#15803d;margin-top:5px">✅ יש כרטיס</div>' + runsHtml + viewEdit;
     } else {
       // אין כרטיס — כפתור יצירה + סימון ידני
       body = '<div style="display:flex;gap:4px;margin-top:6px">'
