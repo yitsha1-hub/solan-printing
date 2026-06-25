@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782390223';
+window.APP_VERSION = '1782390692';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -7787,7 +7787,12 @@ function _syncDeptOrder(dept) {
       if (!w || w.cardCreated) return false;
       return true;
     }
-    return true; // manual — תמיד נשאר עד הסרה ידנית
+    if (entry.type === 'manual') {
+      // שורה ידנית ריקה שננטשה (מעל דקה ולא מולאה) — הסר אוטומטית, כדי שלא יצטברו "שורות ריקות"
+      if (!(entry.label||'').trim() && entry.id && (Date.now() - entry.id) > 60000) return false;
+      return true;
+    }
+    return true;
   });
 
   _deptOrder[dept] = kept;
@@ -7827,10 +7832,9 @@ function removeDeptItem(dept, entryKey) {
   if (idx < 0) return;
   var entry = order[idx];
   // אם זה כרטיס/עבודה שבועית — נסמן כ"הוסר ידנית" כדי ש-_syncDeptOrder לא יחזיר אותו אוטומטית
-  if (entry.type === 'card' || entry.type === 'weekly') {
-    if (!_deptExcluded[dept]) _deptExcluded[dept] = [];
-    if (_deptExcluded[dept].indexOf(entryKey) < 0) _deptExcluded[dept].push(entryKey);
-  }
+  // כל סוג (כולל ידני) — סמן כהוסר כדי שלא יחזור אוטומטית או דרך סנכרון מהשרת
+  if (!_deptExcluded[dept]) _deptExcluded[dept] = [];
+  if (_deptExcluded[dept].indexOf(entryKey) < 0) _deptExcluded[dept].push(entryKey);
   // שמור בהיסטוריית "הוסרו" לשחזור (החדש בראש; שמור עד 50 אחרונים)
   if (!_deptRemoved[dept]) _deptRemoved[dept] = [];
   _deptRemoved[dept].unshift({ entry: JSON.parse(JSON.stringify(entry)), removedAt: Date.now() });
