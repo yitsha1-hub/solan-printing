@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782390692';
+window.APP_VERSION = '1782391212';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -3729,6 +3729,54 @@ function setPlacementPerSheet(n) {
   if (pdw) { pdw.style.display = ''; document.getElementById('f-placement-details').focus(); }
   syncSizeBtns(sizeVal);
   calcRuns();
+  _showPlacementCheckModal();
+}
+
+// תזכורת בעת הכנת כרטיס פלייסמנט — האם הלקוח פפירוס והאם צריך מדבקות/קרטונים
+function _showPlacementCheckModal() {
+  var ex = document.getElementById('placement-check-modal');
+  if (ex) ex.remove();
+  var custVal = (document.getElementById('f-customer') ? document.getElementById('f-customer').value : '') || '';
+  var isPap = /פפירוס/.test(custVal);
+  var html = '<div id="placement-check-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)this.remove()">'
+    + '<div style="background:#fff;border-radius:14px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4);font-family:Heebo,sans-serif;direction:rtl">'
+    + '<div style="background:#2d3561;color:#fff;padding:13px 18px;border-radius:14px 14px 0 0;font-weight:800;font-size:.98rem">🗂️ עבודת פלייסמנט — לבדוק</div>'
+    + '<div style="padding:16px 18px">'
+    + '<div style="margin-bottom:14px"><label style="display:flex;align-items:center;gap:8px;font-size:.95rem;font-weight:700;cursor:pointer">'
+    + '<input type="checkbox" id="pc-papirus" ' + (isPap?'checked':'') + ' style="width:18px;height:18px">האם הלקוח <b>פפירוס</b>?</label></div>'
+    + '<div style="font-size:.9rem;font-weight:700;margin-bottom:6px">מה נדרש?</div>'
+    + '<label style="display:flex;align-items:center;gap:8px;font-size:.92rem;cursor:pointer;margin-bottom:6px"><input type="checkbox" id="pc-stickers" style="width:18px;height:18px">🏷️ מדבקות</label>'
+    + '<label style="display:flex;align-items:center;gap:8px;font-size:.92rem;cursor:pointer"><input type="checkbox" id="pc-cartons" style="width:18px;height:18px">📦 קרטונים</label>'
+    + '</div>'
+    + '<div style="padding:12px 18px;border-top:1px solid #e2e8f0;display:flex;gap:8px;justify-content:flex-end">'
+    + '<button onclick="document.getElementById(\'placement-check-modal\').remove()" style="padding:9px 16px;border:1.5px solid #e2e8f0;background:#fff;border-radius:8px;cursor:pointer;font-weight:700;font-family:Heebo,sans-serif">דלג</button>'
+    + '<button onclick="_savePlacementCheck()" style="padding:9px 20px;border:none;background:#2d3561;color:#fff;border-radius:8px;cursor:pointer;font-weight:800;font-family:Heebo,sans-serif">שמור</button>'
+    + '</div></div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+function _savePlacementCheck() {
+  var pap = document.getElementById('pc-papirus').checked;
+  var stickers = document.getElementById('pc-stickers').checked;
+  var cartons = document.getElementById('pc-cartons').checked;
+  var parts = [];
+  if (pap) parts.push('לקוח פפירוס');
+  var need = [];
+  if (stickers) need.push('מדבקות');
+  if (cartons) need.push('קרטונים');
+  if (need.length) parts.push('נדרש: ' + need.join(' + '));
+  var line = parts.length ? ('🗂️ פלייסמנט — ' + parts.join(' · ')) : '';
+  if (line) {
+    var el = document.getElementById('f-internal-notes');
+    if (el) {
+      // הסר שורת פלייסמנט קודמת אם קיימת, והוסף מעודכנת
+      var cur = (el.value||'').split('\n').filter(function(l){ return l.indexOf('🗂️ פלייסמנט —') === -1; });
+      cur.push(line);
+      el.value = cur.filter(Boolean).join('\n');
+    }
+  }
+  var m = document.getElementById('placement-check-modal');
+  if (m) m.remove();
+  if (typeof showToast === 'function') showToast('✅ נשמר בהערות פנימיות');
 }
 var _ppSheet = 0, _ppGram = '';
 function togglePrinterPaperPicker() {
