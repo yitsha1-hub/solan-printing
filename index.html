@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782376352';
+window.APP_VERSION = '1782382202';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -2160,6 +2160,15 @@ window._fbSnapshot = {};
           <label>כמות עותקים (קבועה)</label>
           <input type="number" id="pm-copies" placeholder="13200">
         </div>
+        <div class="mg-field full" style="background:#f5f3ff;border:1.5px solid #ddd6fe;border-radius:8px;padding:8px 10px">
+          <label style="color:#5b21b6;display:flex;align-items:center;gap:5px">📄 כלל נייר אוטומטי לפי מס' עמודים <span style="font-weight:400;font-size:.75rem;color:#6d28d9">(אופציונלי)</span></label>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;font-size:.85rem">
+            <span>אם מעל</span>
+            <input type="number" id="pm-paper-rule-pages" placeholder="16" style="width:70px;padding:6px 8px;border:1.5px solid #ddd6fe;border-radius:6px;font-family:Heebo,sans-serif">
+            <span>עמ' → נייר:</span>
+            <input type="text" id="pm-paper-rule-paper" placeholder="כרומו 70 גר" style="flex:1;min-width:120px;padding:6px 8px;border:1.5px solid #ddd6fe;border-radius:6px;font-family:Heebo,sans-serif">
+          </div>
+        </div>
         <div class="mg-field">
           <label>צבע</label>
           <select id="pm-color">
@@ -2269,6 +2278,18 @@ window._fbSnapshot = {};
             קובע כמה זמן מחושב לכל עבודה בתור המכונה והדשבורד.
           </div>
           <div id="machine-speeds-wrap"></div>
+        </div>
+        <div class="mg-field full" style="padding-top:14px;border-top:1px solid var(--line)">
+          <label style="color:#991b1b;display:flex;align-items:center;gap:5px">🗑️ מחיקה אוטומטית לפי לקוח</label>
+          <div style="font-size:.8rem;color:#991b1b;margin-bottom:8px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;padding:7px 10px">
+            ⚠️ עבודות מהלקוחות שתגדיר יימחקו <b>לצמיתות</b> (כולל מהיסטוריה ומ-Firebase) אחרי מספר הימים שתקבע. אין שחזור.
+          </div>
+          <div id="customer-purge-wrap"></div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px">
+            <input type="text" id="cp-new-customer" placeholder="שם לקוח" style="flex:1;min-width:120px;padding:7px 9px;border:1.5px solid var(--line);border-radius:6px;font-family:Heebo,sans-serif;font-size:.85rem">
+            <input type="number" id="cp-new-days" min="0" placeholder="ימים" style="width:80px;padding:7px 9px;border:1.5px solid var(--line);border-radius:6px;font-family:Heebo,sans-serif;font-size:.85rem;text-align:center">
+            <button class="btn btn-tpl" style="padding:7px 14px;font-size:.82rem" onclick="addCustomerPurgeRule()">+ הוסף כלל</button>
+          </div>
         </div>
         <div class="mg-field full" style="padding-top:14px;border-top:1px solid var(--line)">
           <label>Firebase — שיתוף כרטיסי עבודה בין עובדים</label>
@@ -5071,10 +5092,12 @@ function confirmRunsAndSave() {
       return Object.assign({}, r, { paper: runPaper, color: n.color });
     })
   };
+  _applyAutoDeptFlags(card);       // שיוך אוטומטי לקיפול/כריכה
   var _warns = validateCard(card);
   if (_warns.length > 0) {
     showCardValidationModal(_warns, function() {
       cards.unshift(card);
+      _autoQueueAssignedRuns(card); // ריצות עם מכונה → לתור המכונה
       persist();
       closeRunsModal();
       clearForm();
@@ -5084,6 +5107,7 @@ function confirmRunsAndSave() {
     return;
   }
   cards.unshift(card);
+  _autoQueueAssignedRuns(card);
   persist();
   closeRunsModal();
   clearForm();
@@ -5093,7 +5117,12 @@ function confirmRunsAndSave() {
 
 // ── נייר לפי ריצות ───────────────────────────────────────────────────────
 function _paperForPages(n, pages) {
-  return n.paper || '';
+  // כלל נייר אוטומטי: אם מספר העמודים מעל הסף שהוגדר לעיתון — החזר את הנייר החלופי
+  if (n && n.paperRule && n.paperRule.overPages && n.paperRule.paper) {
+    var p = parseInt(pages) || 0;
+    if (p > n.paperRule.overPages) return n.paperRule.paper;
+  }
+  return (n && n.paper) || '';
 }
 
 // ========== NEWSPAPER MANAGEMENT ==========
@@ -5106,6 +5135,8 @@ function openPaperModal(id) {
   document.getElementById('pm-type').value   = n?.type   || 'עיתון';
   document.getElementById('pm-size').value   = n?.size   || '';
   document.getElementById('pm-paper').value  = n?.paper  || '';
+  document.getElementById('pm-paper-rule-pages').value = (n?.paperRule?.overPages) || '';
+  document.getElementById('pm-paper-rule-paper').value = (n?.paperRule?.paper) || '';
   document.getElementById('pm-copies').value = n?.copies || '';
   document.getElementById('pm-color').value  = n?.color  || 'פרוצס 2 צדדים';
   document.getElementById('pm-pages').value  = (n?.pageOptions||[]).join(',');
@@ -5140,6 +5171,11 @@ function savePaper() {
     type:        document.getElementById('pm-type').value.trim()||'עיתון',
     size:        document.getElementById('pm-size').value.trim(),
     paper:       document.getElementById('pm-paper').value.trim(),
+    paperRule:   (function(){
+      var op = parseInt(document.getElementById('pm-paper-rule-pages').value) || 0;
+      var pp = document.getElementById('pm-paper-rule-paper').value.trim();
+      return (op > 0 && pp) ? { overPages: op, paper: pp } : null;
+    })(),
     copies:      document.getElementById('pm-copies').value,
     color:       document.getElementById('pm-color').value,
     pageOptions,
@@ -7534,6 +7570,90 @@ function savePlateChange(machine, val) {
 
 var _workOrder = {};  // { machine: [cardId, ...] }
 var _workOrderExcluded = {};  // { machine: [cardId, ...] } — כרטיסים שהוסרו ידנית מרשימת המכונה ולא יוחזרו אוטומטית ע"י _syncWorkOrder
+
+// ── מחיקה אוטומטית לפי לקוח — [{customer, days}] ──────────────────────────
+var customerPurgeRules = (function(){
+  try { return JSON.parse(localStorage.getItem('solanCustomerPurgeRules') || '[]') || []; }
+  catch(e){ return []; }
+})();
+function _saveCustomerPurgeRules() {
+  localStorage.setItem('solanCustomerPurgeRules', JSON.stringify(customerPurgeRules));
+  if (window._fbConnected && window._fbPut) window._fbPut('customerPurgeRules', customerPurgeRules);
+}
+function renderCustomerPurgeSettings() {
+  var wrap = document.getElementById('customer-purge-wrap');
+  if (!wrap) return;
+  if (!customerPurgeRules.length) { wrap.innerHTML = '<div style="font-size:.8rem;color:#888">אין כללי מחיקה אוטומטית.</div>'; return; }
+  wrap.innerHTML = customerPurgeRules.map(function(r, i){
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;background:#fff;border:1px solid #fecaca;border-radius:7px;padding:6px 10px">'
+      + '<span style="flex:1;font-size:.85rem;font-weight:700">' + escHtml(r.customer) + '</span>'
+      + '<span style="font-size:.8rem;color:#991b1b">מחיקה אחרי ' + (parseInt(r.days)||0) + ' ימים</span>'
+      + '<button onclick="removeCustomerPurgeRule(' + i + ')" style="background:none;border:none;color:#e07070;font-size:1.05rem;cursor:pointer;padding:0">✕</button>'
+      + '</div>';
+  }).join('');
+}
+function addCustomerPurgeRule() {
+  var cust = (document.getElementById('cp-new-customer').value||'').trim();
+  var days = parseInt(document.getElementById('cp-new-days').value);
+  if (!cust) { showToast('⚠️ הזן שם לקוח'); return; }
+  if (isNaN(days) || days < 0) { showToast('⚠️ הזן מספר ימים'); return; }
+  if (!confirm('עבודות מהלקוח "' + cust + '" יימחקו לצמיתות אחרי ' + days + ' ימים, ללא שחזור. להוסיף את הכלל?')) return;
+  var existing = customerPurgeRules.find(function(r){ return r.customer === cust; });
+  if (existing) existing.days = days; else customerPurgeRules.push({ customer: cust, days: days });
+  _saveCustomerPurgeRules();
+  document.getElementById('cp-new-customer').value = '';
+  document.getElementById('cp-new-days').value = '';
+  renderCustomerPurgeSettings();
+  showToast('✅ כלל נוסף');
+  _purgeCustomerCards();
+}
+function removeCustomerPurgeRule(i) {
+  customerPurgeRules.splice(i, 1);
+  _saveCustomerPurgeRules();
+  renderCustomerPurgeSettings();
+}
+
+// מחיקה לצמיתות של כרטיס מכל מקום שמור (cards, תור מכונות, סידור מחלקות, רשימות מכונה, פרופר, Firebase)
+function _hardPurgeCard(id) {
+  if (typeof _markDeleted === 'function') _markDeleted('cards', id);
+  cards = (cards||[]).filter(function(c){ return c.id !== id; });
+  machineQueue = (machineQueue||[]).filter(function(e){ return String(e.cardId) !== String(id); });
+  DEPARTMENTS.forEach(function(d){
+    if (_deptOrder[d]) _deptOrder[d] = _deptOrder[d].filter(function(e){ return !(e.type==='card' && e.cardId===id); });
+    if (_deptRemoved[d]) _deptRemoved[d] = _deptRemoved[d].filter(function(r){ return !(r.entry && r.entry.type==='card' && r.entry.cardId===id); });
+  });
+  WORKLIST_MACHINES.forEach(function(m){
+    if (_workOrder[m]) _workOrder[m] = _workOrder[m].filter(function(cid){ return cid !== id; });
+    if (_workOrderExcluded[m]) _workOrderExcluded[m] = _workOrderExcluded[m].filter(function(cid){ return cid !== id; });
+  });
+  (weeklyJobs||[]).forEach(function(w){ if (String(w.cardCreated) === String(id)) delete w.cardCreated; });
+  if (window._fbPut) window._fbPut('proofs/' + id, null);
+}
+
+// סורק את כל הכרטיסים ומוחק לצמיתות עבודות מלקוחות בכלל המחיקה שעברו את מספר הימים
+function _purgeCustomerCards() {
+  if (!customerPurgeRules || !customerPurgeRules.length) return;
+  var now = Date.now();
+  var ruleByCust = {};
+  customerPurgeRules.forEach(function(r){ if (r.customer) ruleByCust[String(r.customer).trim()] = parseInt(r.days)||0; });
+  var toPurge = [];
+  (cards||[]).forEach(function(c){
+    var cust = (c.customer||'').trim();
+    if (!cust || !(cust in ruleByCust)) return;
+    var created = (typeof c.id === 'number' && c.id > 1e12) ? c.id : (Date.parse(c.createdAt) || 0);
+    if (!created) return;
+    if (now - created >= ruleByCust[cust] * 86400000) toPurge.push(c.id);
+  });
+  if (!toPurge.length) return;
+  toPurge.forEach(_hardPurgeCard);
+  if (typeof _saveWorkOrder === 'function') _saveWorkOrder();
+  if (typeof _saveDeptOrder === 'function') _saveDeptOrder();
+  persist();
+  if (window._fbPut) { window._fbPut('machineQueue', machineQueue); window._fbPut('weeklyJobs', weeklyJobs); }
+  if (typeof renderCards === 'function') renderCards();
+  if (typeof _queueRender === 'function') _queueRender();
+  console.log('[purge] נמחקו לצמיתות ' + toPurge.length + ' עבודות לפי כלל לקוח');
+}
 
 function _loadWorkOrder() {
   try {
@@ -13029,6 +13149,7 @@ function openSettings() {
   const fbCfg = localStorage.getItem('solanFirebaseConfig') || '';
   document.getElementById('settings-firebase').value = fbCfg;
   renderMachineSpeedsSettings();
+  renderCustomerPurgeSettings();
   document.getElementById('settings-modal').style.display = 'flex';
 }
 function renderMachineSpeedsSettings() {
@@ -13433,6 +13554,14 @@ async function _fbPollAll() {
       machinePlateChange = Object.assign({}, _defaultPlateChange, pcv);
       localStorage.setItem('solanPlateChange', JSON.stringify(machinePlateChange));
       if (document.getElementById('settings-modal') && document.getElementById('settings-modal').style.display !== 'none') renderMachineSpeedsSettings();
+    }
+    // כללי מחיקה אוטומטית לפי לקוח
+    var cpv = await window._fbGet('customerPurgeRules');
+    if (cpv !== null && Array.isArray(cpv)) {
+      customerPurgeRules = cpv;
+      localStorage.setItem('solanCustomerPurgeRules', JSON.stringify(customerPurgeRules));
+      if (document.getElementById('settings-modal') && document.getElementById('settings-modal').style.display !== 'none') renderCustomerPurgeSettings();
+      _purgeCustomerCards();
     }
     // תור מכונות
     var mqv = await window._fbGet('machineQueue');
@@ -14748,6 +14877,8 @@ setTimeout(checkLowInventory, 1000);
 setTimeout(autoBackup, 2000);
 setTimeout(_autoCompleteWeeklyJobs, 1500);
 setInterval(_autoCompleteWeeklyJobs, 5 * 60 * 1000);
+setTimeout(function(){ try { _purgeCustomerCards(); } catch(e){} }, 3000);
+setInterval(function(){ try { _purgeCustomerCards(); } catch(e){} }, 30 * 60 * 1000);
 // אתחול לוגין — אם זה מסך מפעיל, מדלגים על לוגין
 (function(){
   if (_initMachineViewMode()) return;
