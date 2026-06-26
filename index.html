@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782448849';
+window.APP_VERSION = '1782449154';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -5595,34 +5595,42 @@ function _saveProofFor(cardId, runKey, proof) {
   }
 }
 
-// ניקוי פרופרים ישנים (מעל 24 שעות) — מוחק מ-Firebase ומנקה את דגלי הכרטיס.
-// משתמש בחותמת הזמן שעל הכרטיס (לא מוריד את נתוני הפרופר הכבדים כדי לבדוק).
+// ניקוי פרופרים — מוחק מ-Firebase ומנקה את דגלי הכרטיס.
+// כלל התפוגה: אם העבודה סומנה כהושלמה → 24 שעות מרגע ההשלמה.
+//             אם עדיין לא הושלמה → שבוע מרגע העלאת הפרופר.
+// (משתמש בחותמות זמן שעל הכרטיס — לא מוריד את נתוני הפרופר הכבדים כדי לבדוק.)
+function _proofExpired(uploadedAt, doneAtMs, now) {
+  var DAY = 24 * 60 * 60 * 1000, WEEK = 7 * DAY;
+  if (doneAtMs) return (now - doneAtMs) > DAY;        // 24ש' אחרי השלמה
+  return !!uploadedAt && (now - uploadedAt) > WEEK;   // אחרת — שבוע מההעלאה
+}
 function _cleanupOldProofs() {
-  var DAY = 24 * 60 * 60 * 1000;
   var now = Date.now();
   var changed = false;
   (cards || []).forEach(function(c) {
     if (!c || !c.hasProof) return;
+    var isDone = (c.status === 'done');
+    var doneAtMs = (isDone && c.printedAt) ? (Date.parse(c.printedAt) || 0) : 0;
+    if (isDone && !doneAtMs) doneAtMs = now; // הושלם בלי חותמת — נתחיל ספירת 24ש' מעכשיו
     // פרופרים פר-ריצה
     if (c.runProofs && Object.keys(c.runProofs).length) {
       Object.keys(c.runProofs).forEach(function(rk) {
         var up = c.runProofs[rk] && c.runProofs[rk].uploadedAt;
-        if (up && (now - up) > DAY) {
+        if (_proofExpired(up, doneAtMs, now)) {
           if (window._fbPut) window._fbPut('proofs/' + c.id + '/' + rk, null);
           delete c.runProofs[rk];
           changed = true;
         }
       });
       if (!Object.keys(c.runProofs).length) { delete c.runProofs; c.hasProof = false; delete c.proofUploadedAt; }
-    } else if (c.proofUploadedAt && (now - c.proofUploadedAt) > DAY) {
-      // פרופר יחיד
-      if (window._fbPut) window._fbPut('proofs/' + c.id, null);
-      c.hasProof = false; delete c.proofName; delete c.proofType; delete c.proofUploadedAt;
-      changed = true;
-    } else if (!c.proofUploadedAt && !c.runProofs) {
-      // פרופר ישן מלפני שהיתה חותמת זמן — תן לו חותמת עכשיו כדי שיימחק בעוד 24ש'
-      c.proofUploadedAt = now;
-      changed = true;
+    } else {
+      // פרופר יחיד — אם אין חותמת העלאה (פרופר ישן), קבע אותה עכשיו כדי שתחל ספירת השבוע
+      if (!c.proofUploadedAt) { c.proofUploadedAt = now; changed = true; }
+      else if (_proofExpired(c.proofUploadedAt, doneAtMs, now)) {
+        if (window._fbPut) window._fbPut('proofs/' + c.id, null);
+        c.hasProof = false; delete c.proofName; delete c.proofType; delete c.proofUploadedAt;
+        changed = true;
+      }
     }
   });
   if (changed) { persist(); if (typeof renderCards === 'function') renderCards(); }
