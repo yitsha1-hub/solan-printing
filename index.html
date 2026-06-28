@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782663473';
+window.APP_VERSION = '1782674388';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -14629,13 +14629,89 @@ function _opLoadAndRender() {
   if (!window._fbGet) { _renderOperatorScreen(); return; }
   Promise.all([
     window._fbGet('machineQueue').catch(function(){ return null; }),
-    window._fbGet('cards').catch(function(){ return null; })
+    window._fbGet('cards').catch(function(){ return null; }),
+    window._fbGet('customerProofs').catch(function(){ return null; })
   ]).then(function(res) {
     if (res[0] && Array.isArray(res[0])) machineQueue = res[0];
     if (res[1] && Array.isArray(res[1])) cards = res[1];
+    window._opCustomerProofs = (res[2] && typeof res[2] === 'object') ? res[2] : {};
     _renderOperatorScreen();
   });
 }
+
+// עיתונים מאושרים מהלקוחות שראויים לצפייה אצל הדפסים (אושרו ב-48 השעות האחרונות)
+function _opApprovedProofs() {
+  var all = window._opCustomerProofs || {};
+  var out = [];
+  var DAY2 = 48 * 60 * 60 * 1000, now = Date.now();
+  Object.keys(all).forEach(function(id) {
+    var p = all[id]; if (!p) return;
+    if (p.status === 'approved' && p.fileUrl && p.approvedAt && (now - p.approvedAt) < DAY2) {
+      out.push({ id: id, name: [p.customer, p.title].filter(Boolean).join(' · ') || 'עיתון', when: p.approvedAt, part: null });
+    } else if (p.parts) {
+      Object.keys(p.parts).forEach(function(pid) {
+        var pt = p.parts[pid];
+        if (pt && pt.fileUrl && pt.approvedAt && (now - pt.approvedAt) < DAY2)
+          out.push({ id: id, name: ([p.customer, p.title].filter(Boolean).join(' · ') || 'עיתון') + ' — ' + (pt.name||'ריצה'), when: pt.approvedAt, part: pid });
+      });
+    }
+  });
+  return out.sort(function(a,b){ return b.when - a.when; });
+}
+
+// פתיחת דפדוף מהיר בחלון פנימי (iframe) — נשאר בתוך מסך הדפסים (גם בקיוסק)
+function _opOpenFlipbook(id, part) {
+  var ex = document.getElementById('op-flip-overlay'); if (ex) ex.remove();
+  var base = location.href.replace(/[^/]+(\?.*)?$/, '');
+  var src = base + 'proof-viewer.html?id=' + encodeURIComponent(id) + (part ? '&part=' + encodeURIComponent(part) : '');
+  var ov = document.createElement('div');
+  ov.id = 'op-flip-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:#111;z-index:100000;display:flex;flex-direction:column';
+  ov.innerHTML = '<div style="display:flex;justify-content:flex-end;padding:8px 12px;background:#1e3a5f;flex-shrink:0">'
+    + '<button onclick="var o=document.getElementById(\'op-flip-overlay\');if(o)o.remove()" '
+    + 'style="background:white;border:none;border-radius:8px;padding:8px 20px;font-size:1rem;font-weight:800;cursor:pointer;font-family:Heebo,sans-serif">✕ סגור</button></div>'
+    + '<iframe src="' + src + '" style="flex:1;border:none;width:100%;background:#111"></iframe>';
+  document.body.appendChild(ov);
+}
+
+// ── מצב קיוסק — נעילת מסך הדפסים עם קוד יציאה ────────────────
+function _kioskOn() { return localStorage.getItem('solanKioskOn') === '1'; }
+function _opEnableKiosk() {
+  var pin = localStorage.getItem('solanKioskPin');
+  if (!pin) {
+    pin = (prompt('הגדר קוד יציאה למצב קיוסק (4 ספרות):', '') || '').trim();
+    if (!/^\d{4,8}$/.test(pin)) { alert('יש להזין קוד בן 4–8 ספרות.'); return; }
+    localStorage.setItem('solanKioskPin', pin);
+  }
+  localStorage.setItem('solanKioskOn', '1');
+  _enterFullscreen();
+  _renderOperatorScreen();
+}
+function _opExitKiosk() {
+  var pin = localStorage.getItem('solanKioskPin') || '';
+  var entered = (prompt('קוד יציאה ממצב קיוסק:', '') || '').trim();
+  if (entered !== pin) { alert('קוד שגוי.'); return; }
+  localStorage.removeItem('solanKioskOn');
+  try { if (document.fullscreenElement) document.exitFullscreen(); } catch(e){}
+  _renderOperatorScreen();
+}
+function _enterFullscreen() {
+  var el = document.documentElement;
+  try { (el.requestFullscreen || el.webkitRequestFullscreen || function(){}).call(el); } catch(e){}
+}
+// אכיפת קיוסק: חוסם יציאה מהעמוד, מחזיר למסך מלא, וחוסם תפריט הקשר
+(function _kioskGuards(){
+  window.addEventListener('beforeunload', function(e){ if (_kioskOn()) { e.preventDefault(); e.returnValue = ''; return ''; } });
+  document.addEventListener('contextmenu', function(e){ if (_kioskOn()) e.preventDefault(); });
+  document.addEventListener('visibilitychange', function(){ if (_kioskOn() && document.visibilityState==='visible' && !document.fullscreenElement) _enterFullscreen(); });
+  document.addEventListener('click', function(){ if (_kioskOn() && !document.fullscreenElement) _enterFullscreen(); }, true);
+  document.addEventListener('keydown', function(e){
+    if (!_kioskOn()) return;
+    // חסום קיצורי מעבר/סגירה נפוצים (ככל שהדפדפן מתיר)
+    if ((e.ctrlKey || e.metaKey) && ['t','n','w','r','l','Tab'].indexOf(e.key) !== -1) { e.preventDefault(); }
+    if (e.key === 'F5') e.preventDefault();
+  }, true);
+})();
 
 // ── מצב הדפסה נוכחי — localStorage per machine ───────────────
 function _opGetPrinting(machine) {
@@ -14702,14 +14778,33 @@ function _renderOperatorScreen() {
   }
 
   // ── כותרת ─────────────────────────────────────────────────
-  var html = '<div style="background:white;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;box-shadow:0 1px 6px #0000001a;border-bottom:2px solid #e2e8f0">'
-    + '<div><div style="color:#1e293b;font-size:1.15rem;font-weight:900">🏭 ' + escHtml(machine) + '</div>'
+  var _kiosk = _kioskOn();
+  var _hdrBtns = _kiosk
+    ? '<button onclick="_opExitKiosk()" style="font-size:.66rem;padding:4px 11px;border:none;background:#b91c1c;color:white;border-radius:6px;cursor:pointer;font-weight:800">🔓 יציאה (קוד)</button>'
+    : '<button id="op-install-btn" onclick="_opInstall()" style="font-size:.62rem;padding:3px 8px;border:none;background:#2563eb;color:white;border-radius:5px;cursor:pointer;font-weight:700">📲 הוסף לטלפון</button>'
+      + '<button onclick="_opEnableKiosk()" style="font-size:.62rem;padding:3px 8px;border:none;background:#1e3a5f;color:white;border-radius:5px;cursor:pointer;font-weight:700">🔒 קיוסק</button>'
+      + '<button onclick="sessionStorage.removeItem(\'solanOperatorName\');location.reload()" style="font-size:.62rem;padding:2px 7px;border:1px solid #e2e8f0;background:transparent;color:#94a3b8;border-radius:4px;cursor:pointer">שנה שם</button>';
+  var html = '<div style="background:white;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;box-shadow:0 1px 6px #0000001a;border-bottom:2px solid ' + (_kiosk?'#b91c1c':'#e2e8f0') + '">'
+    + '<div><div style="color:#1e293b;font-size:1.15rem;font-weight:900">🏭 ' + escHtml(machine) + (_kiosk?' <span style="font-size:.62rem;background:#b91c1c;color:#fff;border-radius:5px;padding:2px 7px;vertical-align:middle">🔒 קיוסק</span>':'') + '</div>'
     + '<div style="color:#94a3b8;font-size:.73rem;margin-top:2px">' + active.length + ' בתור · ' + now + ' · ' + escHtml(_machineViewOpName) + '</div></div>'
-    + '<div style="display:flex;gap:5px">'
-    + '<button id="op-install-btn" onclick="_opInstall()" style="font-size:.62rem;padding:3px 8px;border:none;background:#2563eb;color:white;border-radius:5px;cursor:pointer;font-weight:700">📲 הוסף לטלפון</button>'
-    + '<button onclick="sessionStorage.removeItem(\'solanOperatorName\');location.reload()" style="font-size:.62rem;padding:2px 7px;border:1px solid #e2e8f0;background:transparent;color:#94a3b8;border-radius:4px;cursor:pointer">שנה שם</button>'
-    + '</div></div>'
+    + '<div style="display:flex;gap:5px">' + _hdrBtns + '</div></div>'
     + '<div style="flex:1;overflow-y:auto;padding:14px 16px">';
+
+  // ── עיתונים מאושרים מהלקוחות — דפדוף מהיר ─────────────────
+  var _approved = (typeof _opApprovedProofs === 'function') ? _opApprovedProofs() : [];
+  if (_approved.length) {
+    html += '<div style="background:white;border:1.5px solid #c7d2fe;border-radius:12px;padding:11px 14px;margin-bottom:14px">'
+      + '<div style="font-size:.85rem;font-weight:900;color:#1e3a5f;margin-bottom:8px">📰 עיתונים מאושרים לצפייה</div>'
+      + '<div style="display:flex;flex-direction:column;gap:7px">'
+      + _approved.map(function(a){
+          return '<div style="display:flex;align-items:center;gap:8px;justify-content:space-between">'
+            + '<span style="font-size:.85rem;font-weight:700;color:#1e293b;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(a.name) + '</span>'
+            + '<button onclick="_opOpenFlipbook(' + sq(a.id) + ',' + (a.part?sq(a.part):'null') + ')" '
+            + 'style="font-size:.8rem;font-weight:800;padding:6px 14px;border:none;border-radius:8px;background:#7c3aed;color:#fff;cursor:pointer;flex-shrink:0;font-family:Heebo,sans-serif">📖 דפדוף</button>'
+            + '</div>';
+        }).join('')
+      + '</div></div>';
+  }
 
   if (!active.length && !done.length) {
     html += '<div style="text-align:center;color:#94a3b8;font-size:1.1rem;padding:60px 20px;line-height:2">✓<br>אין עבודות בתור</div>';
