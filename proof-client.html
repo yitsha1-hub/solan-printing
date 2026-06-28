@@ -9,12 +9,11 @@
 <style>
   :root { --press:#2d3561; --green:#16a34a; --red:#dc2626; --line:#e5e7eb; --ink:#1f2937; }
   * { box-sizing: border-box; }
-  body { margin:0; font-family: system-ui,"Segoe UI",Arial,sans-serif; background:#f3f4f6; color:var(--ink); padding:18px; }
-  .wrap { max-width: 960px; margin:0 auto; }
-  header { text-align:center; margin-bottom:14px; }
-  header h1 { font-size:1.2rem; margin:0; }
-  header .sub { color:#6b7280; font-size:.85rem; margin-top:3px; }
-  .hint { background:#eef2ff; border:1px solid #c7d2fe; color:#3730a3; padding:10px 14px; border-radius:10px; font-size:.85rem; margin-bottom:14px; }
+  body { margin:0; font-family: system-ui,"Segoe UI",Arial,sans-serif; background:#f3f4f6; color:var(--ink); padding:16px; }
+  .wrap { max-width: 1100px; margin:0 auto; }
+  header { text-align:center; margin-bottom:12px; }
+  header h1 { font-size:1.2rem; margin:0; } header .sub { color:#6b7280; font-size:.85rem; margin-top:3px; }
+  .hint { background:#eef2ff; border:1px solid #c7d2fe; color:#3730a3; padding:9px 13px; border-radius:10px; font-size:.83rem; margin-bottom:12px; }
   .choice { display:flex; gap:14px; flex-wrap:wrap; justify-content:center; margin:20px 0; }
   .choice button { flex:1; min-width:220px; padding:22px; border:2px solid var(--line); border-radius:14px; background:#fff; cursor:pointer; font-size:1.05rem; font-weight:800; color:var(--press); }
   .choice button:hover { border-color:var(--press); background:#f8faff; }
@@ -23,66 +22,90 @@
   .parts { background:#fff; border:1.5px solid var(--line); border-radius:12px; padding:10px 14px; margin-bottom:8px; }
   .parts h3 { font-size:.9rem; margin:4px 0 8px; }
   .parts .row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--line); font-size:.88rem; }
-  .parts .row:last-child { border-bottom:none; }
-  .parts .ok { color:var(--green); font-weight:700; }
-  .drop { border:2.5px dashed #c7d2fe; border-radius:14px; padding:26px; text-align:center; background:#fff; cursor:pointer; }
+  .parts .row:last-child { border-bottom:none; } .parts .ok { color:var(--green); font-weight:700; }
+  .drop { border:2.5px dashed #c7d2fe; border-radius:14px; padding:22px; text-align:center; background:#fff; cursor:pointer; margin-bottom:12px; }
   .drop.over { background:#eef2ff; } .drop b { color:var(--press); }
-  #grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:12px; margin-top:16px; }
-  .pg { background:#fff; border:1.5px solid var(--line); border-radius:10px; overflow:hidden; position:relative; cursor:grab; box-shadow:0 2px 8px rgba(0,0,0,.05); }
-  .pg.dragging { opacity:.4; } .pg.dragover { outline:3px solid var(--press); }
-  .pg canvas { display:block; width:100%; height:auto; background:#fff; }
-  .pg .num { position:absolute; top:6px; right:6px; background:var(--press); color:#fff; font-size:.78rem; font-weight:800; border-radius:20px; padding:2px 9px; }
-  .pg .del { position:absolute; top:6px; left:6px; background:rgba(220,38,38,.92); color:#fff; border:none; border-radius:7px; width:26px; height:26px; cursor:pointer; }
-  .bottom { position:sticky; bottom:0; background:#f3f4f6; padding:14px 0; margin-top:18px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+
+  #workspace { display:flex; gap:14px; align-items:flex-start; }
+  #sidebar { width:158px; flex:0 0 158px; max-height:74vh; overflow-y:auto; display:flex; flex-direction:column; gap:8px; }
+  .thumb { position:relative; border:1.5px solid var(--line); border-radius:8px; overflow:hidden; background:#fff; cursor:grab; }
+  .thumb.active { outline:3px solid var(--press); }
+  .thumb.dragging { opacity:.4; } .thumb.dragover { outline:3px dashed var(--press); }
+  .thumb canvas { display:block; width:100%; height:auto; background:#fff; }
+  .thumb .n { position:absolute; top:4px; right:4px; background:var(--press); color:#fff; font-size:.72rem; font-weight:800; border-radius:14px; padding:1px 7px; }
+  .thumb .tools { position:absolute; bottom:0; left:0; right:0; display:flex; }
+  .thumb .tools button { flex:1; border:none; padding:4px 0; font-size:.78rem; cursor:pointer; color:#fff; }
+  .thumb .rep { background:rgba(45,53,97,.92); } .thumb .rm { background:rgba(220,38,38,.92); }
+
+  #viewer { flex:1; min-width:0; }
+  #spread { display:flex; gap:2px; justify-content:center; background:#d1d5db; padding:8px; border-radius:8px; min-height:40vh; align-items:center; }
+  #spread canvas { display:block; height:64vh; width:auto; max-width:46%; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.15); }
+  #spread .ph { color:#6b7280; font-size:.9rem; padding:40px; }
+  #vnav { display:flex; align-items:center; justify-content:center; gap:16px; margin-top:10px; }
+  #vnav button { font-size:1rem; padding:7px 16px; border:1.5px solid var(--line); background:#fff; border-radius:8px; cursor:pointer; }
+  #vnav button:disabled { opacity:.35; cursor:default; }
+  #vlabel { min-width:120px; text-align:center; font-variant-numeric:tabular-nums; font-size:.88rem; }
+
+  .bottom { position:sticky; bottom:0; background:#f3f4f6; padding:13px 0; margin-top:14px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
   .btn { padding:13px 26px; border:none; border-radius:10px; font-size:1.02rem; font-weight:800; cursor:pointer; }
   .add { background:#fff; color:var(--press); border:1.5px solid var(--line); }
-  .approve { background:var(--green); color:#fff; min-width:230px; }
-  .back { background:#fff; color:#6b7280; border:1.5px solid var(--line); }
+  .approve { background:var(--green); color:#fff; min-width:230px; } .back { background:#fff; color:#6b7280; border:1.5px solid var(--line); }
   .btn:disabled { opacity:.45; cursor:default; }
   #overlay { position:fixed; inset:0; background:rgba(255,255,255,.95); display:none; align-items:center; justify-content:center; flex-direction:column; gap:12px; text-align:center; padding:24px; z-index:50; white-space:pre-line; }
   #status { text-align:center; padding:30px; font-size:1.15rem; font-weight:700; }
   .hidden { display:none !important; }
+  @media (max-width:680px){ #workspace{flex-direction:column} #sidebar{width:100%;flex:none;flex-direction:row;max-height:none;overflow-x:auto} .thumb{flex:0 0 110px} #spread canvas{height:48vh;max-width:48%} }
 </style>
 </head>
 <body>
 <div id="overlay">טוען…</div>
-
 <div class="wrap">
   <header>
     <h1>העלאת קבצים לדפוס</h1>
     <div class="sub" id="sub">סולן הדפסות</div>
   </header>
 
-  <!-- מסך בית: בחירה בין עיתון מלא לריצה -->
   <div id="home" class="hidden">
     <div id="partsBox"></div>
-    <div class="hint">בחר/י מה להעלות. אפשר עיתון שלם בבת אחת, או ריצה אחת בכל פעם (ולחזור לקישור הזה בהמשך להוסיף עוד).</div>
+    <div class="hint">בחר/י מה להעלות. אפשר עיתון שלם בבת אחת, או ריצה אחת בכל פעם (ולחזור לקישור הזה בהמשך).</div>
     <div class="choice">
       <button id="chFull"><span class="em">📄</span>עיתון מלא<span class="d">כל העמודים יחד</span></button>
       <button id="chRun"><span class="em">➕</span>ריצה בודדת<span class="d">חלק מהעיתון — אפשר להוסיף עוד בהמשך</span></button>
     </div>
   </div>
 
-  <!-- עורך: העלאה וסידור -->
   <div id="editor" class="hidden">
     <div class="hint" id="editorHint"></div>
     <div class="drop" id="drop">📄 <b>בחרו קבצי PDF</b> או גררו לכאן
       <input type="file" id="file" accept="application/pdf" multiple hidden></div>
-    <div id="grid"></div>
+    <div id="workspace">
+      <div id="sidebar"></div>
+      <div id="viewer">
+        <div id="spread"><div class="ph">העלו קבצים כדי לצפות ולדפדף</div></div>
+        <div id="vnav">
+          <button id="vprev">‹ הקודם</button>
+          <span id="vlabel"></span>
+          <button id="vnext">הבא ›</button>
+        </div>
+      </div>
+    </div>
     <div class="bottom">
       <button class="btn back" id="backBtn">↩ חזרה</button>
       <button class="btn add" id="addMore">➕ הוסף קבצים</button>
-      <button class="btn approve" id="approve" disabled>✓ אשר ושלח</button>
+      <button class="btn approve" id="approve" disabled>✓ אשר ושלח לדפוס</button>
     </div>
   </div>
 
   <div id="status" class="hidden"></div>
 </div>
 
+<input type="file" id="repInput" accept="application/pdf" hidden>
+
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const _FBURL   = 'https://solan-printing-default-rtdb.europe-west1.firebasedatabase.app';
 const _BUCKETS = ['solan-printing.firebasestorage.app', 'solan-printing.appspot.com'];
+const THUMB_SCALE = 0.22;
 
 const $ = id => document.getElementById(id);
 const overlay = $('overlay');
@@ -90,11 +113,12 @@ const showOverlay = (t, on=true) => { overlay.textContent = t; overlay.style.dis
 const show = (id, on=true) => $(id).classList.toggle('hidden', !on);
 
 const proofId = new URLSearchParams(location.search).get('id');
-let record = null;
-let mode = null;          // 'full' | 'run'
+let record = null, mode = null;
 
-const sources = new Map();
+const sources = new Map();      // fileId → { bytes, pdf }
+const displayCache = new Map(); // uid → canvas (גדול, לצפייה)
 let pages = [], nextUid = 1, nextFid = 1;
+let vIndex = 0;                 // עמוד ראשון בכפולה הנוכחית
 
 (async function init() {
   if (!proofId) return fail('לא נמצא מזהה בכתובת.');
@@ -102,42 +126,31 @@ let pages = [], nextUid = 1, nextFid = 1;
     record = await (await fetch(`${_FBURL}/customerProofs/${proofId}.json`)).json();
     if (!record) return fail('הקישור לא תקין או שהוסר.');
     $('sub').textContent = [record.customer, record.title].filter(Boolean).join(' · ') || 'סולן הדפסות';
-    showOverlay('', false);
-    goHome();
+    showOverlay('', false); goHome();
   } catch (e) { console.error(e); fail('שגיאה בטעינה.'); }
 })();
 
 function goHome() {
-  // אם הוגש עיתון מלא ואושר — סיום
-  if (record.mode === 'full' && record.status === 'approved')
-    return done('העיתון המלא כבר אושר ונשלח לדפוס. תודה!');
-
-  pages = []; sources.clear();
+  if (record.mode === 'full' && record.status === 'approved') return done('העיתון כבר אושר ונשלח לדפוס. תודה!');
+  pages = []; sources.clear(); displayCache.clear(); vIndex = 0;
   show('editor', false); show('status', false); show('home', true);
-
-  // הצגת ריצות שכבר הוגשו
-  const parts = record.parts || {};
-  const list = Object.values(parts).sort((a,b)=>(a.approvedAt||0)-(b.approvedAt||0));
-  if (list.length) {
-    $('partsBox').innerHTML = `<div class="parts"><h3>✓ ריצות שכבר נשלחו</h3>${
-      list.map(p => `<div class="row"><span>${escapeHtml(p.name)}</span><span class="ok">התקבל · ${p.pageCount} עמ'</span></div>`).join('')
-    }</div>`;
-  } else $('partsBox').innerHTML = '';
+  const parts = Object.values(record.parts || {}).sort((a,b)=>(a.approvedAt||0)-(b.approvedAt||0));
+  $('partsBox').innerHTML = parts.length
+    ? `<div class="parts"><h3>✓ ריצות שכבר נשלחו</h3>${parts.map(p=>`<div class="row"><span>${esc(p.name)}</span><span class="ok">התקבל · ${p.pageCount} עמ'</span></div>`).join('')}</div>`
+    : '';
 }
 
 $('chFull').onclick = () => startEditor('full');
 $('chRun').onclick  = () => startEditor('run');
-
 function startEditor(m) {
-  mode = m;
-  pages = []; sources.clear(); renderGrid();
+  mode = m; pages = []; sources.clear(); displayCache.clear(); vIndex = 0;
   $('editorHint').innerHTML = m === 'full'
-    ? 'העלו את <b>כל עמודי העיתון</b> וסדרו אותם בסדר הנכון. אתם אחראים על הסדר הסופי.'
-    : 'העלו את עמודי <b>הריצה</b> הזו וסדרו בסדר הנכון. בסיום תוכלו לחזור ולהוסיף ריצה נוספת.';
+    ? 'העלו את <b>כל עמודי העיתון</b>. דפדפו בתצוגה, וסדרו/החליפו עמודים בסרגל הצד. אתם אחראים על הסדר.'
+    : 'העלו את עמודי <b>הריצה</b>. דפדפו וסדרו בסרגל הצד. בסיום אפשר להוסיף ריצה נוספת.';
+  renderAll();
   show('home', false); show('editor', true);
 }
-
-$('backBtn').onclick = () => { if (!pages.length || confirm('לחזור? העמודים שטרם אושרו יימחקו.')) goHome(); };
+$('backBtn').onclick = () => { if (!pages.length || confirm('לחזור? עמודים שטרם אושרו יימחקו.')) goHome(); };
 
 // ── העלאה ──
 $('drop').onclick = () => $('file').click();
@@ -147,72 +160,145 @@ $('file').onchange = e => addFiles(e.target.files);
 ['dragleave','drop'].forEach(ev => $('drop').addEventListener(ev, e => { e.preventDefault(); $('drop').classList.remove('over'); }));
 $('drop').addEventListener('drop', e => addFiles(e.dataTransfer.files));
 
-const THUMB_SCALE = 0.25;   // רזולוציית ממוזערת — נמוך = מהיר
-
 async function addFiles(fileList) {
   const files = [...fileList].filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
   if (!files.length) return;
   showOverlay('טוען עמודים…');
-
-  const queue = [];  // עמודים שצריך לרנדר ברקע
+  const queue = [];
   for (const file of files) {
     try {
       const bytes = await file.arrayBuffer();
       const fileId = 'f' + (nextFid++);
       const pdf = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
-      sources.set(fileId, { bytes });
+      sources.set(fileId, { bytes, pdf });
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const vp = page.getViewport({ scale: THUMB_SCALE });
         const c = document.createElement('canvas');
-        c.width = Math.max(1, Math.floor(vp.width));
-        c.height = Math.max(1, Math.floor(vp.height));
-        const ctx = c.getContext('2d');
-        ctx.fillStyle = '#e5e7eb'; ctx.fillRect(0, 0, c.width, c.height); // מסגרת זמנית
-        pages.push({ uid: nextUid++, fileId, pageIndex: i - 1, canvas: c });
+        c.width = Math.max(1, Math.floor(vp.width)); c.height = Math.max(1, Math.floor(vp.height));
+        const ctx = c.getContext('2d'); ctx.fillStyle = '#e5e7eb'; ctx.fillRect(0,0,c.width,c.height);
+        pages.push({ uid: nextUid++, fileId, pageIndex: i-1, canvas: c });
         queue.push({ page, vp, ctx });
       }
     } catch (e) { console.error('קובץ נכשל:', file.name, e); }
   }
-
   $('file').value = '';
-  renderGrid();              // הצג מיד את כל העמודים (מסגרות)
-  showOverlay('', false);
-
-  // מלא את התמונות ברקע — הלקוח יכול כבר לסדר/למחוק תוך כדי
-  for (const t of queue) {
-    try { await t.page.render({ canvasContext: t.ctx, viewport: t.vp }).promise; t.page.cleanup(); }
-    catch (e) { /* התעלם מעמוד בודד שנכשל */ }
-  }
+  renderAll(); showOverlay('', false);
+  for (const t of queue) { try { await t.page.render({ canvasContext: t.ctx, viewport: t.vp }).promise; t.page.cleanup(); } catch (e) {} }
 }
 
-function renderGrid() {
-  const grid = $('grid'); grid.innerHTML = '';
+// ── סרגל צד ──
+function renderSidebar() {
+  const sb = $('sidebar'); sb.innerHTML = '';
   pages.forEach((p, idx) => {
-    const div = document.createElement('div');
-    div.className = 'pg'; div.draggable = true; div.dataset.uid = p.uid;
-    div.innerHTML = `<span class="num">${idx + 1}</span><button class="del">✕</button>`;
-    div.insertBefore(p.canvas, div.firstChild);
-    div.querySelector('.del').onclick = e => { e.stopPropagation(); pages = pages.filter(x => x.uid !== p.uid); renderGrid(); };
-    bindDnD(div); grid.appendChild(div);
+    const d = document.createElement('div');
+    d.className = 'thumb' + (showingPages().includes(idx) ? ' active' : '');
+    d.draggable = true; d.dataset.uid = p.uid;
+    d.innerHTML = `<span class="n">${idx+1}</span>
+      <div class="tools"><button class="rep">החלף</button><button class="rm">מחק</button></div>`;
+    d.insertBefore(p.canvas, d.firstChild);
+    d.onclick = e => { if (!e.target.closest('.tools')) { vIndex = alignSpread(idx); renderViewer(); renderSidebar(); } };
+    d.querySelector('.rep').onclick = e => { e.stopPropagation(); replacePage(p.uid); };
+    d.querySelector('.rm').onclick  = e => { e.stopPropagation(); removePage(p.uid); };
+    bindDnD(d); sb.appendChild(d);
   });
   $('approve').disabled = pages.length === 0;
 }
 
+function removePage(uid) {
+  const idx = pages.findIndex(p => p.uid === uid);
+  pages = pages.filter(p => p.uid !== uid); displayCache.delete(uid);
+  if (vIndex >= pages.length) vIndex = Math.max(0, pages.length - 1);
+  renderAll();
+}
+
+// החלפת עמוד — בוחרים PDF, העמוד הראשון שלו מחליף
+let _repUid = null;
+function replacePage(uid) { _repUid = uid; $('repInput').value=''; $('repInput').click(); }
+$('repInput').onchange = async e => {
+  const file = e.target.files[0]; if (!file || _repUid == null) return;
+  showOverlay('מחליף עמוד…');
+  try {
+    const bytes = await file.arrayBuffer();
+    const fileId = 'f' + (nextFid++);
+    const pdf = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+    sources.set(fileId, { bytes, pdf });
+    const item = pages.find(p => p.uid === _repUid);
+    item.fileId = fileId; item.pageIndex = 0;
+    const page = await pdf.getPage(1);
+    const vp = page.getViewport({ scale: THUMB_SCALE });
+    const c = document.createElement('canvas'); c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+    await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise; page.cleanup();
+    item.canvas = c; displayCache.delete(_repUid);
+  } catch (e) { console.error(e); }
+  _repUid = null; renderAll(); showOverlay('', false);
+};
+
+// גרירה לסידור
 let dragUid = null;
 function bindDnD(el) {
   el.addEventListener('dragstart', () => { dragUid = +el.dataset.uid; el.classList.add('dragging'); });
-  el.addEventListener('dragend',   () => { dragUid = null; el.classList.remove('dragging'); document.querySelectorAll('.pg').forEach(x=>x.classList.remove('dragover')); });
+  el.addEventListener('dragend',   () => { dragUid = null; el.classList.remove('dragging'); document.querySelectorAll('.thumb').forEach(x=>x.classList.remove('dragover')); });
   el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('dragover'); });
   el.addEventListener('dragleave', () => el.classList.remove('dragover'));
   el.addEventListener('drop', e => {
-    e.preventDefault();
-    const t = +el.dataset.uid;
+    e.preventDefault(); const t = +el.dataset.uid;
     if (dragUid == null || dragUid === t) return;
     const from = pages.findIndex(p => p.uid === dragUid), to = pages.findIndex(p => p.uid === t);
-    const [m] = pages.splice(from, 1); pages.splice(to, 0, m); renderGrid();
+    const [m] = pages.splice(from, 1); pages.splice(to, 0, m); renderAll();
   });
 }
+
+// ── תצוגת דפדוף (כפולה, RTL) ──
+function showingPages() {
+  if (!pages.length) return [];
+  if (vIndex === 0) return [0];
+  const left = vIndex % 2 === 1 ? vIndex : vIndex - 1;
+  return [left, left + 1].filter(i => i < pages.length);
+}
+function alignSpread(idx) { return idx === 0 ? 0 : (idx % 2 === 1 ? idx : idx - 1); }
+
+async function renderViewer() {
+  const spread = $('spread');
+  if (!pages.length) { spread.innerHTML = '<div class="ph">העלו קבצים כדי לצפות ולדפדף</div>'; $('vlabel').textContent=''; return; }
+  const s = showingPages();
+  $('vlabel').textContent = `עמוד ${s.map(i=>i+1).join('–')} מתוך ${pages.length}`;
+  $('vprev').disabled = vIndex <= 0;
+  $('vnext').disabled = s[s.length-1] >= pages.length - 1;
+  spread.innerHTML = '<div class="ph">טוען…</div>';
+  const canvases = [];
+  for (const i of s) canvases.push(await renderDisplay(pages[i]));
+  spread.innerHTML = '';
+  for (const c of canvases) spread.appendChild(c);   // dir rtl: עמוד נמוך מימין
+}
+
+async function renderDisplay(item) {
+  if (displayCache.has(item.uid)) return displayCache.get(item.uid);
+  const { pdf } = sources.get(item.fileId);
+  const page = await pdf.getPage(item.pageIndex + 1);
+  const v1 = page.getViewport({ scale: 1 });
+  const scale = Math.min(2, 900 / v1.height);
+  const vp = page.getViewport({ scale });
+  const c = document.createElement('canvas'); c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+  await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise; page.cleanup();
+  displayCache.set(item.uid, c); return c;
+}
+
+function step(d) {
+  if (vIndex === 0) vIndex = d > 0 ? 1 : 0;
+  else vIndex = Math.max(0, Math.min(vIndex + d * 2, pages.length - 1));
+  if (vIndex > 0 && vIndex % 2 === 0) vIndex -= 1;
+  renderViewer(); renderSidebar();
+}
+$('vprev').onclick = () => step(-1);
+$('vnext').onclick = () => step(+1);
+document.addEventListener('keydown', e => {
+  if ($('editor').classList.contains('hidden')) return;
+  if (e.key === 'ArrowLeft') step(+1);
+  if (e.key === 'ArrowRight') step(-1);
+});
+
+function renderAll() { renderSidebar(); renderViewer(); }
 
 // ── אישור והגשה ──
 $('approve').onclick = async () => {
@@ -224,7 +310,6 @@ $('approve').onclick = async () => {
     if (!runName) return;
   }
   if (!confirm(`לאשר ולשלוח ${pages.length} עמודים בסדר הנוכחי?\nלאחר האישור לא ניתן לשנות.`)) return;
-
   try {
     showOverlay('מרכיב קובץ…');
     const out = await PDFLib.PDFDocument.create();
@@ -236,55 +321,46 @@ $('approve').onclick = async () => {
     }
     const pdfBytes = await out.save();
     const folder = (record.customer || 'לקוח').replace(/[^\p{L}\p{N}_-]+/gu, '_').slice(0, 60) || 'לקוח';
-
     showOverlay('מעלה…');
     if (mode === 'full') {
       const path = `customerProofs/${folder}/${proofId}/full.pdf`;
       const fileUrl = await uploadBytes(path, pdfBytes);
-      await patch({ status: 'approved', mode: 'full', fileUrl, filePath: path, fileName: 'full.pdf', pageCount: pages.length, approvedAt: Date.now() });
+      await patch({ status:'approved', mode:'full', fileUrl, filePath:path, fileName:'full.pdf', pageCount:pages.length, approvedAt:Date.now() });
       return done('✓ העיתון אושר ונשלח לדפוס. תודה!');
     } else {
       const partId = 'p' + Date.now();
       const path = `customerProofs/${folder}/${proofId}/${partId}.pdf`;
       const fileUrl = await uploadBytes(path, pdfBytes);
       await fetch(`${_FBURL}/customerProofs/${proofId}/parts/${partId}.json`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: runName, fileUrl, filePath: path, pageCount: pages.length, status: 'approved', approvedAt: Date.now() }),
-      });
-      await patch({ status: 'parts', mode: 'parts' });
-      record = await (await fetch(`${_FBURL}/customerProofs/${proofId}.json`)).json();  // רענון
-      showOverlay('', false);
-      alert(`✓ "${runName}" נשלחה. אפשר להוסיף ריצה נוספת או לסגור.`);
-      goHome();
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ name:runName, fileUrl, filePath:path, pageCount:pages.length, status:'approved', approvedAt:Date.now() }) });
+      await patch({ status:'parts', mode:'parts' });
+      record = await (await fetch(`${_FBURL}/customerProofs/${proofId}.json`)).json();
+      showOverlay('', false); alert(`✓ "${runName}" נשלחה. אפשר להוסיף ריצה נוספת או לסגור.`); goHome();
     }
   } catch (e) { console.error(e); showOverlay('שגיאה: ' + e.message + '\n\nנסו שוב או פנו לבית הדפוס.'); }
 };
 
 async function patch(fields) {
-  await fetch(`${_FBURL}/customerProofs/${proofId}.json`, {
-    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields),
-  });
+  await fetch(`${_FBURL}/customerProofs/${proofId}.json`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(fields) });
 }
-
 async function uploadBytes(path, bytes) {
   let lastErr;
   for (const bucket of _BUCKETS) {
     try {
       const r = await fetch(`https://firebasestorage.googleapis.com/v0/b/${bucket}/o?name=${encodeURIComponent(path)}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: bytes });
-      if (r.ok) {
-        const token = (await r.json()).downloadTokens?.split(',')[0] || '';
-        return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(path)}?alt=media&token=${token}`;
-      }
+        { method:'POST', headers:{'Content-Type':'application/pdf'}, body: bytes });
+      if (r.ok) { const token = (await r.json()).downloadTokens?.split(',')[0] || '';
+        return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(path)}?alt=media&token=${token}`; }
     } catch (e) { lastErr = e; }
   }
   throw lastErr || new Error('העלאה נכשלה');
 }
 
-function done(text) { show('home', false); show('editor', false); showOverlay('', false);
-  const s = $('status'); s.classList.remove('hidden'); s.innerHTML = `<div style="color:var(--green);font-size:2.4rem">✓</div>${text}`; }
-function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-function fail(msg) { showOverlay(msg); throw new Error(msg); }
+function done(text){ show('home',false); show('editor',false); showOverlay('',false);
+  const s=$('status'); s.classList.remove('hidden'); s.innerHTML=`<div style="color:var(--green);font-size:2.4rem">✓</div>${text}`; }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function fail(msg){ showOverlay(msg); throw new Error(msg); }
 </script>
 </body>
 </html>
