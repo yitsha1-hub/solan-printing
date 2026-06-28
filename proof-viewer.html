@@ -5,13 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>צפייה בעיתון — סולן הדפסות</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap" rel="stylesheet">
 <style>
-  :root { --press:#2d3561; --line:#e5e7eb; --ink:#1f2937; }
+  :root { --press:#2d3561; --press-d:#222a4d; --gold:#c9a84c; --gold-light:#e8d5a3; --line:#e5e7eb; --ink:#1f2937; }
   * { box-sizing:border-box; }
-  body { margin:0; font-family:system-ui,"Segoe UI",Arial,sans-serif; background:#f3f4f6; color:var(--ink);
-         min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:10px; }
-  header { text-align:center; margin-bottom:8px; }
-  header h1 { font-size:1.1rem; margin:0; } header .sub { color:#6b7280; font-size:.83rem; margin-top:3px; }
+  body { margin:0; font-family:'Heebo',system-ui,"Segoe UI",Arial,sans-serif; color:var(--ink);
+         background:linear-gradient(180deg,#eef1f6 0%,#f5f6f9 100%); min-height:100vh; display:flex; flex-direction:column; align-items:center; }
+  .brandbar { width:100%; background:linear-gradient(135deg,var(--press) 0%,var(--press-d) 100%); color:#fff;
+    padding:14px 20px; box-shadow:0 4px 18px rgba(45,53,97,.28); display:flex; align-items:center; justify-content:center;
+    gap:13px; position:relative; margin-bottom:12px; }
+  .brandbar::after { content:''; position:absolute; left:0; right:0; bottom:0; height:3px;
+    background:linear-gradient(90deg,var(--gold),var(--gold-light),var(--gold)); }
+  .brandbar .logo { width:42px; height:42px; border-radius:11px; background:rgba(255,255,255,.1);
+    border:1.5px solid rgba(201,168,76,.6); display:flex; align-items:center; justify-content:center; font-size:1.35rem; }
+  .brandbar h1 { font-size:1.3rem; font-weight:900; margin:0; } .brandbar h1 span { color:var(--gold); }
+  .brandbar .tag { font-size:.8rem; color:var(--gold-light); margin-top:1px; }
+  header { text-align:center; margin-bottom:8px; padding:0 10px; }
+  header h1 { font-size:1.05rem; font-weight:800; margin:0; color:var(--press); } header .sub { color:#6b7280; font-size:.85rem; margin-top:3px; }
   #viewer { width:100%; max-width:1500px; background:#fff; border-radius:10px; }
   #spread { display:flex; gap:3px; justify-content:center; background:#d1d5db; padding:10px; border-radius:8px;
             min-height:55vh; align-items:center; }
@@ -41,8 +52,15 @@
 </head>
 <body>
 <div id="overlay"><div id="ovText">טוען עיתון…</div><div id="ovBar"><div></div></div></div>
+<div class="brandbar">
+  <div class="logo">🖨️</div>
+  <div style="text-align:center">
+    <h1>סולן הדפסות <span>בע"מ</span></h1>
+    <div class="tag">צפייה בעיתון — סדר עמודים מאושר</div>
+  </div>
+</div>
 <header>
-  <h1 id="ttl">צפייה בעיתון</h1>
+  <h1 id="ttl">👁 צפייה בעיתון</h1>
   <div class="sub" id="sub">סולן הדפסות</div>
 </header>
 
