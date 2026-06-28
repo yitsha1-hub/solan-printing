@@ -105,8 +105,9 @@ let imgs = [], vIndex = 0;
 
   // איזה קובץ להציג: ריצה מסוימת (part), עיתון מלא, או בוחר ריצות
   let url = null, label = '';
-  if (partId && rec.parts && rec.parts[partId]) { url = rec.parts[partId].fileUrl; label = rec.parts[partId].name || ''; }
-  else if (rec.fileUrl) { url = rec.fileUrl; }
+  var cacheUrl = '', cacheAt = 0;
+  if (partId && rec.parts && rec.parts[partId]) { var pt=rec.parts[partId]; url = pt.fileUrl; label = pt.name || ''; cacheUrl = pt.pagesUrl||''; cacheAt = pt.pagesReadyAt||0; }
+  else if (rec.fileUrl) { url = rec.fileUrl; cacheUrl = rec.pagesUrl||''; cacheAt = rec.pagesReadyAt||0; }
   else if (rec.parts && Object.keys(rec.parts).length) {
     // עבודה לפי ריצות — הצג בורר ריצות לצפייה
     showOverlay('', false);
@@ -119,6 +120,19 @@ let imgs = [], vIndex = 0;
   } else { return fail('עדיין לא הועלה/אושר קובץ לעיתון זה.'); }
 
   if (label) $('ttl').textContent = 'צפייה — ' + label;
+
+  // ── פתיחה מהירה: אם יש תצוגה מרונדרת שמורה ועדכנית (פחות מ-12 שעות) — טוען אותה מיידית ללא רינדור ──
+  var FRESH_MS = 12 * 60 * 60 * 1000;
+  if (cacheUrl && cacheAt && (Date.now() - cacheAt) < FRESH_MS) {
+    try {
+      showOverlay('טוען תצוגה מהירה…', true, 0);
+      imgs = await (await fetch(cacheUrl)).json();
+      if (Array.isArray(imgs) && imgs.length) {
+        showOverlay('', false); show('viewer', true); renderViewer();
+        return;
+      }
+    } catch(e){ console.warn('quick-cache failed, falling back to PDF render:', e); }
+  }
 
   try {
     const buf = await (await fetch(url)).arrayBuffer();
