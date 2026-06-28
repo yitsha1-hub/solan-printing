@@ -162,9 +162,10 @@ $('chFull').onclick = () => startEditor('full');
 $('chRun').onclick  = () => startEditor('run');
 function startEditor(m) {
   mode = m; pages = []; sources.clear(); vIndex = 0;
-  $('editorHint').innerHTML = m === 'full'
+  $('editorHint').innerHTML = (m === 'full'
     ? 'העלו את <b>כל עמודי העיתון</b>. דפדפו בתצוגה, וסדרו/החליפו עמודים בסרגל הצד. אתם אחראים על הסדר.'
-    : 'העלו את עמודי <b>הריצה</b>. דפדפו וסדרו בסרגל הצד. בסיום אפשר להוסיף ריצה נוספת.';
+    : 'העלו את עמודי <b>הריצה</b>. דפדפו וסדרו בסרגל הצד. בסיום אפשר להוסיף ריצה נוספת.')
+    + '<br>🎨 <b>שימו לב:</b> ודאו שהקבצים מיוצאים בצבעי <b>CMYK</b> (לא RGB), אחרת ייתכנו הבדלי צבע בדפוס.';
   renderAll(); show('home', false); show('editor', true);
 }
 $('backBtn').onclick = () => { if (!pages.length || confirm('לחזור? עמודים שטרם אושרו יימחקו.')) goHome(); };
@@ -393,7 +394,7 @@ $('approve').onclick = async () => {
     if (mode === 'full') {
       const path = `customerProofs/${folder}/${proofId}/full.pdf`;
       const fileUrl = await uploadBytes(path, pdfBytes, onUp);
-      await patch({ status:'approved', mode:'full', fileUrl, filePath:path, fileName:'full.pdf', pageCount:pages.length, approvedAt:Date.now() });
+      await patch({ status:'approved', mode:'full', fileUrl, filePath:path, fileName:'full.pdf', pageCount:pages.length, fileSize:pdfBytes.byteLength, approvedAt:Date.now() });
       return done('✓ העיתון אושר ונשלח לדפוס. תודה!');
     } else {
       const partId = 'p' + Date.now();
@@ -401,7 +402,7 @@ $('approve').onclick = async () => {
       const fileUrl = await uploadBytes(path, pdfBytes, onUp);
       await fetch(`${_FBURL}/customerProofs/${proofId}/parts/${partId}.json`, {
         method:'PUT', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ name:runName, fileUrl, filePath:path, pageCount:pages.length, status:'approved', approvedAt:Date.now() }) });
+        body: JSON.stringify({ name:runName, fileUrl, filePath:path, pageCount:pages.length, fileSize:pdfBytes.byteLength, status:'approved', approvedAt:Date.now() }) });
       await patch({ status:'parts', mode:'parts' });
       record = await (await fetch(`${_FBURL}/customerProofs/${proofId}.json`)).json();
       showOverlay('', false); alert(`✓ "${runName}" נשלחה. אפשר להוסיף ריצה נוספת או לסגור.`); goHome();
