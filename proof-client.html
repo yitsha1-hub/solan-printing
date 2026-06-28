@@ -14,31 +14,32 @@
   header { text-align:center; margin-bottom:14px; }
   header h1 { font-size:1.2rem; margin:0; }
   header .sub { color:#6b7280; font-size:.85rem; margin-top:3px; }
-  .hint { background:#eef2ff; border:1px solid #c7d2fe; color:#3730a3; padding:10px 14px;
-          border-radius:10px; font-size:.85rem; margin-bottom:14px; }
-  .drop { border:2.5px dashed #c7d2fe; border-radius:14px; padding:26px; text-align:center;
-          background:#fff; cursor:pointer; transition:background .15s; }
-  .drop.over { background:#eef2ff; }
-  .drop b { color:var(--press); }
+  .hint { background:#eef2ff; border:1px solid #c7d2fe; color:#3730a3; padding:10px 14px; border-radius:10px; font-size:.85rem; margin-bottom:14px; }
+  .choice { display:flex; gap:14px; flex-wrap:wrap; justify-content:center; margin:20px 0; }
+  .choice button { flex:1; min-width:220px; padding:22px; border:2px solid var(--line); border-radius:14px; background:#fff; cursor:pointer; font-size:1.05rem; font-weight:800; color:var(--press); }
+  .choice button:hover { border-color:var(--press); background:#f8faff; }
+  .choice .em { display:block; font-size:1.7rem; margin-bottom:6px; }
+  .choice .d { display:block; font-size:.78rem; font-weight:500; color:#6b7280; margin-top:6px; }
+  .parts { background:#fff; border:1.5px solid var(--line); border-radius:12px; padding:10px 14px; margin-bottom:8px; }
+  .parts h3 { font-size:.9rem; margin:4px 0 8px; }
+  .parts .row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--line); font-size:.88rem; }
+  .parts .row:last-child { border-bottom:none; }
+  .parts .ok { color:var(--green); font-weight:700; }
+  .drop { border:2.5px dashed #c7d2fe; border-radius:14px; padding:26px; text-align:center; background:#fff; cursor:pointer; }
+  .drop.over { background:#eef2ff; } .drop b { color:var(--press); }
   #grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:12px; margin-top:16px; }
-  .pg { background:#fff; border:1.5px solid var(--line); border-radius:10px; overflow:hidden;
-        position:relative; cursor:grab; box-shadow:0 2px 8px rgba(0,0,0,.05); }
-  .pg.dragging { opacity:.4; }
-  .pg.dragover { outline:3px solid var(--press); }
+  .pg { background:#fff; border:1.5px solid var(--line); border-radius:10px; overflow:hidden; position:relative; cursor:grab; box-shadow:0 2px 8px rgba(0,0,0,.05); }
+  .pg.dragging { opacity:.4; } .pg.dragover { outline:3px solid var(--press); }
   .pg canvas { display:block; width:100%; height:auto; background:#fff; }
-  .pg .num { position:absolute; top:6px; right:6px; background:var(--press); color:#fff;
-             font-size:.78rem; font-weight:800; border-radius:20px; padding:2px 9px; }
-  .pg .del { position:absolute; top:6px; left:6px; background:rgba(220,38,38,.92); color:#fff;
-             border:none; border-radius:7px; width:26px; height:26px; cursor:pointer; font-size:.9rem; }
-  .bottom { position:sticky; bottom:0; background:#f3f4f6; padding:14px 0; margin-top:18px;
-            display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
-  .btn { padding:14px 28px; border:none; border-radius:10px; font-size:1.05rem; font-weight:800; cursor:pointer; }
+  .pg .num { position:absolute; top:6px; right:6px; background:var(--press); color:#fff; font-size:.78rem; font-weight:800; border-radius:20px; padding:2px 9px; }
+  .pg .del { position:absolute; top:6px; left:6px; background:rgba(220,38,38,.92); color:#fff; border:none; border-radius:7px; width:26px; height:26px; cursor:pointer; }
+  .bottom { position:sticky; bottom:0; background:#f3f4f6; padding:14px 0; margin-top:18px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+  .btn { padding:13px 26px; border:none; border-radius:10px; font-size:1.02rem; font-weight:800; cursor:pointer; }
   .add { background:#fff; color:var(--press); border:1.5px solid var(--line); }
-  .approve { background:var(--green); color:#fff; min-width:240px; }
+  .approve { background:var(--green); color:#fff; min-width:230px; }
+  .back { background:#fff; color:#6b7280; border:1.5px solid var(--line); }
   .btn:disabled { opacity:.45; cursor:default; }
-  #overlay { position:fixed; inset:0; background:rgba(255,255,255,.95); display:none;
-             align-items:center; justify-content:center; flex-direction:column; gap:12px;
-             text-align:center; padding:24px; z-index:50; white-space:pre-line; }
+  #overlay { position:fixed; inset:0; background:rgba(255,255,255,.95); display:none; align-items:center; justify-content:center; flex-direction:column; gap:12px; text-align:center; padding:24px; z-index:50; white-space:pre-line; }
   #status { text-align:center; padding:30px; font-size:1.15rem; font-weight:700; }
   .hidden { display:none !important; }
 </style>
@@ -52,19 +53,26 @@
     <div class="sub" id="sub">סולן הדפסות</div>
   </header>
 
-  <div id="editor">
-    <div class="hint">
-      גררו לכאן את קבצי ה-PDF, או לחצו לבחירה. אפשר עמוד אחד בכל קובץ או קובץ אחד עם הכל.<br>
-      <b>סדרו את העמודים בסדר הנכון</b> ע"י גרירה. אתם אחראים על הסדר הסופי שיודפס.
+  <!-- מסך בית: בחירה בין עיתון מלא לריצה -->
+  <div id="home" class="hidden">
+    <div id="partsBox"></div>
+    <div class="hint">בחר/י מה להעלות. אפשר עיתון שלם בבת אחת, או ריצה אחת בכל פעם (ולחזור לקישור הזה בהמשך להוסיף עוד).</div>
+    <div class="choice">
+      <button id="chFull"><span class="em">📄</span>עיתון מלא<span class="d">כל העמודים יחד</span></button>
+      <button id="chRun"><span class="em">➕</span>ריצה בודדת<span class="d">חלק מהעיתון — אפשר להוסיף עוד בהמשך</span></button>
     </div>
-    <div class="drop" id="drop">
-      📄 <b>בחרו קבצי PDF</b> או גררו לכאן
-      <input type="file" id="file" accept="application/pdf" multiple hidden>
-    </div>
+  </div>
+
+  <!-- עורך: העלאה וסידור -->
+  <div id="editor" class="hidden">
+    <div class="hint" id="editorHint"></div>
+    <div class="drop" id="drop">📄 <b>בחרו קבצי PDF</b> או גררו לכאן
+      <input type="file" id="file" accept="application/pdf" multiple hidden></div>
     <div id="grid"></div>
     <div class="bottom">
+      <button class="btn back" id="backBtn">↩ חזרה</button>
       <button class="btn add" id="addMore">➕ הוסף קבצים</button>
-      <button class="btn approve" id="approve" disabled>✓ אשר ושלח לדפוס</button>
+      <button class="btn approve" id="approve" disabled>✓ אשר ושלח</button>
     </div>
   </div>
 
@@ -72,22 +80,21 @@
 </div>
 
 <script>
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const _FBURL   = 'https://solan-printing-default-rtdb.europe-west1.firebasedatabase.app';
 const _BUCKETS = ['solan-printing.firebasestorage.app', 'solan-printing.appspot.com'];
 
 const $ = id => document.getElementById(id);
 const overlay = $('overlay');
 const showOverlay = (t, on=true) => { overlay.textContent = t; overlay.style.display = on ? 'flex' : 'none'; };
+const show = (id, on=true) => $(id).classList.toggle('hidden', !on);
 
 const proofId = new URLSearchParams(location.search).get('id');
 let record = null;
+let mode = null;          // 'full' | 'run'
 
-// אחסון מקורות: כל קובץ שהועלה → bytes (ל-pdf-lib) + doc (ל-pdf.js)
-const sources = new Map();      // fileId → { bytes, pdfjsDoc }
-let pages = [];                  // [{ uid, fileId, pageIndex, canvas }]  בסדר התצוגה
-let nextUid = 1, nextFid = 1;
+const sources = new Map();
+let pages = [], nextUid = 1, nextFid = 1;
 
 (async function init() {
   if (!proofId) return fail('לא נמצא מזהה בכתובת.');
@@ -95,12 +102,44 @@ let nextUid = 1, nextFid = 1;
     record = await (await fetch(`${_FBURL}/customerProofs/${proofId}.json`)).json();
     if (!record) return fail('הקישור לא תקין או שהוסר.');
     $('sub').textContent = [record.customer, record.title].filter(Boolean).join(' · ') || 'סולן הדפסות';
-    if (record.status === 'approved') return done('הקבצים כבר אושרו ונשלחו לדפוס. תודה!');
     showOverlay('', false);
+    goHome();
   } catch (e) { console.error(e); fail('שגיאה בטעינה.'); }
 })();
 
-// ── העלאת קבצים ──
+function goHome() {
+  // אם הוגש עיתון מלא ואושר — סיום
+  if (record.mode === 'full' && record.status === 'approved')
+    return done('העיתון המלא כבר אושר ונשלח לדפוס. תודה!');
+
+  pages = []; sources.clear();
+  show('editor', false); show('status', false); show('home', true);
+
+  // הצגת ריצות שכבר הוגשו
+  const parts = record.parts || {};
+  const list = Object.values(parts).sort((a,b)=>(a.approvedAt||0)-(b.approvedAt||0));
+  if (list.length) {
+    $('partsBox').innerHTML = `<div class="parts"><h3>✓ ריצות שכבר נשלחו</h3>${
+      list.map(p => `<div class="row"><span>${escapeHtml(p.name)}</span><span class="ok">התקבל · ${p.pageCount} עמ'</span></div>`).join('')
+    }</div>`;
+  } else $('partsBox').innerHTML = '';
+}
+
+$('chFull').onclick = () => startEditor('full');
+$('chRun').onclick  = () => startEditor('run');
+
+function startEditor(m) {
+  mode = m;
+  pages = []; sources.clear(); renderGrid();
+  $('editorHint').innerHTML = m === 'full'
+    ? 'העלו את <b>כל עמודי העיתון</b> וסדרו אותם בסדר הנכון. אתם אחראים על הסדר הסופי.'
+    : 'העלו את עמודי <b>הריצה</b> הזו וסדרו בסדר הנכון. בסיום תוכלו לחזור ולהוסיף ריצה נוספת.';
+  show('home', false); show('editor', true);
+}
+
+$('backBtn').onclick = () => { if (!pages.length || confirm('לחזור? העמודים שטרם אושרו יימחקו.')) goHome(); };
+
+// ── העלאה ──
 $('drop').onclick = () => $('file').click();
 $('addMore').onclick = () => $('file').click();
 $('file').onchange = e => addFiles(e.target.files);
@@ -117,10 +156,9 @@ async function addFiles(fileList) {
       const bytes = await file.arrayBuffer();
       const fileId = 'f' + (nextFid++);
       const pdf = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
-      sources.set(fileId, { bytes, pdfjsDoc: pdf });
+      sources.set(fileId, { bytes });
       for (let i = 1; i <= pdf.numPages; i++) {
-        const canvas = await renderThumb(pdf, i);
-        pages.push({ uid: nextUid++, fileId, pageIndex: i - 1, canvas });
+        pages.push({ uid: nextUid++, fileId, pageIndex: i - 1, canvas: await renderThumb(pdf, i) });
       }
     } catch (e) { console.error('קובץ נכשל:', file.name, e); }
   }
@@ -139,25 +177,17 @@ async function renderThumb(pdf, pageNo) {
   return c;
 }
 
-// ── רשת עמודים + גרירה ──
 function renderGrid() {
-  const grid = $('grid');
-  grid.innerHTML = '';
+  const grid = $('grid'); grid.innerHTML = '';
   pages.forEach((p, idx) => {
     const div = document.createElement('div');
     div.className = 'pg'; div.draggable = true; div.dataset.uid = p.uid;
-    div.innerHTML = `<span class="num">${idx + 1}</span><button class="del" title="מחק עמוד">✕</button>`;
+    div.innerHTML = `<span class="num">${idx + 1}</span><button class="del">✕</button>`;
     div.insertBefore(p.canvas, div.firstChild);
-    div.querySelector('.del').onclick = e => { e.stopPropagation(); removePage(p.uid); };
-    bindDnD(div);
-    grid.appendChild(div);
+    div.querySelector('.del').onclick = e => { e.stopPropagation(); pages = pages.filter(x => x.uid !== p.uid); renderGrid(); };
+    bindDnD(div); grid.appendChild(div);
   });
   $('approve').disabled = pages.length === 0;
-}
-
-function removePage(uid) {
-  pages = pages.filter(p => p.uid !== uid);
-  renderGrid();
 }
 
 let dragUid = null;
@@ -168,46 +198,64 @@ function bindDnD(el) {
   el.addEventListener('dragleave', () => el.classList.remove('dragover'));
   el.addEventListener('drop', e => {
     e.preventDefault();
-    const targetUid = +el.dataset.uid;
-    if (dragUid == null || dragUid === targetUid) return;
-    const from = pages.findIndex(p => p.uid === dragUid);
-    const to   = pages.findIndex(p => p.uid === targetUid);
-    const [moved] = pages.splice(from, 1);
-    pages.splice(to, 0, moved);
-    renderGrid();
+    const t = +el.dataset.uid;
+    if (dragUid == null || dragUid === t) return;
+    const from = pages.findIndex(p => p.uid === dragUid), to = pages.findIndex(p => p.uid === t);
+    const [m] = pages.splice(from, 1); pages.splice(to, 0, m); renderGrid();
   });
 }
 
-// ── אישור: הרכבת PDF מסודר באיכות מלאה + העלאה ──
+// ── אישור והגשה ──
 $('approve').onclick = async () => {
   if (!pages.length) return;
-  if (!confirm(`לאשר ולשלוח ${pages.length} עמודים לדפוס בסדר הנוכחי?\nלאחר האישור לא ניתן לשנות.`)) return;
+  let runName = '';
+  if (mode === 'run') {
+    const count = Object.keys(record.parts || {}).length;
+    runName = (prompt('שם / מספר הריצה:', `ריצה ${count + 1}`) || '').trim();
+    if (!runName) return;
+  }
+  if (!confirm(`לאשר ולשלוח ${pages.length} עמודים בסדר הנוכחי?\nלאחר האישור לא ניתן לשנות.`)) return;
+
   try {
-    showOverlay('מרכיב קובץ סופי…');
+    showOverlay('מרכיב קובץ…');
     const out = await PDFLib.PDFDocument.create();
-    const libCache = new Map();
+    const cache = new Map();
     for (const p of pages) {
-      let lib = libCache.get(p.fileId);
-      if (!lib) { lib = await PDFLib.PDFDocument.load(sources.get(p.fileId).bytes); libCache.set(p.fileId, lib); }
-      const [copied] = await out.copyPages(lib, [p.pageIndex]);
-      out.addPage(copied);
+      let lib = cache.get(p.fileId);
+      if (!lib) { lib = await PDFLib.PDFDocument.load(sources.get(p.fileId).bytes); cache.set(p.fileId, lib); }
+      const [cp] = await out.copyPages(lib, [p.pageIndex]); out.addPage(cp);
     }
     const pdfBytes = await out.save();
-
-    showOverlay('מעלה לדפוס…');
     const folder = (record.customer || 'לקוח').replace(/[^\p{L}\p{N}_-]+/gu, '_').slice(0, 60) || 'לקוח';
-    const path = `customerProofs/${folder}/${proofId}/approved.pdf`;
-    const fileUrl = await uploadBytes(path, pdfBytes);
 
-    showOverlay('שומר…');
-    await fetch(`${_FBURL}/customerProofs/${proofId}.json`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'approved', fileUrl, filePath: path,
-        fileName: 'approved.pdf', pageCount: pages.length, approvedAt: Date.now() }),
-    });
-    done('✓ הקבצים אושרו ונשלחו לדפוס. תודה!');
+    showOverlay('מעלה…');
+    if (mode === 'full') {
+      const path = `customerProofs/${folder}/${proofId}/full.pdf`;
+      const fileUrl = await uploadBytes(path, pdfBytes);
+      await patch({ status: 'approved', mode: 'full', fileUrl, filePath: path, fileName: 'full.pdf', pageCount: pages.length, approvedAt: Date.now() });
+      return done('✓ העיתון אושר ונשלח לדפוס. תודה!');
+    } else {
+      const partId = 'p' + Date.now();
+      const path = `customerProofs/${folder}/${proofId}/${partId}.pdf`;
+      const fileUrl = await uploadBytes(path, pdfBytes);
+      await fetch(`${_FBURL}/customerProofs/${proofId}/parts/${partId}.json`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: runName, fileUrl, filePath: path, pageCount: pages.length, status: 'approved', approvedAt: Date.now() }),
+      });
+      await patch({ status: 'parts', mode: 'parts' });
+      record = await (await fetch(`${_FBURL}/customerProofs/${proofId}.json`)).json();  // רענון
+      showOverlay('', false);
+      alert(`✓ "${runName}" נשלחה. אפשר להוסיף ריצה נוספת או לסגור.`);
+      goHome();
+    }
   } catch (e) { console.error(e); showOverlay('שגיאה: ' + e.message + '\n\nנסו שוב או פנו לבית הדפוס.'); }
 };
+
+async function patch(fields) {
+  await fetch(`${_FBURL}/customerProofs/${proofId}.json`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields),
+  });
+}
 
 async function uploadBytes(path, bytes) {
   let lastErr;
@@ -224,12 +272,9 @@ async function uploadBytes(path, bytes) {
   throw lastErr || new Error('העלאה נכשלה');
 }
 
-function done(text) {
-  $('editor').classList.add('hidden');
-  showOverlay('', false);
-  const s = $('status'); s.classList.remove('hidden');
-  s.innerHTML = `<div style="color:var(--green);font-size:2.4rem">✓</div>${text}`;
-}
+function done(text) { show('home', false); show('editor', false); showOverlay('', false);
+  const s = $('status'); s.classList.remove('hidden'); s.innerHTML = `<div style="color:var(--green);font-size:2.4rem">✓</div>${text}`; }
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function fail(msg) { showOverlay(msg); throw new Error(msg); }
 </script>
 </body>
