@@ -39,8 +39,14 @@
 
   #viewer { flex:1; min-width:0; background:#fff; border-radius:10px; }
   #spread { display:flex; gap:2px; justify-content:center; background:#d1d5db; padding:8px; border-radius:8px; min-height:40vh; align-items:center; }
-  #spread img { display:block; height:64vh; width:auto; max-width:46%; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.15); }
+  #spread .page { position:relative; display:inline-block; line-height:0; }
+  #spread img { display:block; height:64vh; width:auto; max-width:46vw; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.15); }
+  #spread .trim { position:absolute; border:1.5px dashed #e11d48; box-sizing:border-box; pointer-events:none; }
   #spread .ph { color:#6b7280; font-size:.9rem; padding:40px; }
+  .legend { text-align:center; font-size:.74rem; color:#9a3412; margin-top:6px; }
+  .legend b { color:#e11d48; }
+  #warnBox { background:#fff7ed; border:1.5px solid #fdba74; color:#9a3412; padding:11px 14px; border-radius:10px; font-size:.84rem; margin-bottom:12px; }
+  #warnBox b { color:#c2410c; } #warnBox .bad { font-weight:700; }
   #vnav { display:flex; align-items:center; justify-content:center; gap:14px; margin-top:10px; padding-bottom:8px; flex-wrap:wrap; }
   #vnav button { font-size:1rem; padding:7px 14px; border:1.5px solid var(--line); background:#fff; border-radius:8px; cursor:pointer; }
   #vnav button:disabled { opacity:.35; cursor:default; }
@@ -82,6 +88,7 @@
 
   <div id="editor" class="hidden">
     <div class="hint" id="editorHint"></div>
+    <div id="warnBox" class="hidden"></div>
     <div class="drop" id="drop">📄 <b>בחרו קבצי PDF</b> או גררו לכאן
       <input type="file" id="file" accept="application/pdf" multiple hidden></div>
     <div id="workspace">
@@ -94,6 +101,7 @@
           <button id="vnext">הבא ›</button>
           <button id="vfs">⛶ מסך מלא</button>
         </div>
+        <div class="legend"><b>– – –</b> קו חיתוך נטו (TrimBox)</div>
       </div>
     </div>
     <div class="bottom">
@@ -182,13 +190,15 @@ async function addFiles(fileList) {
       const fileId = 'f' + (nextFid++);
       const pdf = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
       sources.set(fileId, { bytes });
-      docs.push({ fileId, pdf }); total += pdf.numPages;
+      const boxes = await fileBoxes(bytes);
+      docs.push({ fileId, pdf, boxes }); total += pdf.numPages;
     } catch (e) { console.error('קובץ נכשל:', file.name, e); }
   }
   for (const d of docs) {
     for (let i = 1; i <= d.pdf.numPages; i++) {
-      const src = await renderToImg(d.pdf, i);
-      pages.push({ uid: nextUid++, fileId: d.fileId, pageIndex: i-1, src });
+      const box = d.boxes ? d.boxes[i-1] : null;
+      const r = await renderPage(d.pdf, i, box);
+      pages.push({ uid: nextUid++, fileId: d.fileId, pageIndex: i-1, src: r.src, trimFrac: r.trimFrac, wmm: r.wmm, hmm: r.hmm });
       doneN++; showOverlay('מעבד עמודים…', true, Math.round(doneN/total*100));
       if (doneN % 3 === 0) renderAll();    // עדכון הדרגתי
     }
@@ -198,8 +208,23 @@ async function addFiles(fileList) {
   renderAll(); showOverlay('', false);
 }
 
-async function renderToImg(pdf, pageNo) {
+// קריאת תיבות העמוד (MediaBox/TrimBox) מ-PDF המקורי
+async function fileBoxes(bytes) {
+  try {
+    const doc = await PDFLib.PDFDocument.load(bytes);
+    return doc.getPages().map(pg => {
+      let mb, tb;
+      try { mb = pg.getMediaBox(); } catch (e) {}
+      try { tb = pg.getTrimBox(); } catch (e) {}
+      return { mb, tb };
+    });
+  } catch (e) { return null; }
+}
+
+async function renderPage(pdf, pageNo, box) {
   const page = await pdf.getPage(pageNo);
+  const view = page.view;                       // [x0,y0,x1,y1] התיבה שמוצגת
+  const vbW = view[2] - view[0], vbH = view[3] - view[1];
   const v1 = page.getViewport({ scale: 1 });
   const scale = Math.min(2.5, RENDER_H / v1.height);
   const vp = page.getViewport({ scale });
@@ -207,7 +232,38 @@ async function renderToImg(pdf, pageNo) {
   c.width = Math.max(1, Math.floor(vp.width)); c.height = Math.max(1, Math.floor(vp.height));
   await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
   page.cleanup();
-  return c.toDataURL('image/jpeg', 0.82);
+  const src = c.toDataURL('image/jpeg', 0.82);
+
+  // TrimBox → אחוזים יחסית לתמונה; וגודל נטו לבדיקת גודל
+  let trimFrac = null, netW = vbW, netH = vbH;
+  if (box && box.tb && box.tb.width && box.tb.height) {
+    const tb = box.tb; netW = tb.width; netH = tb.height;
+    const l = (tb.x - view[0]) / vbW, t = (view[3] - (tb.y + tb.height)) / vbH,
+          w = tb.width / vbW, h = tb.height / vbH;
+    if (l > 0.003 || t > 0.003 || w < 0.997 || h < 0.997)
+      trimFrac = { l: Math.max(0,l), t: Math.max(0,t), w: Math.min(1,w), h: Math.min(1,h) };
+  }
+  return { src, trimFrac, wmm: netW * 25.4 / 72, hmm: netH * 25.4 / 72 };
+}
+
+// בדיקת גודל מול הגודל שהוגדר לעיתון
+function buildWarnings() {
+  const reqW = +(record.reqW || 0), reqH = +(record.reqH || 0);
+  const wb = $('warnBox');
+  if (!reqW || !reqH || !pages.length) { wb.classList.add('hidden'); wb.innerHTML = ''; return; }
+  const tol = 1.5;
+  const bad = [];
+  pages.forEach((p, idx) => {
+    if (p.wmm == null) return;
+    const ok = (Math.abs(p.wmm - reqW) <= tol && Math.abs(p.hmm - reqH) <= tol) ||
+               (Math.abs(p.wmm - reqH) <= tol && Math.abs(p.hmm - reqW) <= tol);
+    if (!ok) bad.push(`עמ' ${idx+1} (${Math.round(p.wmm)}×${Math.round(p.hmm)})`);
+  });
+  if (!bad.length) { wb.classList.add('hidden'); wb.innerHTML = ''; return; }
+  wb.classList.remove('hidden');
+  wb.innerHTML = `<b>⚠️ גודל לא תואם.</b> הגודל הנדרש: <b>${reqW}×${reqH} מ"מ</b>. ` +
+    `העמודים הבאים בגודל שונה: <span class="bad">${bad.join(', ')}</span>. ` +
+    `אפשר לתקן ולהעלות מחדש, או לשלוח כך אם זה בכוונה.`;
 }
 
 // ── סרגל צד ──
@@ -280,7 +336,14 @@ function renderViewer() {
   $('vlabel').textContent = `עמוד ${s.map(i=>i+1).join('–')} מתוך ${pages.length}`;
   $('vprev').disabled = vIndex <= 0;
   $('vnext').disabled = s[s.length-1] >= pages.length - 1;
-  spread.innerHTML = s.map(i => `<img src="${pages[i].src}" alt="">`).join('');  // dir rtl: נמוך מימין
+  // dir rtl: עמוד נמוך מימין. עוטף ב-.page עם קו חיתוך (TrimBox) אם קיים
+  spread.innerHTML = s.map(i => {
+    const p = pages[i];
+    const ov = p.trimFrac
+      ? `<div class="trim" style="left:${(p.trimFrac.l*100).toFixed(2)}%;top:${(p.trimFrac.t*100).toFixed(2)}%;width:${(p.trimFrac.w*100).toFixed(2)}%;height:${(p.trimFrac.h*100).toFixed(2)}%"></div>`
+      : '';
+    return `<div class="page"><img src="${p.src}" alt="">${ov}</div>`;
+  }).join('');
 }
 
 function step(d) {
@@ -302,7 +365,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') step(-1);
 });
 
-function renderAll() { renderSidebar(); renderViewer(); }
+function renderAll() { renderSidebar(); renderViewer(); buildWarnings(); }
 
 // ── אישור + העלאה עם מד אחוזים ──
 $('approve').onclick = async () => {
