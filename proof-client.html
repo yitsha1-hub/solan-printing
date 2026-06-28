@@ -71,15 +71,16 @@
   .approve { background:var(--green); color:#fff; min-width:230px; } .back { background:#fff; color:#6b7280; border:1.5px solid var(--line); }
   .btn:disabled { opacity:.45; cursor:default; }
   #overlay { position:fixed; inset:0; background:rgba(255,255,255,.96); display:none; align-items:center; justify-content:center; flex-direction:column; gap:14px; text-align:center; padding:24px; z-index:50; white-space:pre-line; }
-  #ovBar { width:260px; max-width:80vw; height:10px; background:var(--line); border-radius:6px; overflow:hidden; display:none; }
-  #ovBar > div { height:100%; width:0; background:var(--press); transition:width .12s; }
+  #ovBar { width:300px; max-width:82vw; height:16px; background:var(--line); border-radius:9px; overflow:hidden; display:none; position:relative; }
+  #ovBar > div { height:100%; width:0; background:linear-gradient(90deg,#2d3561,#16a34a); transition:width .15s; }
+  #ovPct { font-size:2.6rem; font-weight:900; color:var(--press); line-height:1; display:none; font-variant-numeric:tabular-nums; }
   #status { text-align:center; padding:30px; font-size:1.15rem; font-weight:700; }
   .hidden { display:none !important; }
   @media (max-width:680px){ #workspace{flex-direction:column} #sidebar{width:100%;flex:none;flex-direction:row;max-height:none;overflow-x:auto} .sb-title{display:none} .thumb{flex:0 0 120px} .thumb img{min-height:120px} #spread img{height:52vh;max-width:48%} }
 </style>
 </head>
 <body>
-<div id="overlay"><div id="ovText">טוען…</div><div id="ovBar"><div></div></div></div>
+<div id="overlay"><div id="ovText">טוען…</div><div id="ovPct"></div><div id="ovBar"><div></div></div></div>
 <div class="wrap">
   <header>
     <h1>העלאת קבצים לדפוס</h1>
@@ -135,8 +136,13 @@ const $ = id => document.getElementById(id);
 const overlay = $('overlay');
 function showOverlay(t, on=true, pct=null){
   $('ovText').textContent = t; overlay.style.display = on ? 'flex' : 'none';
-  if (pct == null) $('ovBar').style.display = 'none';
-  else { $('ovBar').style.display = 'block'; $('ovBar').firstElementChild.style.width = pct + '%'; }
+  const pctEl = $('ovPct');
+  if (pct == null) { $('ovBar').style.display = 'none'; pctEl.style.display = 'none'; pctEl.textContent = ''; }
+  else {
+    const v = Math.max(0, Math.min(100, Math.round(pct)));
+    $('ovBar').style.display = 'block'; $('ovBar').firstElementChild.style.width = v + '%';
+    pctEl.style.display = 'block'; pctEl.textContent = v + '%';
+  }
 }
 const show = (id, on=true) => $(id).classList.toggle('hidden', !on);
 
