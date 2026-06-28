@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782674388';
+window.APP_VERSION = '1782675050';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -2278,6 +2278,11 @@ window._fbSnapshot = {};
             קובע כמה זמן מחושב לכל עבודה בתור המכונה והדשבורד.
           </div>
           <div id="machine-speeds-wrap"></div>
+        </div>
+        <div class="mg-field full" style="padding-top:14px;border-top:1px solid var(--line)">
+          <label>🖥️ קישורים ישירים למסכי הדפסים</label>
+          <div style="font-size:.8rem;color:#666;margin-bottom:8px">פתח את מסך הדפס, או העתק את הקישור כדי לשלוח לדפסים.</div>
+          <div id="operator-links-wrap"></div>
         </div>
         <div class="mg-field full" id="customer-purge-section" style="padding-top:14px;border-top:1px solid var(--line);display:none">
           <label style="color:#991b1b;display:flex;align-items:center;gap:5px">🗑️ מחיקה אוטומטית לפי לקוח <span style="font-weight:400;font-size:.72rem;color:#92400e">(מנהל בלבד)</span></label>
@@ -13274,6 +13279,7 @@ function openSettings() {
   const fbCfg = localStorage.getItem('solanFirebaseConfig') || '';
   document.getElementById('settings-firebase').value = fbCfg;
   renderMachineSpeedsSettings();
+  renderOperatorLinks();
   renderCustomerPurgeSettings();
   document.getElementById('settings-modal').style.display = 'flex';
 }
@@ -13295,6 +13301,29 @@ function renderMachineSpeedsSettings() {
       + '</div>';
   }).join('') || '<div style="font-size:.82rem;color:#888">אין מכונות מוגדרות</div>';
 }
+
+function renderOperatorLinks() {
+  var wrap = document.getElementById('operator-links-wrap');
+  if (!wrap) return;
+  var base = location.href.replace(/[?#].*$/, '');
+  var screens = [ { mv:'4', label:'מסך דפס — 4 צבעים' }, { mv:'8', label:'מסך דפס — 8 צבעים' } ];
+  wrap.innerHTML = screens.map(function(s){
+    var url = base + '?machineView=' + s.mv;
+    var u = url.replace(/'/g, "\\'");
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">'
+      + '<span style="flex:1;min-width:120px;font-size:.85rem;font-weight:700">🏭 '+escHtml(s.label)+'</span>'
+      + '<button class="btn btn-tpl" style="padding:6px 12px;font-size:.78rem" onclick="window.open(\''+u+'\',\'_blank\')">👁 פתח</button>'
+      + '<button class="btn btn-tpl" style="padding:6px 12px;font-size:.78rem" onclick="_copyOperatorLink(\''+u+'\',this)">📋 העתק קישור</button>'
+      + '</div>';
+  }).join('');
+}
+function _copyOperatorLink(url, btn) {
+  var done = function(){ if (btn){ var t=btn.textContent; btn.textContent='✓ הועתק'; setTimeout(function(){ btn.textContent=t; },1500);} };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(done).catch(function(){ prompt('העתק את הקישור:', url); });
+  } else { prompt('העתק את הקישור:', url); }
+}
+
 function closeSettings() {
   document.getElementById('settings-modal').style.display = 'none';
 }
