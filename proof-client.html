@@ -30,7 +30,7 @@
   #sidebar { width:210px; flex:0 0 210px; max-height:82vh; overflow-y:auto; display:flex; flex-direction:column; gap:10px;
              background:#eef0f4; border:1px solid var(--line); border-radius:12px; padding:10px; }
   .sb-title { font-size:.8rem; font-weight:800; color:var(--press); text-align:center; padding:2px 0 4px; }
-  .thumb { position:relative; border:1.5px solid #cbd2dd; border-radius:8px; overflow:hidden; background:#fff; cursor:grab; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  .thumb { position:relative; flex:0 0 auto; border:1.5px solid #cbd2dd; border-radius:8px; overflow:hidden; background:#fff; cursor:grab; box-shadow:0 1px 4px rgba(0,0,0,.08); }
   .thumb.active { outline:3px solid var(--press); box-shadow:0 2px 10px rgba(45,53,97,.35); }
   .thumb.dragging { opacity:.4; } .thumb.dragover { outline:3px dashed var(--press); }
   .thumb img { display:block; width:100%; height:auto; background:#fff; }
@@ -145,6 +145,10 @@ function showOverlay(t, on=true, pct=null){
   }
 }
 const show = (id, on=true) => $(id).classList.toggle('hidden', !on);
+function _fmtEta(sec){ sec = Math.max(0, Math.round(sec));
+  if (sec < 60) return '~' + sec + ' שניות';
+  const m = Math.floor(sec/60), s = sec%60;
+  return s ? `~${m} דק' ו-${s} שנ'` : `~${m} דקות`; }
 
 const proofId = new URLSearchParams(location.search).get('id');
 let record = null, mode = null;
@@ -434,7 +438,15 @@ $('approve').onclick = async () => {
     const pdfBytes = await out.save();
     const folder = (record.customer || 'לקוח').replace(/[^\p{L}\p{N}_-]+/gu, '_').slice(0, 60) || 'לקוח';
 
-    const onUp = pct => showOverlay('מעלה לדפוס…', true, pct);
+    const _upStart = Date.now();
+    const onUp = pct => {
+      let eta = '';
+      if (pct > 2 && pct < 100) {
+        const el = (Date.now() - _upStart) / 1000;
+        eta = '\nנותרו בערך ' + _fmtEta(el / pct * (100 - pct));
+      } else if (pct >= 100) { eta = '\nמסיים…'; }
+      showOverlay('מעלה לדפוס…' + eta, true, pct);
+    };
     if (mode === 'full') {
       const path = `customerProofs/${folder}/${proofId}/full.pdf`;
       const fileUrl = await uploadBytes(path, pdfBytes, onUp);
