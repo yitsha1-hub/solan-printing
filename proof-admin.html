@@ -88,16 +88,46 @@ function render(rows) {
     byCustomer.get(key).push(p);
   }
 
+  // רישום יעדים לייצור ריצות (כדי לתמוך גם בריצות בודדות שאינן ב-_allRows)
+  _genReg = {}; let gi = 0;
+  const genCell = (fileUrl, title) => {
+    const key = 'g' + (gi++); _genReg[key] = { fileUrl, title };
+    return `<select data-sheet="${key}"><option value="32">70×100</option><option value="16">64×90</option></select>
+            <button class="gen" data-gen="${key}">⬇ ייצר ריצות</button>`;
+  };
+
   const rowHtml = p => {
+    const clientLink = `${base}proof-client.html?id=${p.id}`;
+    const parts = p.parts ? Object.entries(p.parts).map(([pid, pt]) => ({ pid, ...pt }))
+                                 .sort((a,b)=>(a.approvedAt||0)-(b.approvedAt||0)) : [];
+
+    // ── עבודה לפי ריצות ──
+    if (parts.length) {
+      const head = `<tr>
+        <td><b>${escapeHtml(p.title || '—')}</b></td>
+        <td><span class="badge b-approved">${parts.length} ריצות התקבלו</span></td>
+        <td>${fmt(p.createdAt)}</td>
+        <td><div class="acts">
+          <button data-copy="${clientLink}">📤 קישור ללקוח</button>
+          <button class="del" data-deljob="${p.id}" title="מחק עבודה וכל הריצות">🗑</button>
+        </div></td></tr>`;
+      const partRows = parts.map(pt => `<tr>
+        <td style="padding-right:26px;color:#555">↳ ${escapeHtml(pt.name)} <span style="color:#9ca3af">(${pt.pageCount} עמ')</span></td>
+        <td><span class="badge b-approved">מאושר</span></td>
+        <td>${fmt(pt.approvedAt)}</td>
+        <td><div class="acts">
+          <a href="${pt.fileUrl}" target="_blank">👁 פתח</a>
+          ${genCell(pt.fileUrl, (p.title ? p.title + ' — ' : '') + pt.name)}
+          <button class="del" data-delpart="${p.id}|${pt.pid}|${encodeURIComponent(pt.filePath||'')}" title="מחק ריצה">🗑</button>
+        </div></td></tr>`).join('');
+      return head + partRows;
+    }
+
+    // ── עבודה רגילה (עיתון מלא / ממתין) ──
     const [txt, cls] = STATUS[p.status] || ['—', ''];
-    const clientLink = `${base}proof-client.html?id=${p.id}`;   // קישור לשליחה ללקוח (העלאה+אישור)
-    const viewLink   = `${base}proof-viewer.html?id=${p.id}`;   // צפייה בתוצאה (אחרי העלאה)
-    const hasFile = !!p.fileUrl;
-    const gen = p.status === 'approved'
-      ? `<select data-sheet="${p.id}"><option value="32">70×100</option><option value="16">64×90</option></select>
-         <button class="gen" data-gen="${p.id}">⬇ ייצר ריצות</button>`
+    const gen = p.status === 'approved' ? genCell(p.fileUrl, p.title || p.fileName)
       : `<button disabled title="זמין רק לאחר אישור">⬇ ייצר ריצות</button>`;
-    const view = hasFile ? `<a href="${viewLink}" target="_blank">👁 צפה</a>` : '';
+    const view = p.fileUrl ? `<a href="${base}proof-viewer.html?id=${p.id}" target="_blank">👁 צפה</a>` : '';
     const note = (p.status === 'rejected' && p.customerNote) ? `<div class="note">📝 ${escapeHtml(p.customerNote)}</div>` : '';
     return `<tr>
       <td>${escapeHtml(p.title || p.fileName || '—')}${note}</td>
@@ -105,17 +135,15 @@ function render(rows) {
       <td>${fmt(p.createdAt)}</td>
       <td><div class="acts">
         <button data-copy="${clientLink}">📤 קישור ללקוח</button>
-        ${view}
-        ${gen}
-        <button class="del" data-del="${p.id}" title="מחק קובץ ורשומה">🗑</button>
-      </div></td>
-    </tr>`;
+        ${view}${gen}
+        <button class="del" data-deljob="${p.id}" title="מחק עבודה">🗑</button>
+      </div></td></tr>`;
   };
 
   const folders = [...byCustomer.entries()].map(([customer, items]) => `
     <details class="folder" open>
       <summary>📁 ${escapeHtml(customer)} <span class="count">(${items.length})</span></summary>
-      <table><thead><tr><th>שם העבודה</th><th>סטטוס</th><th>תאריך</th><th>פעולות</th></tr></thead>
+      <table><thead><tr><th>שם העבודה / ריצה</th><th>סטטוס</th><th>תאריך</th><th>פעולות</th></tr></thead>
       <tbody>${items.map(rowHtml).join('')}</tbody></table>
     </details>`).join('');
 
@@ -123,24 +151,49 @@ function render(rows) {
 
   document.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copyText(b.dataset.copy, b));
   document.querySelectorAll('[data-gen]').forEach(b => b.onclick = () => {
-    const id = b.dataset.gen;
-    const sheet = parseInt(document.querySelector(`[data-sheet="${id}"]`).value, 10);
-    generateRuns(_allRows.find(r => r.id === id), sheet, b);
+    const t = _genReg[b.dataset.gen];
+    const sheet = parseInt(document.querySelector(`[data-sheet="${b.dataset.gen}"]`).value, 10);
+    generateRuns(t, sheet, b);
   });
-  document.querySelectorAll('[data-del]').forEach(b => b.onclick = () =>
-    deleteProof(_allRows.find(r => r.id === b.dataset.del)));
+  document.querySelectorAll('[data-deljob]').forEach(b => b.onclick = () =>
+    deleteProof(_allRows.find(r => r.id === b.dataset.deljob)));
+  document.querySelectorAll('[data-delpart]').forEach(b => b.onclick = () => {
+    const [jobId, pid, fp] = b.dataset.delpart.split('|');
+    deletePart(jobId, pid, decodeURIComponent(fp));
+  });
+}
+let _genReg = {};
+
+// מחיקת ריצה בודדת
+async function deletePart(jobId, pid, filePath) {
+  if (!confirm('למחוק את הריצה הזו? הקובץ יימחק ולא ניתן לשחזר.')) return;
+  msg('מוחק ריצה…');
+  try {
+    if (filePath) {
+      for (const bucket of ['solan-printing.firebasestorage.app', 'solan-printing.appspot.com']) {
+        try { const r = await fetch(`https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(filePath)}`, { method: 'DELETE' });
+          if (r.ok || r.status === 404) break; } catch (e) {}
+      }
+    }
+    await fetch(`${_FBURL}/customerProofs/${jobId}/parts/${pid}.json`, { method: 'DELETE' });
+    await loadProofs();
+  } catch (e) { console.error(e); msg('✗ שגיאה במחיקה: ' + e.message); }
 }
 
 // מחיקת קובץ: מוחק את הקובץ מ-Storage ואת הרשומה מ-RTDB.
 async function deleteProof(p) {
   if (!p) return;
-  if (!confirm(`למחוק לצמיתות את "${p.title || p.fileName}"?\nהקובץ והרשומה יימחקו ולא ניתן לשחזר.`)) return;
+  if (!confirm(`למחוק לצמיתות את "${p.title || p.fileName}"?\nכל הקבצים והרשומה יימחקו ולא ניתן לשחזר.`)) return;
   msg('מוחק…');
   try {
-    if (p.filePath) {
+    // אסוף את כל הנתיבים: קובץ ראשי + כל הריצות
+    const paths = [];
+    if (p.filePath) paths.push(p.filePath);
+    if (p.parts) Object.values(p.parts).forEach(pt => pt.filePath && paths.push(pt.filePath));
+    for (const fp of paths) {
       for (const bucket of ['solan-printing.firebasestorage.app', 'solan-printing.appspot.com']) {
         try {
-          const r = await fetch(`https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(p.filePath)}`, { method: 'DELETE' });
+          const r = await fetch(`https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(fp)}`, { method: 'DELETE' });
           if (r.ok || r.status === 404) break;
         } catch (e) { /* נסה bucket הבא */ }
       }
