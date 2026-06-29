@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782739860';
+window.APP_VERSION = '1782740819';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -4353,10 +4353,22 @@ function moveManualRun(i, dir) {
   var tmp = manualRuns[i]; manualRuns[i] = manualRuns[j]; manualRuns[j] = tmp;
   renderManualRuns();
 }
+// גודל גיליון שלם (מס' עמודים) לפי שדה הגודל — זהה ללוגיקה ב-calcRuns
+function _fullSheetForSize(size) {
+  size = (size||'').trim().toLowerCase();
+  var is32 = /70[\s×x*]?100|100[\s×x*]?70|16[.,]5[\s×x*]?24|24[\s×x*]?16|^a5$/.test(size);
+  var is16 = /64[\s×x*]?90|90[\s×x*]?64|240[\s×x*]?330|330[\s×x*]?240|עיתון\s*a4|a3\s*קיפול/.test(size);
+  return is32 ? 32 : (is16 ? 16 : 0);
+}
 function renderManualRuns() {
   const list = document.getElementById('manual-runs-list');
   if (!manualRuns.length) { list.innerHTML=''; return; }
-  list.innerHTML = manualRuns.map((r,i)=>`
+  const _fs = _fullSheetForSize((document.getElementById('f-size')||{}).value);
+  list.innerHTML = manualRuns.map((r,i)=>{
+  // "פעמים בגיליון" רלוונטי רק לריצה הקטנה מגיליון שלם, ללא A+B וללא מתהפך
+  const _pg = parseInt(r.pages)||0;
+  const _showUp = _fs>0 && _pg>0 && _pg<_fs && !r.abEnabled && !r.tumble;
+  return `
     <div style="display:flex;align-items:center;gap:8px;background:#f8f9ff;border:1.5px solid #dde3f8;border-radius:8px;padding:10px 12px;flex-wrap:wrap">
       <div style="display:flex;flex-direction:column;gap:2px">
         <button type="button" onclick="moveManualRun(${i},-1)"
@@ -4371,10 +4383,10 @@ function renderManualRuns() {
         value="${r.pages}"
         onchange="manualRuns[${i}].pages=this.value"
         style="width:80px;padding:6px 8px;border:1.5px solid var(--line);border-radius:6px;font-family:Heebo,sans-serif;font-size:.88rem;outline:none">
-      <input type="number" placeholder="פעמים בגיליון" min="1" title="כמה פעמים העמודים נכנסים בגיליון — מעדכן את הכמות אוטומטית"
+      ${_showUp ? `<input type="number" placeholder="פעמים בגיליון" min="1" title="כמה פעמים העמודים נכנסים בגיליון — מעדכן את הכמות אוטומטית"
         value="${r.upCount||''}"
         onchange="setManualRunUpCount(${i},this.value)"
-        style="width:120px;padding:6px 8px;border:1.5px solid var(--gold,#c9a84c);border-radius:6px;font-family:Heebo,sans-serif;font-size:.88rem;outline:none;background:#fffdf5">
+        style="width:120px;padding:6px 8px;border:1.5px solid var(--gold,#c9a84c);border-radius:6px;font-family:Heebo,sans-serif;font-size:.88rem;outline:none;background:#fffdf5">` : ''}
       <input type="number" placeholder="כמות עותקים" min="1"
         value="${r.copies}"
         onchange="manualRuns[${i}].copies=this.value"
@@ -4407,7 +4419,8 @@ function renderManualRuns() {
           <input type="text" placeholder="פירוט תוספות / מלל חופשי..." value="${escHtml(r.manualExtra||'')}" oninput="setManualRunManualExtra(${i},this.value)" style="flex:1;min-width:160px;font-size:.78rem;padding:5px 9px;border:1px solid #cbd5e1;border-radius:6px;font-family:Heebo,sans-serif">
         </div>` : ''}
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 // ── עריכת A+B לריצות ידניות (מקבילות לפונקציות שבמודל הריצות, אך על manualRuns) ──
 function toggleManualRunAB(i) {
