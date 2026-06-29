@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782675050';
+window.APP_VERSION = '1782726131';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -13314,8 +13314,36 @@ function renderOperatorLinks() {
       + '<span style="flex:1;min-width:120px;font-size:.85rem;font-weight:700">🏭 '+escHtml(s.label)+'</span>'
       + '<button class="btn btn-tpl" style="padding:6px 12px;font-size:.78rem" onclick="window.open(\''+u+'\',\'_blank\')">👁 פתח</button>'
       + '<button class="btn btn-tpl" style="padding:6px 12px;font-size:.78rem" onclick="_copyOperatorLink(\''+u+'\',this)">📋 העתק קישור</button>'
+      + '<button class="btn btn-tpl" style="padding:6px 12px;font-size:.78rem;background:var(--press);color:#fff" onclick="_downloadKioskLauncher(\''+s.mv+'\',\''+s.label.replace(/'/g,"\\'")+'\')">🔒 הורד קיצור נעול (קיוסק)</button>'
       + '</div>';
-  }).join('');
+  }).join('')
+  + '<div style="font-size:.78rem;color:#888;line-height:1.6;margin-top:6px;padding:8px 10px;background:#f6f6f9;border-radius:8px">'
+  + 'ה-X בראש החלון הוא של הדפדפן ולא ניתן להסתרה מתוך הדף. '
+  + 'ל<b>נעילה מלאה</b> הורד את "קיצור נעול (קיוסק)", העבר אותו למחשב של הדפס והפעל אותו — '
+  + 'המסך ייפתח במסך מלא בלי X, בלי כתובת ובלי טאבים. ליציאה: Alt+F4.'
+  + '</div>';
+}
+function _downloadKioskLauncher(mv, label) {
+  var url = location.href.replace(/[?#].*$/, '') + '?machineView=' + mv;
+  var bat = '@echo off\r\n'
+    + 'REM ===== ' + label + ' - מצב קיוסק נעול =====\r\n'
+    + 'REM ליציאה: Alt+F4\r\n'
+    + 'set "URL=' + url + '"\r\n'
+    + 'set "EDGE=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"\r\n'
+    + 'if not exist "%EDGE%" set "EDGE=C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"\r\n'
+    + 'if exist "%EDGE%" (\r\n'
+    + '  start "" "%EDGE%" --kiosk "%URL%" --edge-kiosk-type=fullscreen --no-first-run --kiosk-idle-timeout-minutes=0 --overscroll-history-navigation=0\r\n'
+    + '  goto :eof\r\n'
+    + ')\r\n'
+    + 'set "CHROME=C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"\r\n'
+    + 'if not exist "%CHROME%" set "CHROME=C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"\r\n'
+    + 'if exist "%CHROME%" start "" "%CHROME%" --kiosk "%URL%" --no-first-run --overscroll-history-navigation=0\r\n';
+  var blob = new Blob(['﻿' + bat], { type: 'application/octet-stream' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'מסך-דפס-' + label.replace(/[^א-תa-zA-Z0-9]+/g, '-') + '.bat';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
 }
 function _copyOperatorLink(url, btn) {
   var done = function(){ if (btn){ var t=btn.textContent; btn.textContent='✓ הועתק'; setTimeout(function(){ btn.textContent=t; },1500);} };
