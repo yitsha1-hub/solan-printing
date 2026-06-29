@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782733293';
+window.APP_VERSION = '1782736751';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -5930,7 +5930,9 @@ function showPreviewModal(card) {
 // ========== PRINT ==========
 function buildPrintCard(c) {
   const _runs = c.runs||[];
-  const _hasPaper = _runs.some(r => r.paper && r.paper.trim());
+  // מציגים עמודת נייר אם לאיזושהי ריצה יש נייר משלה, או אם יש נייר ברמת הכרטיס
+  // (אחרת בכרטיס שהנייר בו אחיד ומוגדר רק ברמת הכרטיס — העמודה הייתה נעלמת).
+  const _hasPaper = _runs.some(r => r.paper && r.paper.trim()) || !!(c.paper && c.paper.trim());
   const _abColCount = _hasPaper ? 7 : 6;
   const runsRows=_runs.map(r=>{
     let _abRowHtml = '';
@@ -5952,7 +5954,7 @@ function buildPrintCard(c) {
       <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-weight:700">${r.copies?parseInt(r.copies).toLocaleString():'—'}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center">${r.folds||'—'}${r.tumble?' <span style="color:#1d4ed8;font-weight:600;font-size:.65rem"> · מתהפך</span>':''}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-weight:700">${r.machine||'—'}</td>
-      ${_hasPaper ? `<td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-size:.8rem">${r.paper||'—'}</td>` : ''}
+      ${_hasPaper ? `<td style="padding:7px 10px;border-bottom:1px solid #ddd;text-align:center;font-size:.8rem">${r.paper||c.paper||'—'}</td>` : ''}
     </tr>${_abRowHtml}`;
   }).join('');
 
