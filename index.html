@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782813568';
+window.APP_VERSION = '1782814492';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -15388,17 +15388,28 @@ function _operatorMarkDone(qid) {
 
 function _opProofOverlay(url, type, label, revoke) {
   var isPdf = (type||'').indexOf('pdf') !== -1 || /\.pdf(\?|$)/i.test(url);
+  if (!document.getElementById('op-spin-style')) {
+    var st = document.createElement('style'); st.id = 'op-spin-style';
+    st.textContent = '@keyframes opspin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(st);
+  }
   var ov = document.createElement('div');
   ov.id = 'op-proof-overlay';
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:99999;display:flex;flex-direction:column';
+  var hideLoad = "var l=document.getElementById('op-proof-loading');if(l)l.remove();";
   ov.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;flex-shrink:0">'
     + '<span style="color:white;font-size:.85rem;font-weight:700;font-family:Heebo,sans-serif">' + escHtml(label||'פרופר') + '</span>'
     + '<button onclick="var o=document.getElementById(\'op-proof-overlay\');if(o)o.remove()" '
     + 'style="background:white;border:none;border-radius:8px;padding:8px 18px;font-size:1rem;font-weight:800;cursor:pointer;font-family:Heebo,sans-serif">✕ סגור</button></div>'
+    + '<div id="op-proof-loading" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#fff;font-family:Heebo,sans-serif;pointer-events:none">'
+    +   '<div style="width:48px;height:48px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:opspin 1s linear infinite"></div>'
+    +   '<div style="font-size:1rem;font-weight:700">⏳ טוען פרופר…</div></div>'
     + (isPdf
-      ? '<iframe src="' + url + '" style="flex:1;border:none;width:100%"></iframe>'
-      : '<img src="' + url + '" style="flex:1;object-fit:contain;width:100%;min-height:0">');
+      ? '<iframe src="' + url + '" onload="' + hideLoad + '" style="flex:1;border:none;width:100%"></iframe>'
+      : '<img src="' + url + '" onload="' + hideLoad + '" onerror="' + hideLoad + '" style="flex:1;object-fit:contain;width:100%;min-height:0">');
   document.body.appendChild(ov);
+  // גיבוי: הסתרת מחוון הטעינה גם אם onload לא נורה (חלק מדפדפנים ב-iframe PDF)
+  setTimeout(function(){ var l=document.getElementById('op-proof-loading'); if(l) l.remove(); }, 8000);
   if (revoke) setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
 }
 function _opViewProof(cardId, runKey) {
