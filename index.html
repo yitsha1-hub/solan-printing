@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782740819';
+window.APP_VERSION = '1782801751';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -1347,6 +1347,7 @@ window._fbSnapshot = {};
       <div class="field">
         <label>מס' עמודים</label>
         <input class="fi" type="number" id="f-pages" placeholder="32" min="1" oninput="calcRuns()">
+        <input class="fi" type="text" id="f-pages-note" placeholder="מלל חופשי ליד מס' העמודים (אופציונלי)" style="margin-top:6px;font-size:.9rem">
       </div>
 
       <div class="field" id="machine-field">
@@ -5187,6 +5188,7 @@ function confirmRunsAndSave() {
     deliveryDate: '',
     copies:       (document.getElementById('runs-copies-input') && document.getElementById('runs-copies-input').value) ? document.getElementById('runs-copies-input').value : n.copies,
     pages:        pages,
+    pagesNote:    (document.getElementById('f-pages-note')||{value:''}).value.trim(),
     color:        n.color,
     size:         n.size,
     paper:        _paperUsed,
@@ -5539,6 +5541,7 @@ function editCard(id) {
   setVal('f-delivery-date', c.deliveryDate);
   setVal('f-copies',        c.copies);
   setVal('f-pages',         c.pages);
+  setVal('f-pages-note',    c.pagesNote||'');
   setVal('f-size',          c.size);
   setTimeout(function(){ _updateA4A5Picker((document.getElementById('f-size')||{}).value||''); }, 0);
   setVal('f-paper',         c.paper);
@@ -5584,7 +5587,7 @@ function editCard(id) {
   window.scrollTo(0,0);
 }
 function clearForm() {
-  ['f-name','f-type','f-order-date','f-delivery-date','f-copies','f-pages','f-size','f-paper','f-notes','f-internal-notes','f-machine','f-placement-details']
+  ['f-name','f-type','f-order-date','f-delivery-date','f-copies','f-pages','f-pages-note','f-size','f-paper','f-notes','f-internal-notes','f-machine','f-placement-details']
     .forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
   document.querySelectorAll('input[name="color"]').forEach(r=>r.checked=false);
   ['f-needs-folding','f-needs-binding'].forEach(id=>{ const e=document.getElementById(id); if(e) e.checked=false; });
@@ -5877,6 +5880,7 @@ function _saveCardNew() {
     copies:       document.getElementById('f-copies').value,
     sheetsMode:   !!(document.getElementById('f-sheets-mode')&&document.getElementById('f-sheets-mode').checked),
     pages:        document.getElementById('f-pages').value,
+    pagesNote:    (document.getElementById('f-pages-note')||{value:''}).value.trim(),
     color:        getColor(),
     size:         document.getElementById('f-size').value.trim(),
     paper:        document.getElementById('f-paper').value.trim(),
@@ -5931,6 +5935,7 @@ function buildTempCard() {
     copies:       document.getElementById('f-copies').value,
     sheetsMode:   !!(document.getElementById('f-sheets-mode')&&document.getElementById('f-sheets-mode').checked),
     pages:        document.getElementById('f-pages').value,
+    pagesNote:    (document.getElementById('f-pages-note')||{value:''}).value.trim(),
     color:        getColor(),
     size:         document.getElementById('f-size').value.trim(),
     paper:        document.getElementById('f-paper').value.trim(),
@@ -6071,7 +6076,7 @@ function buildPrintCard(c) {
   const _pagesRow = `
     <div style="display:flex;padding:12px 0 0;align-items:baseline">
       <div style="width:165px;font-size:1.05rem;font-weight:700;color:#333;flex-shrink:0">מס' עמ'</div>
-      <div style="font-size:1.18rem;color:#111;font-weight:500;flex:1">${c.pages ? '<strong style="font-size:1.45rem;font-weight:900">'+c.pages+'</strong>' : '<span style="display:inline-block;min-width:170px;border-bottom:1.5px solid #999;height:1.5em"></span>'}</div>
+      <div style="font-size:1.18rem;color:#111;font-weight:500;flex:1">${c.pages ? '<strong style="font-size:1.45rem;font-weight:900">'+c.pages+'</strong>' : (c.pagesNote ? '' : '<span style="display:inline-block;min-width:170px;border-bottom:1.5px solid #999;height:1.5em"></span>')}${c.pagesNote ? ' <span style="font-size:1.05rem;color:#333;font-weight:600">'+escHtml(c.pagesNote)+'</span>' : ''}</div>
     </div>`;
 
   const fieldsTop = [
