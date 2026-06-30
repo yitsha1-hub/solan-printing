@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782822507';
+window.APP_VERSION = '1782823906';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -15514,9 +15514,9 @@ function _opPVBuild(ov){
     + (multi ? '<select id="op-pv-sel" style="height:38px;border:none;border-radius:8px;padding:0 8px;font-family:Heebo,sans-serif;font-size:.9rem;font-weight:700;cursor:pointer"></select>' : '<span id="op-pv-label" style="color:#cbd5e1;font-size:.85rem;font-weight:700;font-family:Heebo,sans-serif"></span>')
     + (multi ? _opPVbtn('›','עמוד הבא').replace('<button','<button id="op-pv-next"') : '')
     + '<span style="width:10px"></span>'
-    + _opPVbtn('➖','הקטן').replace('<button','<button id="op-pv-zout"')
+    + _opPVbtn('🔍➖','הקטן').replace('<button','<button id="op-pv-zout"')
     + _opPVbtn('⤢ התאם','התאם למסך').replace('<button','<button id="op-pv-fit"')
-    + _opPVbtn('➕','הגדל').replace('<button','<button id="op-pv-zin"')
+    + _opPVbtn('🔍➕','הגדל').replace('<button','<button id="op-pv-zin"')
     + (multi ? _opPVbtn('⊞ כפולה','הצג שני עמודים').replace('<button','<button id="op-pv-spread"') : '')
     + (pv.pdfUrl ? _opPVbtn('📄 PDF','פתח PDF מלא').replace('<button','<button id="op-pv-pdf"') : '')
     + _opPVbtn('⛶','מסך מלא').replace('<button','<button id="op-pv-fs"')
@@ -15581,15 +15581,40 @@ function _opProofOverlay(url, type, label, revoke) {
   _opSpinStyle();
   var ov = document.createElement('div'); ov.id = 'op-proof-overlay';
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:99999;display:flex;flex-direction:column';
-  ov.appendChild(_opProofBar(label, null));
+  window._opOZ = 1;   // מצב זום לצופה ה-PDF/תמונה
+  // סרגל עם לחצני זכוכית מגדלת
+  var bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;align-items:center;gap:7px;padding:9px 12px;flex-shrink:0;flex-wrap:wrap;background:#0f172a';
+  bar.innerHTML = '<span style="color:#fff;font-size:.85rem;font-weight:800;font-family:Heebo,sans-serif;margin-left:auto">' + escHtml(label||'פרופר') + '</span>'
+    + _opPVbtn('🔍➖','הקטן').replace('<button','<button id="op-oz-out"')
+    + _opPVbtn('⤢ התאם','התאם למסך').replace('<button','<button id="op-oz-fit"')
+    + _opPVbtn('🔍➕','הגדל').replace('<button','<button id="op-oz-in"')
+    + _opPVbtn('⛶','מסך מלא').replace('<button','<button id="op-oz-fs"')
+    + _opPVbtn('✕','סגור').replace('<button','<button id="op-oz-close"').replace('#1e3a5f','#b91c1c');
+  ov.appendChild(bar);
   ov.appendChild(_opLoadingEl());
+  var vp = document.createElement('div');
+  vp.style.cssText = 'flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;-webkit-overflow-scrolling:touch';
+  var stage = document.createElement('div'); stage.id = 'op-oz-stage';
+  stage.style.cssText = 'width:100%;height:100%;min-width:100%;min-height:100%;display:flex;align-items:center;justify-content:center;margin:auto';
   var hide = function(){ var l = document.getElementById('op-proof-loading'); if (l) l.remove(); };
   var view;
-  if (isPdf) { view = document.createElement('iframe'); view.src = url; view.style.cssText = 'flex:1;border:none;width:100%'; }
-  else { view = document.createElement('img'); view.src = url; view.style.cssText = 'flex:1;object-fit:contain;width:100%;min-height:0'; }
+  if (isPdf) { view = document.createElement('iframe'); view.src = url; view.style.cssText = 'width:100%;height:100%;border:none'; }
+  else { view = document.createElement('img'); view.src = url; view.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain'; }
   view.onload = hide; view.onerror = hide;
-  ov.appendChild(view);
+  stage.appendChild(view); vp.appendChild(stage); ov.appendChild(vp);
   document.body.appendChild(ov);
+  // זום: שינוי גודל ה-stage (וה-iframe/img שבתוכו) + גלילה
+  var apply = function(){ var z = window._opOZ; stage.style.width = (z*100)+'%'; stage.style.height = (z*100)+'%'; };
+  var zStep = function(mode){ var i = _OP_ZOOMS.indexOf(window._opOZ); if(i<0)i=0;
+    if(mode==='in') window._opOZ=_OP_ZOOMS[Math.min(_OP_ZOOMS.length-1,i+1)];
+    else if(mode==='out') window._opOZ=_OP_ZOOMS[Math.max(0,i-1)];
+    else window._opOZ=1; apply(); };
+  document.getElementById('op-oz-out').onclick = function(){ zStep('out'); };
+  document.getElementById('op-oz-in').onclick  = function(){ zStep('in'); };
+  document.getElementById('op-oz-fit').onclick = function(){ zStep('fit'); };
+  document.getElementById('op-oz-fs').onclick  = _opProofFullscreen;
+  document.getElementById('op-oz-close').onclick = _opCloseProof;
   setTimeout(hide, 8000); // גיבוי אם onload לא נורה
   if (revoke) setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
 }
