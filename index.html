@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782841470';
+window.APP_VERSION = '1782841690';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -5704,16 +5704,16 @@ async function _renderProofPagesCache(file, spath) {
   try {
     var buf = await file.arrayBuffer();
     var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-    var imgs = [], RENDER_H = 1500;
+    var imgs = [], RENDER_H = 2100;
     for (var i = 1; i <= pdf.numPages; i++) {
       var page = await pdf.getPage(i);
       var v1 = page.getViewport({ scale: 1 });
-      var scale = Math.min(2.2, RENDER_H / v1.height);
+      var scale = Math.min(3.0, RENDER_H / v1.height);
       var vp = page.getViewport({ scale: scale });
       var c = document.createElement('canvas');
       c.width = Math.max(1, Math.floor(vp.width)); c.height = Math.max(1, Math.floor(vp.height));
       await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
-      imgs.push(c.toDataURL('image/jpeg', 0.92));
+      imgs.push(c.toDataURL('image/jpeg', 0.95));
       page.cleanup && page.cleanup();
     }
     pdf.cleanup && pdf.cleanup();
@@ -15753,8 +15753,8 @@ function _opInkRenderBars(){
   var divs = '';
   for (var z=1; z<N; z++){ divs += '<div style="position:absolute;top:0;bottom:0;left:'+(z/N*100).toFixed(3)+'%;width:1px;background:rgba(255,255,255,.4)"></div>'; }
   var imgHtml = imgSrc
-    ? '<div style="position:sticky;top:0;z-index:3;width:100%;height:130px;margin-bottom:6px;background:#0b1220;border-radius:7px;overflow:hidden;border:1px solid #334155">'
-      + '<img src="'+imgSrc+'" style="width:100%;height:100%;object-fit:fill;display:block">'
+    ? '<div style="position:sticky;top:0;z-index:3;width:100%;height:210px;margin-bottom:6px;background:#0b1220;border-radius:7px;overflow:hidden;border:1px solid #334155">'
+      + '<img src="'+imgSrc+'" style="width:100%;height:100%;object-fit:fill;display:block;image-rendering:auto">'
       + divs + '</div>'
     : '';
   var sections = _OP_INK_META.map(function(m){
