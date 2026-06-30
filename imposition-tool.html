@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>סולן הדפסות — כלי פריסה / קיפול</title>
+<title>סולן הדפסות — כלי קיפול גיליון לחוברת</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <style>
   :root{ --press:#2d3561; --press-d:#222a4d; --gold:#c9a84c; --gold-light:#e8d5a3; --line:#e2e2ea; }
@@ -20,49 +20,42 @@
   .drop:hover{border-color:var(--gold);background:#fffdf6}
   .drop.over{border-color:var(--gold);background:#fbf7e9}
   .drop b{color:var(--press)}
-  .opts{display:flex;flex-wrap:wrap;gap:18px;margin-top:14px;font-size:.9rem}
+  .opts{display:flex;flex-wrap:wrap;gap:18px;margin-top:14px;font-size:.9rem;align-items:center}
   .opt{display:flex;align-items:center;gap:8px}
-  .opt input[type=number]{width:74px;padding:6px 8px;border:1.5px solid var(--line);border-radius:7px;font-family:inherit;text-align:center}
   select{padding:7px 10px;border:1.5px solid var(--line);border-radius:8px;font-family:inherit;font-size:.9rem;background:#fff}
   .btn{border:none;border-radius:10px;padding:13px 22px;font-size:1rem;font-weight:800;cursor:pointer;font-family:inherit}
   .btn-go{background:var(--gold);color:#3a2e00;width:100%;margin-top:16px}
   .btn-go:disabled{opacity:.5;cursor:default}
-  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:.86rem}
-  th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:center}
-  th{background:#f8fafc;color:#475569;font-weight:700}
   .warn{background:#fffbeb;border:1.5px solid #fde68a;color:#92400e;border-radius:10px;padding:10px 14px;font-size:.85rem;margin-top:10px;line-height:1.6}
   .ok{background:#f0fdf4;border:1.5px solid #bbf7d0;color:#15803d;border-radius:10px;padding:10px 14px;font-size:.9rem;margin-top:12px;font-weight:700}
   #log{font-size:.85rem;color:#475569;margin-top:10px;white-space:pre-line;line-height:1.7}
   .muted{color:#64748b;font-size:.82rem;line-height:1.7}
   .dl{display:inline-block;margin-top:12px;background:var(--press);color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:800}
-  code{background:#f1f5f9;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.85em}
 </style>
 </head>
 <body>
 <div class="brandbar">
   <span class="logo">🖨️</span>
-  <div><h1>סולן הדפסות — כלי פריסה / קיפול</h1><div class="sub">קדם דפוס · הפיכת פרופר לגיליונות מוכנים לדפוס</div></div>
+  <div><h1>סולן הדפסות — כלי קיפול גיליון לחוברת</h1><div class="sub">קדם דפוס · הפיכת גיליון פרוס לחוברת מסודרת לבדיקה</div></div>
 </div>
 
 <div class="wrap">
   <div class="card">
-    <h2>1. העלאת הפרופר</h2>
-    <div class="drop" id="drop">📄 <b>בחר קובץ PDF</b> או גרור לכאן<br>
-      <span class="muted">הקובץ צריך להיות עמודים בודדים בסדר קריאה, בגודל נטו 165×240 מ"מ</span>
+    <h2>1. העלאת הגיליון הפרוס</h2>
+    <div class="drop" id="drop">📄 <b>בחר קובץ PDF של גיליון פרוס</b> או גרור לכאן<br>
+      <span class="muted">גיליון 70×100 פרוס (צד קדמי + אחורי) — בדיוק כמו שיוצא מ-Apogee. הכלי "מקפל" אותו לחוברת בסדר קריאה.</span>
       <input type="file" id="file" accept="application/pdf" hidden>
     </div>
     <div class="opts">
       <div class="opt"><label>סוג גיליון:</label>
-        <select id="sheet">
-          <option value="32" selected>70×100 — 32 עמ' לגיליון (חתימה 165×240)</option>
-        </select>
+        <select id="sheet"><option value="32" selected>70×100 — חתימת 32 עמ' (165×240)</option></select>
       </div>
-      <div class="opt"><label>סימני חיתוך:</label>
-        <select id="marks"><option value="0" selected>בלי</option><option value="1">עם סימני פינה</option></select>
+      <div class="opt"><label>צד ראשון בקובץ:</label>
+        <select id="firstside"><option value="0" selected>קדמי (עמ' 1)</option><option value="1">אחורי</option></select>
       </div>
     </div>
     <div class="muted" id="fileinfo" style="margin-top:10px"></div>
-    <button class="btn btn-go" id="go" disabled>🔧 צור פריסה לדפוס</button>
+    <button class="btn btn-go" id="go" disabled>📖 קפל לחוברת</button>
     <div id="log"></div>
     <div id="result"></div>
   </div>
@@ -70,10 +63,11 @@
   <div class="card">
     <h2>איך זה עובד</h2>
     <div class="muted">
-      • הכלי מפצל את החוברת ל<b>חתימות (קונטרסים)</b> לפי אותה לוגיקה של מערכת הלקוחות: כל 32 עמ' = גיליון 70×100 שלם; שארית מתחלקת לפי הכלל (כולל מקרים מיוחדים 20→4+16, 24→8+16).<br>
-      • כל חתימת 32 עמ' נפרסת על גיליון 70×100 (צד קדמי + אחורי) לפי <b>תבנית הפריסה</b> שלכם — 4×4 משבצות, עמודים מסובבים 90°, הדפסה דו-צדדית בהיפוך שמאל-ימין.<br>
-      • הפלט: קובץ PDF מוכן לדפוס, גיליון לכל צד. <b>הצבעים והתוכן לא משתנים</b> — רק ממוקמים ומסובבים.<br>
-      • ⚠️ כרגע מוטמעת תבנית <b>32 עמ'</b> בלבד. חתימות בגדלים אחרים (16/8 וכו') יסומנו — שלח לי את התבניות שלהן ואוסיף אותן.
+      • מעלים את ה<b>גיליון הפרוס</b> (כמו הקובץ של Apogee — 2 עמודים: צד קדמי + אחורי לכל חתימה).<br>
+      • הכלי מזהה היכן כל עמוד יושב בגיליון (לפי <b>תבנית הפריסה 32 עמ'</b> שלכם), "מקפל" אותו ומסדר את כל העמודים <b>בסדר קריאה</b> 1,2,3… בחוברת אחת — לבדיקה שהקיפול והסדר יצאו נכון לפני פלטות/דפוס.<br>
+      • הצבעים והתוכן <b>לא משתנים</b> — רק חיתוך לפי הנטו, סיבוב לישר, וסידור.<br>
+      • קובץ עם כמה חתימות (כמה זוגות עמודים) — כל חתימה תקופל בנפרד ל-32 עמ' ברצף.<br>
+      • ⚠️ מוטמעת תבנית <b>32 עמ'</b>. גיליונות בגדלים אחרים יסומנו — שלחו לי את התבניות שלהם.
     </div>
   </div>
 </div>
@@ -81,111 +75,67 @@
 <script>
 const { PDFDocument, degrees } = PDFLib;
 const MM = 72/25.4;
-const SHEET_W = 1000*MM, SHEET_H = 700*MM;
-const TRIM_W = 165, TRIM_H = 240;            // מ"מ — גודל נטו של עמוד
-const SLOT_W = 240, SLOT_H = 165;            // מ"מ — המשבצת בגיליון (עמוד מסובב 90°)
-const COLX = [5, 255, 505, 755];             // מ"מ — קצה שמאל של כל עמודה (top-left)
-const ROWY = [15, 180, 355, 520];            // מ"מ — קצה עליון של כל שורה (top-left)
-const COLROT = [90, -90, 90, -90];           // סיבוב לפי עמודה
+const COLCX = [125, 375, 625, 875];          // מ"מ — מרכז עמודה (top-left, על שטח פריסה 1000×700)
+const ROWCY = [97.5, 262.5, 437.5, 602.5];   // מ"מ — מרכז שורה (top-left)
+const COLROT = [90, -90, 90, -90];           // סיבוב שבו הודפס העמוד (לפי עמודה)
+const TRIM_W = 165, TRIM_H = 240;            // מ"מ — גודל נטו
 
-// מפת הפריסה לחתימת 32 עמ' — חולצה מהתבנית Template.pdf (front/back, 4 שורות × 4 עמודות)
+// מפת הפריסה 32 עמ' (חולצה מ-Template.pdf): side → 4 שורות × 4 עמודות → מספר עמוד בחוברת
 const GRID32 = {
   front: [ [1,16,13,4], [32,17,20,29], [25,24,21,28], [8,9,12,5] ],
   back:  [ [3,14,15,2], [30,19,18,31], [27,22,23,26], [6,11,10,7] ]
 };
-// בונה רשימת מיקומים: עמוד-מקומי (1..32) → {side,col,row}
-function placements32(){
-  const out = [];
-  ['front','back'].forEach((sideName, side)=>{
-    GRID32[sideName].forEach((rowArr, row)=>{
-      rowArr.forEach((pg, col)=>{ out.push({ page: pg, side: side, col: col, row: row }); });
-    });
-  });
-  return out;
-}
-const PLACE32 = placements32();
+// היפוך: מספר עמוד → {side,col,row}
+const INV32 = (function(){
+  const m = {};
+  ['front','back'].forEach((sn,side)=>GRID32[sn].forEach((rowArr,row)=>rowArr.forEach((pg,col)=>{ m[pg]={side,col,row}; })));
+  return m;
+})();
 
-const range = (a,b)=>Array.from({length:b-a+1},(_,k)=>a+k);
-
-// תכנון חתימות — זהה ללוגיקת splitToKontresim של האפליקציה, אך מחזיר סדר-קריאה מקומי
-function planSignatures(total, fullSheet){
-  let layers = [];
-  if (fullSheet===32 && (total===20 || total===24)) layers = [total-16, 16];
-  else {
-    const rem = total % fullSheet;
-    if (rem) layers.push(rem);
-    let inner = total - rem;
-    while (inner > 0) { layers.push(fullSheet); inner -= fullSheet; }
-  }
-  let front = 1, back = total, sigs = [];
-  layers.forEach((lp, i)=>{
-    const isLast = i === layers.length-1;
-    const half = lp/2;
-    let local, label;
-    if (isLast && lp === fullSheet) {
-      local = range(front, front+lp-1); label = front+'–'+(front+lp-1); front += lp;
-    } else {
-      const fe = front+half-1, bs = back-half+1;
-      local = [...range(front,fe), ...range(bs,back)];
-      label = (fe+1===bs) ? (front+'–'+back) : (front+'–'+fe+' + '+bs+'–'+back);
-      front += half; back -= half;
-    }
-    sigs.push({ count: lp, local: local, label: label, num: i+1 });
-  });
-  return sigs;
-}
-
-function placeRotated(sheet, embed, col, row, rot){
-  const x0 = COLX[col]*MM;
-  const yBottom = SHEET_H - (ROWY[row] + SLOT_H)*MM;
-  const xScale = (TRIM_W*MM)/embed.width;
-  const yScale = (TRIM_H*MM)/embed.height;
-  if (rot === 90) {
-    sheet.drawPage(embed, { x: x0 + SLOT_W*MM, y: yBottom, xScale, yScale, rotate: degrees(90) });
-  } else {
-    sheet.drawPage(embed, { x: x0, y: yBottom + SLOT_H*MM, xScale, yScale, rotate: degrees(-90) });
+// "מקפל" חתימה אחת: מחלץ את 32 העמודים מהגיליון (צד קדמי+אחורי) ומסדר בסדר קריאה.
+async function foldSignature(out, frontPage, backPage, firstSideIsFront){
+  const fEmbed = await out.embedPage(frontPage);
+  const bEmbed = await out.embedPage(backPage);
+  const mwmm = frontPage.getWidth()/MM, mhmm = frontPage.getHeight()/MM;
+  const offX = (mwmm - 1000)/2, offY = (mhmm - 700)/2;   // שטח הפריסה ממורכז בגיליון (כולל bleed)
+  const sheetHpt = frontPage.getHeight();
+  const OUTW = TRIM_W*MM, OUTH = TRIM_H*MM;
+  const ocx = OUTW/2, ocy = OUTH/2;
+  for (let n = 1; n <= 32; n++){
+    const pos = INV32[n];
+    // אם "הצד הראשון בקובץ" הוא האחורי — מחליפים קדמי/אחורי
+    const useFront = firstSideIsFront ? (pos.side === 0) : (pos.side === 1);
+    const embed = useFront ? fEmbed : bEmbed;
+    const cxmm = COLCX[pos.col] + offX;
+    const cytopmm = ROWCY[pos.row] + offY;
+    const scx = cxmm * MM;
+    const scy = sheetHpt - cytopmm * MM;          // מרכז המשבצת בקואורדינטות pdf-lib (origin תחתון-שמאלי)
+    const theta = (COLROT[pos.col] === 90) ? -90 : 90;   // ביטול הסיבוב → ישר
+    const c = Math.cos(theta*Math.PI/180), s = Math.sin(theta*Math.PI/180);
+    const page = out.addPage([OUTW, OUTH]);
+    const ax = ocx - (scx*c - scy*s);
+    const ay = ocy - (scx*s + scy*c);
+    page.drawPage(embed, { x: ax, y: ay, rotate: degrees(theta), xScale: 1, yScale: 1 });
   }
 }
 
-function cropMarks(sheet, col, row){
-  const m = 3*MM, off = 1.2*MM, x0 = COLX[col]*MM, yT = SHEET_H - ROWY[row]*MM, xR = x0 + SLOT_W*MM, yB = SHEET_H - (ROWY[row]+SLOT_H)*MM;
-  const ln = (x1,y1,x2,y2)=>sheet.drawLine({ start:{x:x1,y:y1}, end:{x:x2,y:y2}, thickness:0.5, color: PDFLib.rgb(0,0,0) });
-  // 4 פינות, שני קווים בכל פינה (בתוך הרווחים)
-  [[x0,yT],[xR,yT],[x0,yB],[xR,yB]].forEach(([px,py],i)=>{
-    const sx = (i%2===0)? -1 : 1;     // שמאל/ימין
-    const sy = (i<2)? 1 : -1;         // עליון/תחתון
-    ln(px, py+sy*off, px, py+sy*(off+m));   // קו אנכי
-    ln(px+sx*off, py, px+sx*(off+m), py);   // קו אופקי
-  });
-}
-
-async function impose(arrayBuffer, opts){
+async function fold(arrayBuffer, opts){
   opts = opts || {};
-  const fullSheet = opts.fullSheet || 32;
-  const withMarks = !!opts.marks;
-  const src = await PDFDocument.load(arrayBuffer, { ignoreEncryption:true });
-  const total = src.getPageCount();
+  const firstSideIsFront = (opts.firstSide || 0) === 0;
+  const src = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+  const pages = src.getPages();
   const out = await PDFDocument.create();
-  const embeds = await out.embedPages(src.getPages());   // עמוד מוטמע לכל עמוד מקור
-  const sigs = planSignatures(total, fullSheet);
-  const report = { total, sigs: [], skipped: [] };
-  for (const sig of sigs){
-    if (sig.count === 32){
-      const fSheet = out.addPage([SHEET_W, SHEET_H]);
-      const bSheet = out.addPage([SHEET_W, SHEET_H]);
-      for (const pl of PLACE32){
-        const bookletPage = sig.local[pl.page - 1];        // עמוד-מקומי → עמוד בחוברת
-        if (!bookletPage || bookletPage > total) continue;
-        const embed = embeds[bookletPage - 1];
-        const sheet = pl.side === 0 ? fSheet : bSheet;
-        placeRotated(sheet, embed, pl.col, pl.row, COLROT[pl.col]);
-        if (withMarks) cropMarks(sheet, pl.col, pl.row);
-      }
-      report.sigs.push({ num: sig.num, count: 32, label: sig.label, sheets: 2 });
-    } else {
-      report.skipped.push({ num: sig.num, count: sig.count, label: sig.label });
-    }
+  const report = { sheets: pages.length, signatures: 0, pagesOut: 0, oddSheet: false, sizeWarn: null };
+  // בדיקת גודל גיליון (אזהרה אם רחוק מ-70×100)
+  if (pages.length){
+    const w = pages[0].getWidth()/MM, h = pages[0].getHeight()/MM;
+    if (Math.abs(w-1000) > 60 || Math.abs(h-700) > 60) report.sizeWarn = Math.round(w)+'×'+Math.round(h)+' מ"מ';
   }
+  for (let s = 0; s+1 < pages.length; s += 2){
+    await foldSignature(out, pages[s], pages[s+1], firstSideIsFront);
+    report.signatures++; report.pagesOut += 32;
+  }
+  if (pages.length % 2 === 1) report.oddSheet = true;
   const bytes = await out.save();
   return { bytes, report };
 }
@@ -208,44 +158,34 @@ function setFile(f){
 
 $('go').onclick = async () => {
   if (!_file) return;
-  $('go').disabled = true; $('result').innerHTML=''; $('log').textContent = 'קורא את ה-PDF…';
+  $('go').disabled = true; $('result').innerHTML=''; $('log').textContent = 'קורא את הגיליון…';
   try {
     const buf = await _file.arrayBuffer();
-    const fullSheet = parseInt($('sheet').value,10);
-    const marks = $('marks').value==='1';
-    $('log').textContent = 'בונה פריסה…';
-    const { bytes, report } = await impose(buf, { fullSheet, marks });
-    // טבלת חתימות
-    let html = '<h2 style="margin-top:18px">תכנון חתימות — '+report.total+' עמ\'</h2>'
-      + '<table><thead><tr><th>חתימה</th><th>עמודים</th><th>גודל</th><th>גיליונות</th></tr></thead><tbody>';
-    report.sigs.forEach(s=> html += '<tr><td>'+s.num+'</td><td>'+s.label+'</td><td>32 עמ\'</td><td>צד קדמי + אחורי</td></tr>');
-    report.skipped.forEach(s=> html += '<tr style="color:#b45309"><td>'+s.num+'</td><td>'+s.label+'</td><td>'+s.count+' עמ\'</td><td>⚠️ אין תבנית</td></tr>');
-    html += '</tbody></table>';
-    if (report.skipped.length){
-      html += '<div class="warn">⚠️ '+report.skipped.length+' חתימה/ות בגודל שאין לו עדיין תבנית פריסה ('
-        + report.skipped.map(s=>s.count+' עמ\'').join(', ')
-        + ') — הן <b>לא</b> נכללו בקובץ. שלח/י לי את תבנית הפריסה (כמו Template.pdf) לגדלים האלה ואטמיע אותן.</div>';
-    }
-    if (report.sigs.length){
+    $('log').textContent = 'מקפל לחוברת…';
+    const { bytes, report } = await fold(buf, { firstSide: parseInt($('firstside').value,10) });
+    let html = '';
+    if (report.signatures === 0){
+      html = '<div class="warn">לא נמצאו זוגות צד קדמי+אחורי בקובץ. צריך גיליון פרוס: לפחות 2 עמודים (קדמי + אחורי).</div>';
+    } else {
+      if (report.sizeWarn) html += '<div class="warn">⚠️ גודל הגיליון בקובץ הוא '+report.sizeWarn+' — התבנית מותאמת ל-70×100. אם התוצאה לא מדויקת, ייתכן שהגיליון לא בגודל/פריסה הצפויים.</div>';
+      if (report.oddSheet) html += '<div class="warn">⚠️ בקובץ יש מספר אי-זוגי של עמודים — העמוד האחרון (בלי צד תואם) דולג.</div>';
       const blob = new Blob([bytes], { type:'application/pdf' });
       const url = URL.createObjectURL(blob);
-      const name = _file.name.replace(/\.pdf$/i,'') + ' — פריסה לדפוס.pdf';
-      html += '<div class="ok">✓ נוצרה פריסה ל-'+report.sigs.length+' חתימה/ות ('+(report.sigs.length*2)+' גיליונות).</div>'
-        + '<a class="dl" href="'+url+'" download="'+name+'">⬇️ הורד את הפריסה</a>';
-    } else {
-      html += '<div class="warn">לא נוצרו גיליונות — אין חתימות 32 עמ\' בקובץ זה.</div>';
+      const name = _file.name.replace(/\.pdf$/i,'') + ' — חוברת מקופלת.pdf';
+      html += '<div class="ok">✓ קופלו '+report.signatures+' חתימות → '+report.pagesOut+' עמ\' בסדר קריאה.</div>'
+        + '<a class="dl" href="'+url+'" download="'+name+'">⬇️ הורד את החוברת המקופלת</a>'
+        + '<div class="muted" style="margin-top:10px">בדוק שהעמודים בסדר הנכון ובכיוון ישר. אם הצד הראשון בקובץ הוא דווקא האחורי — שנה את "צד ראשון בקובץ" ונסה שוב.</div>';
     }
-    $('result').innerHTML = html;
-    $('log').textContent = '';
+    $('result').innerHTML = html; $('log').textContent = '';
   } catch(e){
     console.error(e); $('log').textContent = '✗ שגיאה: ' + (e.message||e);
   } finally { $('go').disabled = false; }
 };
 
 // חשיפה לבדיקות
-window.impose = impose;
-window.planSignatures = planSignatures;
-window.PLACE32 = PLACE32;
+window.fold = fold;
+window.INV32 = INV32;
+window.GRID32 = GRID32;
 </script>
 </body>
 </html>
