@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782821704';
+window.APP_VERSION = '1782822507';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -14993,7 +14993,27 @@ function _initMachineViewMode() {
     _opLoadAndRender();
     window._opPollInterval = setInterval(_opLoadAndRender, 10000);
   }, 1800);
+  _opKeepAwake();   // מונע כיבוי מסך בחוסר פעילות (Wake Lock)
   return true;
+}
+
+// ── Wake Lock — שומר על המסך דלוק כל עוד מסך הדפס פתוח (גם בצפייה בפרופר) ──
+var _opWakeLock = null;
+function _opKeepAwake() {
+  var acquire = function(){
+    if (!('wakeLock' in navigator)) return;
+    try {
+      navigator.wakeLock.request('screen').then(function(wl){
+        _opWakeLock = wl;
+        wl.addEventListener('release', function(){ _opWakeLock = null; });
+      }).catch(function(){});
+    } catch(e){}
+  };
+  acquire();
+  // הדפדפן משחרר Wake Lock כשהטאב יורד לרקע — נבקש מחדש כשחוזרים
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') acquire(); });
+  // גיבוי: ריענון תקופתי של ה-Wake Lock
+  setInterval(function(){ if (!_opWakeLock && document.visibilityState === 'visible') acquire(); }, 60000);
 }
 
 function _opLoadAndRender() {
