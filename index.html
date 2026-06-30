@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782840040';
+window.APP_VERSION = '1782840248';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -15698,6 +15698,7 @@ function _opInkPanelEl(jobName){
     + _OP_INK_META.map(function(m){ return '<label style="font-size:1rem;font-weight:900;color:'+(m.k==='Y'?'#FFD400':(m.k==='K'?'#e2e8f0':m.bar))+'">'+m.k+' % <input id="op-ink-'+m.k+'" type="number" min="0" max="100" value="'+_opInk[m.k]+'" style="'+bigInput+'"></label>'; }).join('')
     + '<span style="width:1px;height:34px;background:#334155"></span>'
     + '<label style="font-size:.9rem;font-weight:700">מקדם כיול % <input id="op-ink-factor" type="number" min="10" max="200" value="'+_opInk.factor+'" style="'+bigInput+'"></label>'
+    + '<button onclick="_opInkFromProof()" style="height:46px;padding:0 18px;font-size:1.05rem;font-weight:900;background:#7c3aed;color:#fff;border:none;border-radius:10px;cursor:pointer;font-family:Heebo,sans-serif">📷 קרא מהפרופר</button>'
     + '<button onclick="_opInkApply()" style="height:46px;padding:0 22px;font-size:1.05rem;font-weight:900;background:#16a34a;color:#fff;border:none;border-radius:10px;cursor:pointer;font-family:Heebo,sans-serif">חשב ✓</button>'
     + '</div>'
     + '<div id="op-ink-bars"></div>'
@@ -15745,6 +15746,44 @@ function _opInkToggle(){
   var show = p.style.display === 'none';
   p.style.display = show ? 'block' : 'none';
   if (show && !document.getElementById('op-ink-bars').innerHTML) _opInkRenderBars();
+}
+// קריאה אוטומטית: ניתוח תמונת הפרופר → כיסוי C/M/Y/K לכל אזור (לרוחב הגיליון)
+function _opInkFromProof(){
+  var src = (window._opPV && window._opPV.imgs && window._opPV.imgs.length) ? window._opPV.imgs[window._opPV.idx] : null;
+  if (!src) { alert('קריאה אוטומטית זמינה כשהפרופר מוצג כתמונה (לא PDF). פתח את הפרופר ונסה שוב.'); return; }
+  var im = new Image();
+  im.onload = function(){
+    try {
+      var N = _opInk.zones || 32;
+      var maxW = 1000, sc = Math.min(1, maxW / im.naturalWidth);
+      var W = Math.max(N, Math.round(im.naturalWidth * sc)), H = Math.max(1, Math.round(im.naturalHeight * sc));
+      var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+      var ctx = cv.getContext('2d'); ctx.drawImage(im, 0, 0, W, H);
+      var d = ctx.getImageData(0, 0, W, H).data;
+      var C=[],M=[],Y=[],K=[],cnt=[];
+      for (var z=0; z<N; z++){ C[z]=0;M[z]=0;Y[z]=0;K[z]=0;cnt[z]=0; }
+      for (var y=0; y<H; y++){
+        for (var x=0; x<W; x++){
+          var p=(y*W+x)*4, a=d[p+3]; if (a<10) continue;
+          var rr=d[p]/255, gg=d[p+1]/255, bb=d[p+2]/255;
+          var k=1-Math.max(rr,gg,bb), c=0,m=0,yv=0;
+          if (k<0.999){ c=(1-rr-k)/(1-k); m=(1-gg-k)/(1-k); yv=(1-bb-k)/(1-k); }
+          var z=Math.min(N-1, Math.floor(x/W*N));
+          C[z]+=c; M[z]+=m; Y[z]+=yv; K[z]+=k; cnt[z]++;
+        }
+      }
+      for (var z=0; z<N; z++){
+        var n=cnt[z]||1;
+        _opInk.keys.C[z]=Math.round(C[z]/n*100);
+        _opInk.keys.M[z]=Math.round(M[z]/n*100);
+        _opInk.keys.Y[z]=Math.round(Y[z]/n*100);
+        _opInk.keys.K[z]=Math.round(K[z]/n*100);
+      }
+      _opInkRenderBars();
+    } catch(e){ alert('לא ניתן לנתח את תמונת הפרופר: ' + (e.message||e)); }
+  };
+  im.onerror = function(){ alert('שגיאה בטעינת תמונת הפרופר.'); };
+  im.src = src;
 }
 
 function _opViewProof(cardId, runKey) {
