@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782833204';
+window.APP_VERSION = '1782837239';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -1371,6 +1371,10 @@ window._fbSnapshot = {};
 
       <div class="field full" id="runs-field" style="display:none">
         <label>פירוט ריצות — בחר מכונה לכל ריצה</label>
+        <label id="single-sheet-row" style="display:none;align-items:center;gap:8px;cursor:pointer;font-weight:700;color:var(--press);background:#f6f1ff;border:1.5px solid #ddd6fe;border-radius:8px;padding:9px 12px;margin:0 0 8px">
+          <input type="checkbox" id="f-single-sheet" style="accent-color:#7c3aed;width:16px;height:16px" onchange="calcRuns()">
+          📄 הכל על גיליון אחד (חתימה אחת + אפשרות פלאייר)
+        </label>
         <div id="runs-output" style="margin-top:6px"></div>
       </div>
 
@@ -3920,9 +3924,20 @@ var RUN_AB_EXTRAS = [
   { key:'custom',      label:'עלון בגודל מצויין' }
 ];
 
-function buildRuns(totalPages, copies, fullSheet) {
+function buildRuns(totalPages, copies, fullSheet, singleSheet) {
   const halfSheet    = fullSheet / 2;
   const quarterSheet = fullSheet / 4;
+
+  // אופציה: כל העמודים על גיליון אחד (חתימה אחת) — אם הם נכנסים בגיליון מלא.
+  // ריצה אחת, כל הכמות, עם אפשרות A+B (להוסיף פלאייר במקום הפנוי בגיליון).
+  if (singleSheet && totalPages > 0 && totalPages <= fullSheet) {
+    return [{
+      num: 1, pages: totalPages, pageRange: 'עמ\' 1–' + totalPages, copies: copies,
+      folds: (fullSheet === 32 ? '4 קיפולים' : '3 קיפולים'),
+      machine: '', abMandatory: false, abEligible: true, abEnabled: false,
+      abExtras: [], abExtraCustomSize: '', manualExtra: '', upCount: 1, singleSheet: true
+    }];
+  }
 
   // בנה שכבות מבחוץ פנימה
   // השאר = totalPages mod fullSheet → שכבה חלקית (הריצה הקצרה ביותר), והיא ברירת
@@ -4042,7 +4057,14 @@ function calcRuns() {
     if (r.upCount) prevUp[r.num] = r.upCount;
     if (r.paper) prevPaper[r.num] = r.paper;
   });
-  currentRuns = buildRuns(pages, copies, fs);
+  // אופציית "הכל על גיליון אחד" — מוצגת רק כשהעמודים נכנסים בגיליון מלא
+  var _ssRow = document.getElementById('single-sheet-row');
+  var _ssBox = document.getElementById('f-single-sheet');
+  var _ssFits = pages > 0 && pages <= fs;
+  if (_ssRow) _ssRow.style.display = _ssFits ? 'flex' : 'none';
+  if (!_ssFits && _ssBox) _ssBox.checked = false;
+  var _single = !!(_ssBox && _ssBox.checked && _ssFits);
+  currentRuns = buildRuns(pages, copies, fs, _single);
   currentRuns.forEach(r=>{
     if(prev[r.num]) r.machine=prev[r.num];
     if(prevTumble[r.num]) r.tumble=true;
@@ -5547,6 +5569,7 @@ function editCard(id) {
   setVal('f-copies',        c.copies);
   setVal('f-pages',         c.pages);
   setVal('f-pages-note',    c.pagesNote||'');
+  var _ssb=document.getElementById('f-single-sheet'); if(_ssb) _ssb.checked = !!c.singleSheet;
   setVal('f-size',          c.size);
   setTimeout(function(){ _updateA4A5Picker((document.getElementById('f-size')||{}).value||''); }, 0);
   setVal('f-paper',         c.paper);
@@ -5595,7 +5618,7 @@ function clearForm() {
   ['f-name','f-type','f-order-date','f-delivery-date','f-copies','f-pages','f-pages-note','f-size','f-paper','f-notes','f-internal-notes','f-machine','f-placement-details']
     .forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
   document.querySelectorAll('input[name="color"]').forEach(r=>r.checked=false);
-  ['f-needs-folding','f-needs-binding'].forEach(id=>{ const e=document.getElementById(id); if(e) e.checked=false; });
+  ['f-needs-folding','f-needs-binding','f-single-sheet'].forEach(id=>{ const e=document.getElementById(id); if(e) e.checked=false; });
   document.querySelectorAll('#view-new .size-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('runs-field').style.display='none';
   document.getElementById('runs-output').innerHTML='';
@@ -6095,6 +6118,7 @@ function _saveCardNew() {
     placementDetails: (document.getElementById('f-placement-details')||{value:''}).value.trim(),
     machine:      document.getElementById('f-machine').value,
     tumble:       !!(document.getElementById('f-tumble')&&document.getElementById('f-tumble').checked),
+    singleSheet:  !!(document.getElementById('f-single-sheet')&&document.getElementById('f-single-sheet').checked),
     perSheet:     parseInt((document.getElementById('f-per-sheet')||{value:'1'}).value)||1,
     needsFolding: document.getElementById('f-needs-folding')?document.getElementById('f-needs-folding').checked:false,
     needsBinding: document.getElementById('f-needs-binding')?document.getElementById('f-needs-binding').checked:false,
@@ -6150,6 +6174,7 @@ function buildTempCard() {
     placementDetails: (document.getElementById('f-placement-details')||{value:''}).value.trim(),
     machine:      document.getElementById('f-machine').value,
     tumble:       !!(document.getElementById('f-tumble')&&document.getElementById('f-tumble').checked),
+    singleSheet:  !!(document.getElementById('f-single-sheet')&&document.getElementById('f-single-sheet').checked),
     perSheet:     parseInt((document.getElementById('f-per-sheet')||{value:'1'}).value)||1,
     needsFolding: document.getElementById('f-needs-folding')?document.getElementById('f-needs-folding').checked:false,
     needsBinding: document.getElementById('f-needs-binding')?document.getElementById('f-needs-binding').checked:false,
