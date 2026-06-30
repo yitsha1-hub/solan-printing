@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782826604';
+window.APP_VERSION = '1782833204';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -4022,7 +4022,7 @@ function calcRuns() {
   const field  = document.getElementById('runs-field');
   const out    = document.getElementById('runs-output');
   let fs=0, lbl='';
-  const _is32 = /70[\s×x*]?100|100[\s×x*]?70|16[.,]5[\s×x*]?24|24[\s×x*]?16|^a5$/.test(size);
+  const _is32 = /70[\s×x*]?100|100[\s×x*]?70|16[.,]5[\s×x*]?24|24[\s×x*]?16|165[\s×x*]?240|240[\s×x*]?165|^a5$/.test(size);
   // עיתון A4 = 16 עמ' לגיליון (עם חלוקה לריצות). "A4" רגיל = פלאייר/דף — בלי ריצות.
   const _is16 = /64[\s×x*]?90|90[\s×x*]?64|240[\s×x*]?330|330[\s×x*]?240|עיתון\s*a4|a3\s*קיפול/.test(size);
   if (!copies||!pages) { field.style.display='none'; currentRuns=[]; return; }
