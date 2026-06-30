@@ -61,11 +61,14 @@
   .thumb .rep { background:rgba(45,53,97,.92); } .thumb .rm { background:rgba(220,38,38,.92); }
 
   #viewer { flex:1; min-width:0; background:#fff; border-radius:10px; }
-  #spread { display:flex; gap:3px; justify-content:center; background:#d1d5db; padding:10px; border-radius:8px; min-height:55vh; align-items:center; }
+  /* gap:0 — שני העמודים נוגעים נטו-לנטו, כך שתמונה הנפרשת על כפולה מתחברת ברצף */
+  #spread { display:flex; gap:0; justify-content:center; background:#d1d5db; padding:10px; border-radius:8px; min-height:55vh; align-items:center; box-shadow:0 4px 16px rgba(0,0,0,.18); }
   #spread .pagewrap { display:inline-flex; flex-direction:column; align-items:center; gap:5px; }
   #spread .page { position:relative; display:inline-block; line-height:0; }
   #spread .page.drop-on { outline:4px dashed var(--press); outline-offset:-2px; }
-  #spread img { display:block; height:78vh; width:auto; max-width:48vw; background:#fff; box-shadow:0 3px 12px rgba(0,0,0,.2); }
+  #spread img { display:block; height:78vh; width:auto; max-width:48vw; background:#fff; box-shadow:none; }
+  /* תצוגה "נטו": ה-div מציג רק את אזור החיתוך (TrimBox) של העמוד דרך background, כך שהבלידs לא נראה והעמודים מתחברים */
+  #spread .page.netcrop { display:block; height:78vh; width:auto; max-width:48vw; background-color:#fff; background-repeat:no-repeat; }
   #spread .trim { position:absolute; border:1.5px dashed #e11d48; box-sizing:border-box; pointer-events:none; }
   #spread .pgdel { position:absolute; top:8px; left:8px; width:34px; height:34px; border:none; border-radius:50%;
     background:rgba(220,38,38,.92); color:#fff; font-size:1.05rem; font-weight:800; cursor:pointer; line-height:1;
@@ -406,12 +409,24 @@ function renderViewer() {
   // dir rtl: עמוד נמוך מימין. עוטף ב-.page עם קו חיתוך (TrimBox), כפתור מחיקה, ויעד גרירה.
   spread.innerHTML = s.map(i => {
     const p = pages[i];
-    const ov = p.trimFrac
-      ? `<div class="trim" style="left:${(p.trimFrac.l*100).toFixed(2)}%;top:${(p.trimFrac.t*100).toFixed(2)}%;width:${(p.trimFrac.w*100).toFixed(2)}%;height:${(p.trimFrac.h*100).toFixed(2)}%"></div>`
-      : '';
+    const tf = p.trimFrac;
+    if (tf && (tf.w < 1 || tf.h < 1)) {
+      // תצוגה נטו: חותכים ל-TrimBox דרך background, כדי שכפולה תתחבר גם כשיש בליד
+      const ar = (p.wmm && p.hmm) ? (p.wmm / p.hmm) : (tf.w / tf.h);
+      const posX = tf.w < 1 ? (tf.l / (1 - tf.w) * 100) : 0;
+      const posY = tf.h < 1 ? (tf.t / (1 - tf.h) * 100) : 0;
+      const sizeW = (100 / tf.w).toFixed(3);
+      const sizeH = (100 / tf.h).toFixed(3);
+      const st = `aspect-ratio:${ar.toFixed(4)};background-image:url('${p.src}');`
+        + `background-size:${sizeW}% ${sizeH}%;background-position:${posX.toFixed(3)}% ${posY.toFixed(3)}%;`;
+      return `<div class="pagewrap">`
+        + `<div class="page netcrop" data-idx="${i}" data-uid="${p.uid}" style="${st}">`
+        + `<button class="pgdel" title="מחק עמוד זה" data-uid="${p.uid}">✕</button></div>`
+        + `<div class="pgnum">עמוד ${i+1}</div></div>`;
+    }
     return `<div class="pagewrap">`
       + `<div class="page" data-idx="${i}" data-uid="${p.uid}">`
-      + `<img src="${p.src}" alt="">${ov}`
+      + `<img src="${p.src}" alt="">`
       + `<button class="pgdel" title="מחק עמוד זה" data-uid="${p.uid}">✕</button></div>`
       + `<div class="pgnum">עמוד ${i+1}</div></div>`;
   }).join('');
