@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782838992';
+window.APP_VERSION = '1782839701';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -15525,6 +15525,7 @@ function _opProofBar(label, onPdf) {
   var grp = document.createElement('div'); grp.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
   var mk = function(txt, bg, col){ var b=document.createElement('button'); b.textContent=txt; b.style.cssText='background:'+bg+';color:'+col+';border:none;border-radius:8px;padding:8px 14px;font-size:.95rem;font-weight:800;cursor:pointer;font-family:Heebo,sans-serif'; return b; };
   if (onPdf) { var bp = mk('📄 PDF מלא', '#475569', '#fff'); bp.onclick = onPdf; grp.appendChild(bp); }
+  var bi = mk('🎨 ברזי צבע', '#7c5a00', '#fff'); bi.onclick = _opInkToggle; grp.appendChild(bi);
   var bf = mk('⛶ מסך מלא', '#1e3a5f', '#fff'); bf.onclick = _opProofFullscreen; grp.appendChild(bf);
   var bc = mk('✕ סגור', '#fff', '#1e293b'); bc.onclick = _opCloseProof; grp.appendChild(bc);
   bar.appendChild(grp);
@@ -15564,14 +15565,17 @@ function _opPVBuild(ov){
     + _opPVbtn('🔍➕','הגדל').replace('<button','<button id="op-pv-zin"')
     + (multi ? _opPVbtn('⊞ כפולה','הצג שני עמודים').replace('<button','<button id="op-pv-spread"') : '')
     + (pv.pdfUrl ? _opPVbtn('📄 PDF','פתח PDF מלא').replace('<button','<button id="op-pv-pdf"') : '')
+    + _opPVbtn('🎨 ברזי צבע','מחשבון ברזי צבע').replace('<button','<button id="op-pv-ink"').replace('#1e3a5f','#7c5a00')
     + _opPVbtn('⛶','מסך מלא').replace('<button','<button id="op-pv-fs"')
     + _opPVbtn('✕','סגור').replace('<button','<button id="op-pv-close"').replace('#1e3a5f','#b91c1c');
   ov.appendChild(bar);
   var vp = document.createElement('div'); vp.id = 'op-pv-viewport';
   vp.style.cssText = 'flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;-webkit-overflow-scrolling:touch';
   ov.appendChild(vp);
+  ov.appendChild(_opInkPanelEl(pv.label));   // פאנל ברזי צבע (מתחת לפרופר, מוסתר עד שלוחצים)
   // wiring
   var on = function(id,fn){ var b=document.getElementById(id); if(b) b.onclick=fn; };
+  on('op-pv-ink', _opInkToggle);
   on('op-pv-prev', function(){ _opPVNav(-1); });
   on('op-pv-next', function(){ _opPVNav(1); });
   on('op-pv-zout', function(){ _opPVZoom('out'); });
@@ -15634,6 +15638,7 @@ function _opProofOverlay(url, type, label, revoke) {
     + _opPVbtn('🔍➖','הקטן').replace('<button','<button id="op-oz-out"')
     + _opPVbtn('⤢ התאם','התאם למסך').replace('<button','<button id="op-oz-fit"')
     + _opPVbtn('🔍➕','הגדל').replace('<button','<button id="op-oz-in"')
+    + _opPVbtn('🎨 ברזי צבע','מחשבון ברזי צבע').replace('<button','<button id="op-oz-ink"').replace('#1e3a5f','#7c5a00')
     + _opPVbtn('⛶','מסך מלא').replace('<button','<button id="op-oz-fs"')
     + _opPVbtn('✕','סגור').replace('<button','<button id="op-oz-close"').replace('#1e3a5f','#b91c1c');
   ov.appendChild(bar);
@@ -15648,6 +15653,7 @@ function _opProofOverlay(url, type, label, revoke) {
   else { view = document.createElement('img'); view.src = url; view.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain'; }
   view.onload = hide; view.onerror = hide;
   stage.appendChild(view); vp.appendChild(stage); ov.appendChild(vp);
+  ov.appendChild(_opInkPanelEl(label));   // פאנל ברזי צבע מתחת לפרופר
   document.body.appendChild(ov);
   // זום: שינוי גודל ה-stage (וה-iframe/img שבתוכו) + גלילה
   var apply = function(){ var z = window._opOZ; stage.style.width = (z*100)+'%'; stage.style.height = (z*100)+'%'; };
@@ -15660,9 +15666,87 @@ function _opProofOverlay(url, type, label, revoke) {
   document.getElementById('op-oz-fit').onclick = function(){ zStep('fit'); };
   document.getElementById('op-oz-fs').onclick  = _opProofFullscreen;
   document.getElementById('op-oz-close').onclick = _opCloseProof;
+  var _ozInk=document.getElementById('op-oz-ink'); if(_ozInk) _ozInk.onclick = _opInkToggle;
   setTimeout(hide, 8000); // גיבוי אם onload לא נורה
   if (revoke) setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
 }
+// ── מחשבון ברזי צבע (Heidelberg) — אופציונלי, מתחת לפרופר ──────────────────
+var _opInk = { zones:32, C:0, M:0, Y:0, K:0, factor:100, keys:{C:{},M:{},Y:{},K:{}}, job:'' };
+var _OP_INK_META = [
+  { k:'C', label:'ציאן (C)', bar:'#00AEEF' },
+  { k:'M', label:'מגנטה (M)', bar:'#EC008C' },
+  { k:'Y', label:'צהוב (Y)', bar:'#FFD400' },
+  { k:'K', label:'שחור (K)', bar:'#e2e8f0' }
+];
+function _opInkKeyVal(color, i){
+  var ov = _opInk.keys[color] && _opInk.keys[color][i];
+  var base = (ov !== undefined && ov !== '' && ov !== null) ? ov : _opInk[color];
+  var v = (parseFloat(base)||0) * (parseFloat(_opInk.factor)||100)/100;
+  return Math.max(0, Math.min(100, Math.round(v)));
+}
+function _opInkPanelEl(jobName){
+  _opInk.job = jobName || '';
+  var bigInput = 'width:62px;height:42px;font-size:1.15rem;font-weight:800;text-align:center;border:2px solid #475569;border-radius:8px;background:#fff;color:#0f172a;font-family:Heebo,sans-serif';
+  var p = document.createElement('div');
+  p.id = 'op-ink-panel';
+  p.style.cssText = 'display:none;background:#0f172a;color:#fff;border-top:4px solid #c9a84c;padding:12px 14px;max-height:48vh;overflow:auto;font-family:Heebo,sans-serif;direction:rtl;flex-shrink:0';
+  p.innerHTML =
+      '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px">'
+    + '<span style="font-size:1.05rem;font-weight:900;color:#c9a84c">🎨 ברזי צבע — '+escHtml(jobName||'עבודה')+'</span>'
+    + '<label style="font-size:.9rem;font-weight:700">אזורים <input id="op-ink-zones" type="number" min="1" max="60" value="'+_opInk.zones+'" style="'+bigInput+';width:70px"></label>'
+    + '<span style="width:1px;height:34px;background:#334155"></span>'
+    + _OP_INK_META.map(function(m){ return '<label style="font-size:1rem;font-weight:900;color:'+(m.k==='Y'?'#FFD400':(m.k==='K'?'#e2e8f0':m.bar))+'">'+m.k+' % <input id="op-ink-'+m.k+'" type="number" min="0" max="100" value="'+_opInk[m.k]+'" style="'+bigInput+'"></label>'; }).join('')
+    + '<span style="width:1px;height:34px;background:#334155"></span>'
+    + '<label style="font-size:.9rem;font-weight:700">מקדם כיול % <input id="op-ink-factor" type="number" min="10" max="200" value="'+_opInk.factor+'" style="'+bigInput+'"></label>'
+    + '<button onclick="_opInkApply()" style="height:46px;padding:0 22px;font-size:1.05rem;font-weight:900;background:#16a34a;color:#fff;border:none;border-radius:10px;cursor:pointer;font-family:Heebo,sans-serif">חשב ✓</button>'
+    + '</div>'
+    + '<div id="op-ink-bars"></div>'
+    + '<div style="font-size:.74rem;color:#94a3b8;margin-top:8px">המלצת פתיחת ברז = אחוז כיסוי × מקדם הכיול. לחיצה על ברז מאפשרת לכוון אזור בודד. זו נקודת התחלה — כוונון סופי על המכונה.</div>';
+  return p;
+}
+function _opInkApply(){
+  var g = function(id){ var e=document.getElementById(id); return e?e.value:''; };
+  _opInk.zones  = Math.max(1, Math.min(60, parseInt(g('op-ink-zones'))||32));
+  ['C','M','Y','K'].forEach(function(k){ _opInk[k] = Math.max(0, Math.min(100, parseFloat(g('op-ink-'+k))||0)); });
+  _opInk.factor = Math.max(10, Math.min(200, parseFloat(g('op-ink-factor'))||100));
+  _opInkRenderBars();
+}
+function _opInkSetKey(color, i){
+  var cur = _opInkKeyVal(color, i);
+  var v = prompt('פתיחת ברז ' + (i+1) + ' — ' + color + ' (0–100%):', cur);
+  if (v === null) return;
+  v = parseFloat(v);
+  if (isNaN(v)) { delete _opInk.keys[color][i]; } else { _opInk.keys[color][i] = Math.max(0, Math.min(100, v)) / (((parseFloat(_opInk.factor)||100))/100); }
+  _opInkRenderBars();
+}
+function _opInkRenderBars(){
+  var host = document.getElementById('op-ink-bars'); if(!host) return;
+  var N = _opInk.zones, rowH = 96;
+  host.innerHTML = _OP_INK_META.map(function(m){
+    var bars = '';
+    for (var i=0;i<N;i++){
+      var v = _opInkKeyVal(m.k, i);
+      var fh = Math.round(v/100*rowH);
+      var edited = _opInk.keys[m.k] && _opInk.keys[m.k][i] !== undefined && _opInk.keys[m.k][i] !== '';
+      bars += '<div onclick="_opInkSetKey(\''+m.k+'\','+i+')" title="ברז '+(i+1)+'" style="flex:1;min-width:13px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;cursor:pointer">'
+        + '<span style="font-size:.6rem;font-weight:800;color:#fff;line-height:1">'+v+'</span>'
+        + '<div style="width:80%;height:'+fh+'px;background:'+m.bar+';border-radius:2px 2px 0 0;'+(edited?'outline:2px solid #fff;':'')+'"></div>'
+        + '<span style="font-size:.55rem;color:#64748b;line-height:1.2">'+(i+1)+'</span>'
+        + '</div>';
+    }
+    return '<div style="margin-bottom:9px">'
+      + '<div style="font-size:.92rem;font-weight:900;margin-bottom:3px;color:'+(m.k==='Y'?'#FFD400':(m.k==='K'?'#e2e8f0':m.bar))+'">'+m.label+'</div>'
+      + '<div style="display:flex;gap:2px;align-items:flex-end;height:'+(rowH+18)+'px;background:#1e293b;padding:5px 6px;border-radius:7px;overflow-x:auto">'+bars+'</div>'
+      + '</div>';
+  }).join('');
+}
+function _opInkToggle(){
+  var p = document.getElementById('op-ink-panel'); if(!p) return;
+  var show = p.style.display === 'none';
+  p.style.display = show ? 'block' : 'none';
+  if (show && !document.getElementById('op-ink-bars').innerHTML) _opInkRenderBars();
+}
+
 function _opViewProof(cardId, runKey) {
   if (!cardId) return;
   var c = (cards||[]).find(function(x){ return String(x.id) === String(cardId); });
