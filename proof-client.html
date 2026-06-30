@@ -46,6 +46,10 @@
     cursor:pointer; margin-bottom:14px; font-size:1rem; transition:all .18s; box-shadow:0 2px 10px rgba(0,0,0,.04); }
   .drop:hover { border-color:var(--gold); background:#fffdf6; }
   .drop.over { background:#fbf7e9; border-color:var(--gold); } .drop b { color:var(--press); }
+  /* חיווי בזמן גרירת קובץ מהמחשב לכל אזור העורך */
+  #editor.extdrag { outline:3px dashed var(--press); outline-offset:-8px; border-radius:12px; position:relative; }
+  #editor.extdrag::after { content:'שחררו כאן להוספת עמודים'; position:fixed; top:14px; left:50%; transform:translateX(-50%);
+    background:var(--press); color:#fff; padding:8px 18px; border-radius:20px; font-weight:800; font-size:.9rem; z-index:60; box-shadow:0 4px 14px rgba(0,0,0,.25); }
 
   #workspace { display:flex; gap:16px; align-items:flex-start; }
   #sidebar { width:210px; flex:0 0 210px; max-height:82vh; overflow-y:auto; display:flex; flex-direction:column; gap:10px;
@@ -240,7 +244,14 @@ $('addMore').onclick = () => $('file').click();
 $('file').onchange = e => addFiles(e.target.files);
 ['dragover','dragenter'].forEach(ev => $('drop').addEventListener(ev, e => { e.preventDefault(); $('drop').classList.add('over'); }));
 ['dragleave','drop'].forEach(ev => $('drop').addEventListener(ev, e => { e.preventDefault(); $('drop').classList.remove('over'); }));
-$('drop').addEventListener('drop', e => addFiles(e.dataTransfer.files));
+$('drop').addEventListener('drop', e => { e.stopPropagation(); addFiles(e.dataTransfer.files); });
+
+// גרירת קבצים מהמחשב לכל אזור העורך (כולל הדפדוף) — גם לאחר שכבר הועלו קבצים.
+// כך הלקוח יכול למחוק עמוד ולגרור עמוד חדש מהמחשב לכל מקום בחלון.
+function _dtHasFiles(e){ return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types||[], 'Files') !== -1; }
+['dragover','dragenter'].forEach(ev => $('editor').addEventListener(ev, e => { if (_dtHasFiles(e)) { e.preventDefault(); $('editor').classList.add('extdrag'); } }));
+$('editor').addEventListener('dragleave', e => { if (e.target === $('editor')) $('editor').classList.remove('extdrag'); });
+$('editor').addEventListener('drop', e => { if (_dtHasFiles(e)) { e.preventDefault(); $('editor').classList.remove('extdrag'); addFiles(e.dataTransfer.files); } });
 
 async function addFiles(fileList) {
   const files = [...fileList].filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
