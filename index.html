@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782803806';
+window.APP_VERSION = '1782804929';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -5642,6 +5642,44 @@ function _readProofFile(file, cb) {
   reader.readAsDataURL(file);
 }
 
+// העלאת פרופר ל-RTDB עם מעקב אחוזי התקדמות (XHR, בניגוד ל-fetch שאין בו progress)
+function _uploadProofWithProgress(path, proof, onProgress) {
+  return new Promise(function(resolve){
+    try {
+      var body = JSON.stringify(proof);
+      var xhr = new XMLHttpRequest();
+      xhr.open('PUT', _FBURL + '/' + path + '.json', true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      if (xhr.upload) xhr.upload.onprogress = function(e){
+        if (e.lengthComputable && onProgress) onProgress(Math.min(99, Math.round(e.loaded / e.total * 100)));
+      };
+      xhr.onload  = function(){ if (onProgress) onProgress(100); resolve(xhr.status >= 200 && xhr.status < 300); };
+      xhr.onerror = function(){ resolve(false); };
+      xhr.ontimeout = function(){ resolve(false); };
+      xhr.send(body);
+    } catch(e) { resolve(false); }
+  });
+}
+function _showProofProgress(pct) {
+  var el = document.getElementById('proof-upload-progress');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'proof-upload-progress';
+    el.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:100001;background:#1e293b;color:#fff;padding:13px 20px;border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.35);font-family:Heebo,sans-serif;min-width:280px;direction:rtl';
+    el.innerHTML = '<div style="font-size:.86rem;font-weight:800;margin-bottom:9px">⏳ מעלה פרופר... <span id="pup-pct">0%</span></div>'
+      + '<div style="height:9px;background:#334155;border-radius:6px;overflow:hidden"><div id="pup-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#7c3aed,#c9a84c);transition:width .25s"></div></div>'
+      + '<div style="font-size:.72rem;color:#94a3b8;margin-top:7px">אל תסגור את החלון עד לסיום</div>';
+    document.body.appendChild(el);
+  }
+  var bar = document.getElementById('pup-bar'), lbl = document.getElementById('pup-pct');
+  if (bar) bar.style.width = pct + '%';
+  if (lbl) lbl.textContent = pct + '%';
+}
+function _hideProofProgress() {
+  var el = document.getElementById('proof-upload-progress');
+  if (el) el.remove();
+}
+
 function _saveProofFor(cardId, runKey, proof) {
   if (!cardId || cardId === 'preview' || !proof) return;
   var path = runKey ? 'proofs/' + cardId + '/' + runKey : 'proofs/' + cardId;
@@ -5659,9 +5697,9 @@ function _saveProofFor(cardId, runKey, proof) {
     persist();
     if (typeof renderCards === 'function') renderCards();
   }
-  showToast('⏳ מעלה פרופר... (אל תסגור עד לאישור)');
-  var put = window._fbPut ? window._fbPut(path, proof) : Promise.resolve(false);
-  Promise.resolve(put).then(function(ok){
+  _showProofProgress(0);
+  _uploadProofWithProgress(path, proof, function(pct){ _showProofProgress(pct); }).then(function(ok){
+    _hideProofProgress();
     if (ok === false) throw new Error('upload failed');
     if (c) {
       c.proofUploading = false;
@@ -5671,6 +5709,7 @@ function _saveProofFor(cardId, runKey, proof) {
     }
     showToast('✅ הפרופר הועלה ונשמר');
   }).catch(function(){
+    _hideProofProgress();
     // ההעלאה נכשלה — בטל את הסימון כדי שלא יוצג פרופר שלא קיים
     if (c) {
       c.proofUploading = false;
@@ -6016,6 +6055,7 @@ function showPreviewModal(card) {
     card.id === 'preview' ? 'inline-block' : 'none';
   document.getElementById('print-modal').classList.add('open');
   window._previewCard = card;
+  window._printModalIsPreview = true; // סגירה תשאיר את המשתמש בטופס, לא תזרוק לרשימת הכרטיסים
 }
 
 // ========== PRINT ==========
@@ -6456,6 +6496,7 @@ function showPrintModal(card) {
   // זכור מאיפה נפתח הכרטיס — טאב נוכחי + מיקום הגלילה — כדי לחזור לשם בסגירה
   window._modalReturnTab = _getActiveTab();
   window._modalReturnScrollY = window.scrollY || window.pageYOffset || 0;
+  window._printModalIsPreview = false; // כרטיס אמיתי — בסגירה לנווט לטאב המקור
   document.getElementById('print-card-content').innerHTML = buildPrintCard(card);
   document.getElementById('print-modal-save-btn').style.display = 'none';
   var _delBtn = document.getElementById('print-modal-delete-btn');
@@ -6504,6 +6545,8 @@ function saveFromPreview() {
 function closePrintModal() {
   document.getElementById('print-modal').classList.remove('open');
   window._pendingDeduct = null;
+  // תצוגה מקדימה — השאר את המשתמש בטופס העריכה (אל תנווט לרשימת הכרטיסים)
+  if (window._printModalIsPreview) { window._printModalIsPreview = false; return; }
   // חזור לטאב שממנו נפתח הכרטיס (לא תמיד "כרטיסים") ושחזר את מיקום הגלילה
   var rt = window._modalReturnTab || 'saved';
   var ry = window._modalReturnScrollY || 0;
