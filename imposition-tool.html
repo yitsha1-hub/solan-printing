@@ -47,8 +47,14 @@
       <input type="file" id="file" accept="application/pdf" hidden>
     </div>
     <div class="opts">
-      <div class="opt"><label>סוג גיליון:</label>
-        <select id="sheet"><option value="32" selected>70×100 — חתימת 32 עמ' (165×240)</option></select>
+      <div class="opt"><label>סוג הפריסה:</label>
+        <select id="sheet">
+          <option value="32" selected>32 עמ' (70×100)</option>
+          <option value="16perf">16 עמ' — פרפקטור (8 צבעים)</option>
+          <option value="16p">16 עמ' — מתהפך (4 צבעים)</option>
+          <option value="8perf">8 עמ' — פרפקטור (8 צבעים)</option>
+          <option value="8p">8 עמ' — מתהפך (4 צבעים)</option>
+        </select>
       </div>
       <div class="opt"><label>צד ראשון בקובץ:</label>
         <select id="firstside"><option value="0" selected>קדמי (עמ' 1)</option><option value="1">אחורי</option></select>
@@ -63,11 +69,11 @@
   <div class="card">
     <h2>איך זה עובד</h2>
     <div class="muted">
-      • מעלים את ה<b>גיליון הפרוס</b> (כמו הקובץ של Apogee — 2 עמודים: צד קדמי + אחורי לכל חתימה).<br>
-      • הכלי מזהה היכן כל עמוד יושב בגיליון (לפי <b>תבנית הפריסה 32 עמ'</b> שלכם), "מקפל" אותו ומסדר את כל העמודים <b>בסדר קריאה</b> 1,2,3… בחוברת אחת — לבדיקה שהקיפול והסדר יצאו נכון לפני פלטות/דפוס.<br>
+      • בוחרים את <b>סוג הפריסה</b> (32 / 16 / 8 עמ', פרפקטור או מתהפך) ומעלים את ה<b>גיליון הפרוס</b> (הקובץ של Apogee).<br>
+      • <b>פרפקטור</b> (8 צבעים) = קובץ של 2 עמודים (צד קדמי + אחורי). <b>מתהפך</b> (4 צבעים) = קובץ של עמוד גיליון אחד.<br>
+      • הכלי "מקפל" את הגיליון ומסדר את העמודים <b>בסדר קריאה</b> 1,2,3… בחוברת אחת — לבדיקה שהקיפול והסדר יצאו נכון לפני פלטות/דפוס.<br>
       • הצבעים והתוכן <b>לא משתנים</b> — רק חיתוך לפי הנטו, סיבוב לישר, וסידור.<br>
-      • קובץ עם כמה חתימות (כמה זוגות עמודים) — כל חתימה תקופל בנפרד ל-32 עמ' ברצף.<br>
-      • ⚠️ מוטמעת תבנית <b>32 עמ'</b>. גיליונות בגדלים אחרים יסומנו — שלחו לי את התבניות שלהם.
+      • קובץ עם כמה חתימות (כמה גיליונות) — כל חתימה תקופל בנפרד ברצף.
     </div>
   </div>
 </div>
@@ -77,65 +83,73 @@ const { PDFDocument, degrees } = PDFLib;
 const MM = 72/25.4;
 const COLCX = [125, 375, 625, 875];          // מ"מ — מרכז עמודה (top-left, על שטח פריסה 1000×700)
 const ROWCY = [97.5, 262.5, 437.5, 602.5];   // מ"מ — מרכז שורה (top-left)
-const COLROT = [90, -90, 90, -90];           // סיבוב שבו הודפס העמוד (לפי עמודה)
 const TRIM_W = 165, TRIM_H = 240;            // מ"מ — גודל נטו
 
-// מפת הפריסה 32 עמ' (חולצה מ-Template.pdf): side → 4 שורות × 4 עמודות → מספר עמוד בחוברת
-const GRID32 = {
-  front: [ [1,16,13,4], [32,17,20,29], [25,24,21,28], [8,9,12,5] ],
-  back:  [ [3,14,15,2], [30,19,18,31], [27,22,23,26], [6,11,10,7] ]
+// ── תבניות הפריסה (חולצו מ-Template*.pdf): grid[side][row][col] = מספר עמוד; rot = סיבוב לפי עמודה ──
+// sides=1 → גיליון מתהפך (פלטה אחת, 2-up); sides=2 → פרפקטור (צד קדמי + אחורי)
+const TEMPLATES = {
+  '32':     { N:32, sides:2, rot:[90,-90,90,-90],
+              grids:[ [[1,16,13,4],[32,17,20,29],[25,24,21,28],[8,9,12,5]],
+                      [[3,14,15,2],[30,19,18,31],[27,22,23,26],[6,11,10,7]] ] },
+  '16perf': { N:16, sides:2, rot:[-90,90,-90,90],
+              grids:[ [[8,1,4,5],[9,16,13,12],[12,13,16,9],[5,4,1,8]],
+                      [[6,3,2,7],[11,14,15,10],[10,15,14,11],[7,2,3,6]] ] },
+  '16p':    { N:16, sides:1, rot:[-90,90,-90,90],
+              grids:[ [[8,1,2,7],[9,16,15,10],[12,13,14,11],[5,4,3,6]] ] },
+  '8perf':  { N:8,  sides:2, rot:[90,-90,90,-90],
+              grids:[ [[1,4,1,4],[8,5,8,5],[5,8,5,8],[4,1,4,1]],
+                      [[3,2,3,2],[6,7,6,7],[7,6,7,6],[2,3,2,3]] ] },
+  '8p':     { N:8,  sides:1, rot:[90,-90,90,-90],
+              grids:[ [[1,4,3,2],[8,5,6,7],[5,8,7,6],[4,1,2,3]] ] }
 };
-// היפוך: מספר עמוד → {side,col,row}
-const INV32 = (function(){
+// בונה מפה: מספר עמוד → {side,col,row} (מופע ראשון)
+function _buildMap(tpl){
   const m = {};
-  ['front','back'].forEach((sn,side)=>GRID32[sn].forEach((rowArr,row)=>rowArr.forEach((pg,col)=>{ m[pg]={side,col,row}; })));
+  tpl.grids.forEach((grid,side)=>grid.forEach((rowArr,row)=>rowArr.forEach((pg,col)=>{ if(!(pg in m)) m[pg]={side,col,row}; })));
   return m;
-})();
+}
 
-// "מקפל" חתימה אחת: מחלץ את 32 העמודים מהגיליון (צד קדמי+אחורי) ומסדר בסדר קריאה.
-async function foldSignature(out, frontPage, backPage, firstSideIsFront){
-  const fEmbed = await out.embedPage(frontPage);
-  const bEmbed = await out.embedPage(backPage);
-  const mwmm = frontPage.getWidth()/MM, mhmm = frontPage.getHeight()/MM;
+// "מקפל" חתימה אחת: מחלץ את N העמודים מהגיליון ומסדר בסדר קריאה.
+async function foldSignature(out, sidePages, tpl, map, firstSideIsFront){
+  const embeds = [];
+  for (let i=0;i<sidePages.length;i++) embeds.push(await out.embedPage(sidePages[i]));
+  const ref = sidePages[0];
+  const mwmm = ref.getWidth()/MM, mhmm = ref.getHeight()/MM;
   const offX = (mwmm - 1000)/2, offY = (mhmm - 700)/2;   // שטח הפריסה ממורכז בגיליון (כולל bleed)
-  const sheetHpt = frontPage.getHeight();
-  const OUTW = TRIM_W*MM, OUTH = TRIM_H*MM;
-  const ocx = OUTW/2, ocy = OUTH/2;
-  for (let n = 1; n <= 32; n++){
-    const pos = INV32[n];
-    // אם "הצד הראשון בקובץ" הוא האחורי — מחליפים קדמי/אחורי
-    const useFront = firstSideIsFront ? (pos.side === 0) : (pos.side === 1);
-    const embed = useFront ? fEmbed : bEmbed;
-    const cxmm = COLCX[pos.col] + offX;
-    const cytopmm = ROWCY[pos.row] + offY;
-    const scx = cxmm * MM;
-    const scy = sheetHpt - cytopmm * MM;          // מרכז המשבצת בקואורדינטות pdf-lib (origin תחתון-שמאלי)
-    const theta = (COLROT[pos.col] === 90) ? -90 : 90;   // ביטול הסיבוב → ישר
+  const sheetHpt = ref.getHeight();
+  const OUTW = TRIM_W*MM, OUTH = TRIM_H*MM, ocx = OUTW/2, ocy = OUTH/2;
+  for (let n = 1; n <= tpl.N; n++){
+    const pos = map[n]; if (!pos) continue;
+    let sideIdx = pos.side;
+    if (tpl.sides === 2 && !firstSideIsFront) sideIdx = 1 - sideIdx;   // היפוך קדמי/אחורי אם נדרש
+    const embed = embeds[sideIdx] || embeds[0];
+    const scx = (COLCX[pos.col] + offX) * MM;
+    const scy = sheetHpt - (ROWCY[pos.row] + offY) * MM;   // מרכז המשבצת (origin תחתון-שמאלי)
+    const theta = (tpl.rot[pos.col] === 90) ? -90 : 90;     // ביטול הסיבוב → ישר
     const c = Math.cos(theta*Math.PI/180), s = Math.sin(theta*Math.PI/180);
     const page = out.addPage([OUTW, OUTH]);
-    const ax = ocx - (scx*c - scy*s);
-    const ay = ocy - (scx*s + scy*c);
-    page.drawPage(embed, { x: ax, y: ay, rotate: degrees(theta), xScale: 1, yScale: 1 });
+    page.drawPage(embed, { x: ocx - (scx*c - scy*s), y: ocy - (scx*s + scy*c), rotate: degrees(theta), xScale: 1, yScale: 1 });
   }
 }
 
 async function fold(arrayBuffer, opts){
   opts = opts || {};
+  const tpl = TEMPLATES[opts.type || '32']; const map = _buildMap(tpl);
   const firstSideIsFront = (opts.firstSide || 0) === 0;
   const src = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
   const pages = src.getPages();
   const out = await PDFDocument.create();
-  const report = { sheets: pages.length, signatures: 0, pagesOut: 0, oddSheet: false, sizeWarn: null };
-  // בדיקת גודל גיליון (אזהרה אם רחוק מ-70×100)
+  const per = tpl.sides;   // עמודי-קובץ לחתימה (1=מתהפך, 2=פרפקטור)
+  const report = { sheets: pages.length, signatures: 0, pagesOut: 0, leftover: 0, sizeWarn: null };
   if (pages.length){
     const w = pages[0].getWidth()/MM, h = pages[0].getHeight()/MM;
     if (Math.abs(w-1000) > 60 || Math.abs(h-700) > 60) report.sizeWarn = Math.round(w)+'×'+Math.round(h)+' מ"מ';
   }
-  for (let s = 0; s+1 < pages.length; s += 2){
-    await foldSignature(out, pages[s], pages[s+1], firstSideIsFront);
-    report.signatures++; report.pagesOut += 32;
+  for (let s = 0; s + per <= pages.length; s += per){
+    await foldSignature(out, pages.slice(s, s+per), tpl, map, firstSideIsFront);
+    report.signatures++; report.pagesOut += tpl.N;
   }
-  if (pages.length % 2 === 1) report.oddSheet = true;
+  report.leftover = pages.length % per;
   const bytes = await out.save();
   return { bytes, report };
 }
@@ -161,20 +175,24 @@ $('go').onclick = async () => {
   $('go').disabled = true; $('result').innerHTML=''; $('log').textContent = 'קורא את הגיליון…';
   try {
     const buf = await _file.arrayBuffer();
+    const type = $('sheet').value;
     $('log').textContent = 'מקפל לחוברת…';
-    const { bytes, report } = await fold(buf, { firstSide: parseInt($('firstside').value,10) });
+    const { bytes, report } = await fold(buf, { type: type, firstSide: parseInt($('firstside').value,10) });
+    var per = (type==='16p'||type==='8p') ? 1 : 2;
     let html = '';
     if (report.signatures === 0){
-      html = '<div class="warn">לא נמצאו זוגות צד קדמי+אחורי בקובץ. צריך גיליון פרוס: לפחות 2 עמודים (קדמי + אחורי).</div>';
+      html = '<div class="warn">לא נמצאו מספיק עמודים בקובץ לסוג שנבחר. '
+        + (per===2 ? 'פרפקטור צריך 2 עמודים (קדמי + אחורי).' : 'מתהפך צריך עמוד גיליון אחד לפחות.')
+        + ' ודא שבחרת את סוג הפריסה הנכון.</div>';
     } else {
-      if (report.sizeWarn) html += '<div class="warn">⚠️ גודל הגיליון בקובץ הוא '+report.sizeWarn+' — התבנית מותאמת ל-70×100. אם התוצאה לא מדויקת, ייתכן שהגיליון לא בגודל/פריסה הצפויים.</div>';
-      if (report.oddSheet) html += '<div class="warn">⚠️ בקובץ יש מספר אי-זוגי של עמודים — העמוד האחרון (בלי צד תואם) דולג.</div>';
+      if (report.sizeWarn) html += '<div class="warn">⚠️ גודל הגיליון בקובץ הוא '+report.sizeWarn+' — התבניות מותאמות ל-70×100. אם התוצאה לא מדויקת, ייתכן שנבחר סוג פריסה לא נכון.</div>';
+      if (report.leftover) html += '<div class="warn">⚠️ נשארו '+report.leftover+' עמ\' בקובץ שלא הושלמה להם חתימה — דולגו.</div>';
       const blob = new Blob([bytes], { type:'application/pdf' });
       const url = URL.createObjectURL(blob);
       const name = _file.name.replace(/\.pdf$/i,'') + ' — חוברת מקופלת.pdf';
       html += '<div class="ok">✓ קופלו '+report.signatures+' חתימות → '+report.pagesOut+' עמ\' בסדר קריאה.</div>'
         + '<a class="dl" href="'+url+'" download="'+name+'">⬇️ הורד את החוברת המקופלת</a>'
-        + '<div class="muted" style="margin-top:10px">בדוק שהעמודים בסדר הנכון ובכיוון ישר. אם הצד הראשון בקובץ הוא דווקא האחורי — שנה את "צד ראשון בקובץ" ונסה שוב.</div>';
+        + '<div class="muted" style="margin-top:10px">בדוק שהעמודים בסדר הנכון ובכיוון ישר. אם הצד הראשון בקובץ הוא דווקא האחורי (בפרפקטור) — שנה את "צד ראשון בקובץ" ונסה שוב.</div>';
     }
     $('result').innerHTML = html; $('log').textContent = '';
   } catch(e){
@@ -184,8 +202,8 @@ $('go').onclick = async () => {
 
 // חשיפה לבדיקות
 window.fold = fold;
-window.INV32 = INV32;
-window.GRID32 = GRID32;
+window.TEMPLATES = TEMPLATES;
+window._buildMap = _buildMap;
 </script>
 </body>
 </html>
