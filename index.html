@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782906535';
+window.APP_VERSION = '1782907051';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -41,6 +41,21 @@ window.APP_VERSION = '1782906535';
   }
   setTimeout(checkVersion, 3000);
   setInterval(checkVersion, 60000);
+})();
+
+// ── גובה כותרת דינמי ─────────────────────────────────────────────
+// שומר את גובה הכותרת ב-CSS var --hdr-h כדי שסרגל הטאבים יידבק בדיוק
+// מתחתיה בכל גלילה (אחרת, אם הכותרת גבוהה מ-60px, היא מכסה את טאב הדשבורד).
+(function(){
+  function setHdrH(){
+    var h = document.querySelector('header');
+    if (h && h.offsetHeight) document.documentElement.style.setProperty('--hdr-h', h.offsetHeight + 'px');
+  }
+  document.addEventListener('DOMContentLoaded', setHdrH);
+  window.addEventListener('load', setHdrH);
+  window.addEventListener('resize', setHdrH);
+  window.addEventListener('orientationchange', setHdrH);
+  setTimeout(setHdrH, 300); setTimeout(setHdrH, 1200);
 })();
 
 // Capture install prompt as early as possible (fires before any JS runs)
@@ -102,14 +117,14 @@ header h1 span{color:var(--gold);}
 
 /* TABS */
 /* ── layout ── */
-.app-layout{display:flex;min-height:calc(100vh - 60px);}
+.app-layout{display:flex;min-height:calc(100vh - var(--hdr-h,60px));}
 
 /* ── sidebar ── */
 /* position:sticky + align-self:flex-start כדי שהסרגל יישאר קבוע מול הגלילה של העמוד
    (ללא align-self הוא היה נמתח לגובה .main ע"י flex stretch, וsticky לא היה משפיע) */
 .tabs{display:flex;flex-direction:column;background:#1a1a2e;width:180px;min-width:180px;
   flex-shrink:0;padding:10px 0;overflow-y:auto;overflow-x:hidden;
-  position:sticky;top:60px;align-self:flex-start;max-height:calc(100vh - 60px);}
+  position:sticky;top:var(--hdr-h,60px);align-self:flex-start;max-height:calc(100vh - var(--hdr-h,60px));z-index:90;}
 .tab{padding:13px 18px;cursor:pointer;color:rgba(255,255,255,.55);font-weight:600;
   font-size:.88rem;border-right:3px solid transparent;border-bottom:none;
   transition:all .2s;user-select:none;white-space:nowrap;text-align:right;}
@@ -122,7 +137,7 @@ header h1 span{color:var(--gold);}
 @media(max-width:640px){
   .app-layout{flex-direction:column;}
   .tabs{flex-direction:row;width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;
-    padding:0;position:sticky;top:0;z-index:200;
+    padding:0;position:sticky;top:var(--hdr-h,0px);z-index:200;
     border-bottom:1px solid rgba(255,255,255,.12);}
   .tab{padding:10px 12px;border-right:none;border-bottom:3px solid transparent;
     font-size:.75rem;flex:1;text-align:center;min-width:max-content;}
