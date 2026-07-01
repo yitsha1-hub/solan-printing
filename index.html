@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782841995';
+window.APP_VERSION = '1782886697';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -15036,7 +15036,7 @@ function _initMachineViewMode() {
   // Fast poll every 10s for live updates
   setTimeout(function() {
     _opLoadAndRender();
-    window._opPollInterval = setInterval(_opLoadAndRender, 10000);
+    window._opPollInterval = setInterval(_opLoadAndRender, 20000);  // 20ש' (היה 10) — מפחית Outgoing Bandwidth
   }, 1800);
   _opKeepAwake();   // מונע כיבוי מסך בחוסר פעילות (Wake Lock)
   return true;
@@ -15061,16 +15061,20 @@ function _opKeepAwake() {
   setInterval(function(){ if (!_opWakeLock && document.visibilityState === 'visible') acquire(); }, 60000);
 }
 
+var _opPollN = 0;
 function _opLoadAndRender() {
   if (!window._fbGet) { _renderOperatorScreen(); return; }
+  _opPollN++;
+  // customerProofs משתנה לעיתים רחוקות — מורידים אותו רק כל ~מנה 3 (חיסכון ב-Outgoing Bandwidth)
+  var fetchProofs = (_opPollN % 3 === 1);
   Promise.all([
     window._fbGet('machineQueue').catch(function(){ return null; }),
     window._fbGet('cards').catch(function(){ return null; }),
-    window._fbGet('customerProofs').catch(function(){ return null; })
+    fetchProofs ? window._fbGet('customerProofs').catch(function(){ return null; }) : Promise.resolve(undefined)
   ]).then(function(res) {
     if (res[0] && Array.isArray(res[0])) machineQueue = res[0];
     if (res[1] && Array.isArray(res[1])) cards = res[1];
-    window._opCustomerProofs = (res[2] && typeof res[2] === 'object') ? res[2] : {};
+    if (res[2] !== undefined) window._opCustomerProofs = (res[2] && typeof res[2] === 'object') ? res[2] : {};
     _renderOperatorScreen();
   });
 }
