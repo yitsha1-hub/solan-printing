@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782892099';
+window.APP_VERSION = '1782892595';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -9436,6 +9436,12 @@ function renderWorkList() {
     if (copies) h += '<span style="font-size:.63rem;color:#475569;background:#f1f5f9;border:1px solid #e5e7eb;border-radius:4px;padding:1px 5px;white-space:nowrap">🖨️ ' + escHtml(fmtQty(copies)) + '</span>';
     return h;
   };
+  // proofBadge — חיווי אם מצורף פרופר לכרטיס (כדי לוודא שהוספת פרופר לכרטיס הנכון בתור)
+  var proofBadge = function(c){
+    return _cardHasAnyProof(c)
+      ? ' <span title="פרופר מצורף" style="font-size:.62rem;color:#5b21b6;background:#ede9fe;border:1px solid #ddd6fe;border-radius:4px;padding:1px 5px;white-space:nowrap;font-weight:700">📄 פרופר</span>'
+      : '';
+  };
   // openBtn — small icon that opens the work card
   var openBtn = function(cardIdSq, sz){
     return '<button onclick="_queueOpenCard(' + cardIdSq + ')" title="פתח כרטיס עבודה" '
@@ -9471,7 +9477,7 @@ function renderWorkList() {
       poolHtml += wholeInQueue ? '<span style="color:#16a34a;font-size:.8rem;flex-shrink:0">✓</span>' : '<span style="color:#cbd5e1;font-size:.9rem;flex-shrink:0">⠿</span>';
       poolHtml += '<div style="flex:1;min-width:0">'
         + '<div style="font-weight:700;font-size:.8rem;white-space:normal;overflow-wrap:anywhere;word-break:break-word;line-height:1.3">'
-        + escHtml(c.name || 'ללא שם') + (isWeekly ? ' <span style="font-size:.65rem;color:#9ca3af">שב\'</span>' : '') + '</div>';
+        + escHtml(c.name || 'ללא שם') + (isWeekly ? ' <span style="font-size:.65rem;color:#9ca3af">שב\'</span>' : '') + proofBadge(c) + '</div>';
       if (c.customer) poolHtml += '<div style="font-size:.68rem;color:#6b7280">' + escHtml(c.customer) + '</div>';
       // paper + (for single-run cards) copies badges
       var cardBadges = infoBadges(c.paper, hasMultiRuns ? null : c.copies);
@@ -9609,7 +9615,7 @@ function renderWorkList() {
         machinesHtml += '<div style="flex:1;min-width:0">'
           + '<div style="font-weight:700;font-size:.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
           + (isFirst ? '<span style="font-size:.65rem;background:#1a1a4e;color:white;border-radius:3px;padding:1px 5px;margin-left:4px">בהדפסה</span>' : '')
-          + escHtml(name) + '</div>'
+          + escHtml(name) + (c ? proofBadge(c) : '') + '</div>'
           + (runLabel ? '<div style="font-size:.7rem;color:#6b7280">' + escHtml(runLabel) + '</div>' : '')
           + (infoBadges(ePaper, eCopies) ? '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px">' + infoBadges(ePaper, eCopies) + '</div>' : '')
           + '</div>';
