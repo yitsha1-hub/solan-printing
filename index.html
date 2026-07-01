@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782907348';
+window.APP_VERSION = '1782910101';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -1155,7 +1155,7 @@ window._fbSnapshot = {};
   <div class="tab"        onclick="switchTab('inventory')" id="tab-inventory">📦 מלאי</div>
   <div class="tab"        onclick="switchTab('quotes')"    id="tab-quotes">💰 הצעות מחיר</div>
   <div class="tab"        onclick="switchTab('orders')"   id="tab-orders">🛒 הזמנות</div>
-  <div class="tab"        onclick="switchTab('worklist')"  id="tab-worklist">📋 רשימת עבודות</div>
+  <div class="tab"        onclick="switchTab('printfiles')" id="tab-printfiles">📥 להכניס בחורים</div>
   <div class="tab"        onclick="switchTab('agent')"     id="tab-agent">🤖 סוכן <span id="agent-badge" style="display:none;background:#ef4444;color:white;border-radius:10px;padding:1px 7px;font-size:.7rem;font-weight:800;margin-right:2px"></span></div>
 </div>
 
@@ -1187,6 +1187,34 @@ window._fbSnapshot = {};
 <!-- ===== WORK LIST VIEW ===== -->
 <div id="view-worklist" style="display:none">
   <div id="worklist-content"></div>
+</div>
+
+<!-- ===== קבצים להדפסה ("להכניס בחורים") ===== -->
+<div id="view-printfiles" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+    <h2 style="font-size:1.15rem;font-weight:900;color:var(--press);margin:0">📥 להכניס בחורים</h2>
+    <span style="font-size:.82rem;color:#6b7280">קבצים של פלאיירים ועלונים להדפסה — מעקב כמויות</span>
+  </div>
+  <div style="background:#f6f9ff;border:1.5px solid #c0ccf0;border-radius:12px;padding:14px 16px;margin-bottom:16px">
+    <div style="font-weight:800;color:var(--press);margin-bottom:10px;font-size:.92rem">➕ הוספת קובץ להדפסה</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div style="flex:1;min-width:180px">
+        <label style="display:block;font-size:.76rem;color:#555;font-weight:700;margin-bottom:3px">שם הקובץ</label>
+        <input class="fi" id="pf-name" placeholder="לדוגמה: פלאייר מבצע קיץ" style="margin:0">
+      </div>
+      <div style="width:150px">
+        <label style="display:block;font-size:.76rem;color:#555;font-weight:700;margin-bottom:3px">כמות להדפסה</label>
+        <input class="fi" id="pf-qty" type="number" min="1" placeholder="5000" style="margin:0">
+      </div>
+      <div style="flex:1;min-width:180px">
+        <label style="display:block;font-size:.76rem;color:#555;font-weight:700;margin-bottom:3px">קובץ (PDF / תמונה)</label>
+        <input id="pf-file" type="file" accept="application/pdf,image/*" style="font-size:.82rem;width:100%">
+      </div>
+      <button class="btn btn-primary" onclick="addPrintFile()" style="white-space:nowrap">➕ הוסף</button>
+    </div>
+    <div id="pf-add-status" style="font-size:.82rem;color:var(--press);margin-top:8px;display:none"></div>
+  </div>
+  <div id="printfiles-list"></div>
 </div>
 
 <!-- ===== AGENT VIEW ===== -->
@@ -2408,7 +2436,7 @@ window._fbSnapshot = {};
 </nav>
 
 <div id="mob-more-panel">
-  <div class="mob-more-item" onclick="mobNav('worklist');toggleMobMore()"><span class="mi-icon">📋</span>רשימת עבודות</div>
+  <div class="mob-more-item" onclick="mobNav('printfiles');toggleMobMore()"><span class="mi-icon">📥</span>להכניס בחורים</div>
   <div class="mob-more-item" onclick="mobNav('inventory');toggleMobMore()"><span class="mi-icon">📦</span>מלאי</div>
   <div class="mob-more-item" onclick="mobNav('papers');toggleMobMore()">  <span class="mi-icon">📰</span>עיתונים ועלונים</div>
   <div class="mob-more-item" onclick="mobNav('quotes');toggleMobMore()">  <span class="mi-icon">💰</span>הצעות מחיר</div>
@@ -2442,6 +2470,7 @@ let cards          = JSON.parse(localStorage.getItem('solanCards') || '[]');
 let _selectedPaperDay = null;
 let newspapers= JSON.parse(localStorage.getItem('solanNewspapers')|| '[]');
 let flyers    = JSON.parse(localStorage.getItem('solanFlyers')    || '[]');
+let printFiles = JSON.parse(localStorage.getItem('solanPrintFiles') || '[]');  // קבצים להדפסה + מעקב כמויות ("להכניס בחורים")
 let weeklyJobs= JSON.parse(localStorage.getItem('solanWeeklyJobs')|| '[]');
 let recurringJobs = JSON.parse(localStorage.getItem('solanRecurringJobs') || '[]');
 let machineQueue = JSON.parse(localStorage.getItem('solanMachineQueue') || '[]');
@@ -3036,6 +3065,7 @@ function persist() {
   localStorage.setItem('solanCards',               JSON.stringify(cards));
   localStorage.setItem('solanNewspapers',          JSON.stringify(newspapers));
   localStorage.setItem('solanFlyers',             JSON.stringify(flyers));
+  localStorage.setItem('solanPrintFiles',          JSON.stringify(printFiles));
   localStorage.setItem('solanWeeklyJobs',          JSON.stringify(weeklyJobs));
   localStorage.setItem('solanRecurringJobs',       JSON.stringify(recurringJobs));
   localStorage.setItem('solanMachineQueue',        JSON.stringify(machineQueue));
@@ -3053,7 +3083,7 @@ function persist() {
       inventoryHistory: inventoryHistory, invoiceLogs: invoiceLogs,
       quotes: _filterDeleted('quotes', quotes), customers: customers, orders: _filterDeleted('orders', orders),
       weeklyJobs: weeklyJobs, recurringJobs: recurringJobs, quotePricing: quotePricing, documentPrices: documentPrices, deletedIds: deletedIds,
-      machineQueue: machineQueue
+      machineQueue: machineQueue, printFiles: printFiles
     };
     _paths.cards = _filterDeleted('cards', cards);
     window._fbPendingPuts = window._fbPendingPuts || {};
@@ -3093,7 +3123,7 @@ function updateBadge() {
 // ========== TABS ==========
 function switchTab(tab) {
   if(currentUser&&!currentUser.isAdmin){var p=currentUser.permissions||{};if(tab==='inventory'&&p.inventory==='none'){showToast('🔒 אין הרשאה למלאי');return;}if(tab==='quotes'&&p.quotes==='none'){showToast('🔒 אין הרשאה להצעות מחיר');return;}if(tab==='papers'&&p.papers==='none'){showToast('🔒 אין הרשאה לניהול עיתונים');return;}if(tab==='new'&&p.createCard===false){showToast('🔒 אין הרשאה ליצירת כרטיס חדש');return;}if(tab==='week'&&p.weekView===false){showToast('🔒 אין הרשאה ליומן שבועי');return;}}
-  ['dashboard','week','new','recurring','saved','papers','inventory','quotes','orders','queue','templates','worklist','agent'].forEach(t => {
+  ['dashboard','week','new','recurring','saved','papers','inventory','quotes','orders','queue','templates','worklist','printfiles','agent'].forEach(t => {
     const v = document.getElementById('view-'+t); if (v) v.style.display = t===tab ? '' : 'none';
     const tb = document.getElementById('tab-'+t); if (tb) tb.classList.toggle('active', t===tab);
   });
@@ -3109,6 +3139,7 @@ function switchTab(tab) {
   if (tab==='recurring') renderRecurringJobs();
   if (tab==='templates') renderTemplates();
   if (tab==='worklist')  renderWorkList();
+  if (tab==='printfiles') renderPrintFiles();
   if (tab==='agent')     renderAgentTab();
   // שמור את הטאב הפעיל כדי שריענון יחזיר לאותו מסך
   window._activeTab = tab;
@@ -10625,6 +10656,147 @@ function confirmMakeCardWeekly(cardId, day) {
   showToast('✅ "' + (c.name||'') + '" יופיע כל שבוע ביום ' + day);
 }
 
+// ═══════════════════════════════════════════════════════
+// קבצים להדפסה + מעקב כמויות ("להכניס בחורים")
+// ═══════════════════════════════════════════════════════
+function _pfRemaining(p){ return Math.max(0, (parseInt(p.totalQty)||0) - (parseInt(p.printedQty)||0)); }
+function _pfDone(p){ var t=parseInt(p.totalQty)||0; return t>0 && (parseInt(p.printedQty)||0) >= t; }
+
+function renderPrintFiles(){
+  var el = document.getElementById('printfiles-list');
+  if (!el) return;
+  var list = (printFiles||[]).slice().sort(function(a,b){
+    var da=_pfDone(a)?1:0, db=_pfDone(b)?1:0;         // לא-הושלמו קודם
+    if (da!==db) return da-db;
+    return (b.createdAt||b.id||0) - (a.createdAt||a.id||0);   // חדש קודם
+  });
+  if (!list.length){
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;font-size:.95rem">אין קבצים להדפסה. הוסף קובץ למעלה ⬆️</div>';
+    return;
+  }
+  el.innerHTML = list.map(function(p){
+    var total=parseInt(p.totalQty)||0, printed=parseInt(p.printedQty)||0, remaining=_pfRemaining(p);
+    var pct = total ? Math.min(100, Math.round(printed/total*100)) : 0;
+    var done=_pfDone(p), sessions=(p.sessions||[]);
+    var sessRows = sessions.length
+      ? sessions.map(function(s,i){
+          var d=new Date(s.at);
+          var dstr = isNaN(d.getTime()) ? '' : d.toLocaleDateString('he-IL')+' '+d.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});
+          return '<tr>'
+            + '<td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:center;color:#999">'+(i+1)+'</td>'
+            + '<td style="padding:5px 8px;border-bottom:1px solid #eee;font-weight:800;color:#2563eb">'+(parseInt(s.qty)||0).toLocaleString()+'</td>'
+            + '<td style="padding:5px 8px;border-bottom:1px solid #eee;color:#666;font-size:.8rem">'+dstr+(s.by?' · '+escHtml(s.by):'')+'</td>'
+            + '<td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:center"><button onclick="printFileUndoSession('+p.id+','+i+')" title="בטל רישום זה" style="background:none;border:none;cursor:pointer;color:#b91c1c;font-size:.9rem">✕</button></td>'
+            + '</tr>';
+        }).join('')
+      : '<tr><td colspan="4" style="padding:8px;text-align:center;color:#aaa;font-size:.82rem">עדיין לא הודפס כלום</td></tr>';
+    return '<div style="border:1.5px solid '+(done?'#bbf7d0':'#e2e8f0')+';border-radius:12px;padding:14px 16px;margin-bottom:14px;background:'+(done?'#f0fdf4':'#fff')+'">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">'
+      +   '<div style="min-width:0">'
+      +     '<div style="font-weight:900;font-size:1.05rem;color:#111">'+(done?'✅ ':'')+escHtml(p.name||'ללא שם')+'</div>'
+      +     (p.fileName?'<div style="font-size:.78rem;color:#888;margin-top:2px">📎 '+escHtml(p.fileName)+'</div>':'')
+      +   '</div>'
+      +   '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+      +     (done
+             ? '<button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;border:1.5px solid #c7d2fe" onclick="printFileTake('+p.id+')">🖨️ הדפס שוב</button>'
+             : '<button class="btn btn-sm btn-primary" onclick="printFileTake('+p.id+')">📥 הורד והדפס</button>')
+      +     '<button class="btn btn-sm" style="background:#fee2e2;color:#b91c1c;border:1.5px solid #fecaca" onclick="printFileDelete('+p.id+')">🗑️</button>'
+      +   '</div>'
+      + '</div>'
+      + '<div style="margin-top:12px">'
+      +   '<div style="display:flex;justify-content:space-between;font-size:.85rem;font-weight:700;margin-bottom:4px">'
+      +     '<span style="color:#2563eb">הודפס: '+printed.toLocaleString()+' / '+total.toLocaleString()+'</span>'
+      +     '<span style="color:'+(done?'#16a34a':'#b45309')+'">'+(done?'הושלם ✔':'נותרו: '+remaining.toLocaleString())+'</span>'
+      +   '</div>'
+      +   '<div style="height:12px;background:#eef2f7;border-radius:7px;overflow:hidden">'
+      +     '<div style="height:100%;width:'+pct+'%;background:'+(done?'#22c55e':'linear-gradient(90deg,#3b82f6,#6366f1)')+';transition:width .3s"></div>'
+      +   '</div>'
+      + '</div>'
+      + '<div style="margin-top:12px">'
+      +   '<table style="width:100%;border-collapse:collapse;font-size:.88rem">'
+      +     '<thead><tr style="background:#f3f4f6;color:#374151">'
+      +       '<th style="padding:5px 8px;text-align:center;font-size:.78rem;width:36px">#</th>'
+      +       '<th style="padding:5px 8px;text-align:right;font-size:.78rem">כמות שהודפסה</th>'
+      +       '<th style="padding:5px 8px;text-align:right;font-size:.78rem">מתי</th>'
+      +       '<th style="padding:5px 8px;width:36px"></th>'
+      +     '</tr></thead>'
+      +     '<tbody>'+sessRows+'</tbody>'
+      +   '</table>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function addPrintFile(){
+  var name=(document.getElementById('pf-name')||{value:''}).value.trim();
+  var qty=parseInt((document.getElementById('pf-qty')||{value:''}).value)||0;
+  var fileEl=document.getElementById('pf-file');
+  var file=fileEl && fileEl.files && fileEl.files[0];
+  if (!name){ showToast('⚠️ חסר שם קובץ'); return; }
+  if (!qty || qty<1){ showToast('⚠️ הזן כמות להדפסה'); return; }
+  if (!file){ showToast('⚠️ בחר קובץ'); return; }
+  var id=Date.now();
+  var status=document.getElementById('pf-add-status');
+  if (status){ status.style.display='block'; status.textContent='⏳ מעלה קובץ… 0%'; }
+  var m=(file.name||'').match(/\.[a-z0-9]+$/i); var ext=m?m[0]:'';
+  var spath='printFiles/'+id+'/'+Date.now()+ext;
+  _uploadProofToStorage(spath, file, function(pct){ if(status) status.textContent='⏳ מעלה קובץ… '+pct+'%'; }).then(function(url){
+    printFiles.unshift({ id:id, name:name, totalQty:qty, printedQty:0, sessions:[],
+      fileName:file.name||'', fileUrl:url, filePath:spath,
+      createdAt:Date.now(), createdBy:(currentUser?currentUser.id:'admin') });
+    persist();
+    var n=document.getElementById('pf-name'); if(n) n.value='';
+    var q=document.getElementById('pf-qty'); if(q) q.value='';
+    if (fileEl) fileEl.value='';
+    if (status){ status.style.display='none'; }
+    renderPrintFiles();
+    showToast('✅ הקובץ נוסף');
+  }).catch(function(){
+    if (status){ status.textContent='❌ העלאת הקובץ נכשלה — נסה שוב'; }
+    showToast('❌ העלאת הקובץ נכשלה');
+  });
+}
+
+function printFileTake(id){
+  var p=(printFiles||[]).find(function(x){ return String(x.id)===String(id); });
+  if (!p) return;
+  if (p.fileUrl){ var w=window.open(p.fileUrl,'_blank'); if(!w) showToast('יש לאפשר חלונות קופצים בדפדפן'); }
+  var remaining=_pfRemaining(p), total=parseInt(p.totalQty)||0;
+  var ans=prompt('כמה עותקים הדפסת עכשיו?\n(נותרו '+remaining.toLocaleString()+' מתוך '+total.toLocaleString()+')','');
+  if (ans===null) return;                      // ביטול — לא רושם כלום
+  var q=parseInt(String(ans).replace(/[^\d]/g,''))||0;
+  if (q<=0){ showToast('לא נרשמה כמות'); return; }
+  p.sessions=p.sessions||[];
+  p.sessions.push({ at:new Date().toISOString(), qty:q, by:((currentUser&&currentUser.name)||'') });
+  p.printedQty=(parseInt(p.printedQty)||0)+q;
+  persist();
+  renderPrintFiles();
+  if (_pfDone(p)) showToast('🎉 "'+(p.name||'')+'" — הודפס במלואו!');
+  else showToast('✅ נרשמו '+q.toLocaleString()+' · נותרו '+_pfRemaining(p).toLocaleString());
+}
+
+function printFileUndoSession(id, idx){
+  var p=(printFiles||[]).find(function(x){ return String(x.id)===String(id); });
+  if (!p || !p.sessions || !p.sessions[idx]) return;
+  if (!confirm('לבטל את רישום הכמות הזה?')) return;
+  var q=parseInt(p.sessions[idx].qty)||0;
+  p.sessions.splice(idx,1);
+  p.printedQty=Math.max(0,(parseInt(p.printedQty)||0)-q);
+  persist();
+  renderPrintFiles();
+}
+
+function printFileDelete(id){
+  var p=(printFiles||[]).find(function(x){ return String(x.id)===String(id); });
+  if (!p) return;
+  if (!confirm('למחוק את "'+(p.name||'')+'" והקובץ המצורף?')) return;
+  if (p.filePath && typeof _deleteProofStorage==='function') _deleteProofStorage(p.filePath);
+  printFiles=(printFiles||[]).filter(function(x){ return String(x.id)!==String(id); });
+  persist();
+  renderPrintFiles();
+  showToast('🗑️ נמחק');
+}
+
 function removeWeeklyJob(id) {
   const item = weeklyJobs.find(w => w.id === id);
   if (!item) return;
@@ -14091,6 +14263,14 @@ async function _fbPollAll() {
       if (document.getElementById('view-recurring') && document.getElementById('view-recurring').style.display!=='none') renderRecurringJobs();
     }
     if (typeof _autoCompleteWeeklyJobs === 'function') _autoCompleteWeeklyJobs();
+    // קבצים להדפסה ("להכניס בחורים")
+    var pfv = await window._fbGet('printFiles');
+    if (pfv !== null && !(_pend.printFiles > 0)) {
+      printFiles = Array.isArray(pfv) ? pfv : Object.values(pfv);
+      localStorage.setItem('solanPrintFiles', JSON.stringify(printFiles));
+      window._fbSnapshot.printFiles = JSON.stringify(printFiles);
+      if (document.getElementById('view-printfiles') && document.getElementById('view-printfiles').style.display!=='none' && typeof renderPrintFiles==='function') renderPrintFiles();
+    }
     // הצעות מחיר
     var qv = await window._fbGet('quotes');
     if (qv !== null && !(_pend.quotes > 0)) {
