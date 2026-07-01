@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782889515';
+window.APP_VERSION = '1782891367';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -15856,7 +15856,10 @@ function _opInkFromProof(){
 
 function _opViewProof(cardId, runKey) {
   if (!cardId) return;
-  var c = (cards||[]).find(function(x){ return String(x.id) === String(cardId); });
+  var c0 = (cards||[]).find(function(x){ return String(x.id) === String(cardId); });
+  // חסינות לכפילויות: אם לכרטיס עצמו אין פרופר — לוקחים מכרטיס אחר עם אותו שם שיש לו
+  var c = _opProofCardFor(c0) || c0;
+  cardId = c ? c.id : cardId;
   // מוצאים את הפרופר הטוב ביותר לעבודה: קודם של הריצה הספציפית, אחרת פרופר יחיד של הכרטיס,
   // אחרת הפרופר הראשון של ריצה כלשהי — כדי שגם ריצה בלי פרופר משלה תציג את פרופר הכרטיס.
   var rec = null, legacyKey = runKey;
@@ -15882,12 +15885,23 @@ function _opViewProof(cardId, runKey) {
   });
 }
 
+// האם לכרטיס יש פרופר כלשהו
+function _cardHasAnyProof(c){
+  return !!(c && (c.hasProof || c.proofUrl || (c.runProofs && Object.keys(c.runProofs).length)));
+}
+// מחזיר את הכרטיס שממנו לקחת את הפרופר: הכרטיס עצמו, אחרת כרטיס אחר עם אותו שם שיש לו פרופר
+// (חסינות לכרטיסים כפולים — פרופר על עותק אחד, העבודה במכונה על עותק אחר)
+function _opProofCardFor(c){
+  if (!c) return null;
+  if (_cardHasAnyProof(c)) return c;
+  if (c.name) {
+    var cand = (cards||[]).filter(function(x){ return x && x.name === c.name && x.status !== 'trash' && _cardHasAnyProof(x); });
+    if (cand.length) { cand.sort(function(a,b){ return (b.proofUploadedAt||b.id||0) - (a.proofUploadedAt||a.id||0); }); return cand[0]; }
+  }
+  return null;
+}
 function _opRunHasProof(c, run) {
-  if (!c) return false;
-  // מציגים כפתור פרופר אם לכרטיס יש פרופר כלשהו — של הריצה הזו, פרופר יחיד, או של ריצה אחרת
-  if (c.hasProof || c.proofUrl) return true;
-  if (c.runProofs && Object.keys(c.runProofs).length) return true;
-  return false;
+  return !!_opProofCardFor(c);
 }
 
 function _proofBtnsHtml(c) {
