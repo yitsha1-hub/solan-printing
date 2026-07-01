@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782910101';
+window.APP_VERSION = '1782910892';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -10760,19 +10760,34 @@ function addPrintFile(){
 function printFileTake(id){
   var p=(printFiles||[]).find(function(x){ return String(x.id)===String(id); });
   if (!p) return;
-  if (p.fileUrl){ var w=window.open(p.fileUrl,'_blank'); if(!w) showToast('יש לאפשר חלונות קופצים בדפדפן'); }
-  var remaining=_pfRemaining(p), total=parseInt(p.totalQty)||0;
-  var ans=prompt('כמה עותקים הדפסת עכשיו?\n(נותרו '+remaining.toLocaleString()+' מתוך '+total.toLocaleString()+')','');
-  if (ans===null) return;                      // ביטול — לא רושם כלום
-  var q=parseInt(String(ans).replace(/[^\d]/g,''))||0;
-  if (q<=0){ showToast('לא נרשמה כמות'); return; }
-  p.sessions=p.sessions||[];
-  p.sessions.push({ at:new Date().toISOString(), qty:q, by:((currentUser&&currentUser.name)||'') });
-  p.printedQty=(parseInt(p.printedQty)||0)+q;
-  persist();
-  renderPrintFiles();
-  if (_pfDone(p)) showToast('🎉 "'+(p.name||'')+'" — הודפס במלואו!');
-  else showToast('✅ נרשמו '+q.toLocaleString()+' · נותרו '+_pfRemaining(p).toLocaleString());
+  // רישום סבב הדפסה: חלון שאלת כמות ועדכון הטבלה
+  var _logQty=function(){
+    var remaining=_pfRemaining(p), total=parseInt(p.totalQty)||0;
+    var ans=prompt('כמה עותקים הדפסת עכשיו?\n(נותרו '+remaining.toLocaleString()+' מתוך '+total.toLocaleString()+')','');
+    if (ans===null) return;                      // ביטול — לא רושם כלום
+    var q=parseInt(String(ans).replace(/[^\d]/g,''))||0;
+    if (q<=0){ showToast('לא נרשמה כמות'); return; }
+    p.sessions=p.sessions||[];
+    p.sessions.push({ at:new Date().toISOString(), qty:q, by:((currentUser&&currentUser.name)||'') });
+    p.printedQty=(parseInt(p.printedQty)||0)+q;
+    persist(); renderPrintFiles();
+    if (_pfDone(p)) showToast('🎉 "'+(p.name||'')+'" — הודפס במלואו!');
+    else showToast('✅ נרשמו '+q.toLocaleString()+' · נותרו '+_pfRemaining(p).toLocaleString());
+  };
+  if (!p.fileUrl){ _logQty(); return; }
+  // הורדה רגילה של הקובץ (לא פתיחה בטאב צפייה) ואז חלון השאלה — כך החלון מופיע על המסך
+  // ולא נעלם מאחורי טאב ה-PDF. משתמשים ב-blob כדי לכפות הורדה במקום צפייה.
+  showToast('⬇️ מוריד את הקובץ…');
+  fetch(p.fileUrl).then(function(r){ return r.blob(); }).then(function(blob){
+    var u=URL.createObjectURL(blob);
+    var a=document.createElement('a'); a.href=u; a.download=p.fileName||((p.name||'קובץ')+'.pdf');
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(u); }, 15000);
+    _logQty();
+  }).catch(function(){
+    _logQty();                                   // שואל קודם (שהחלון יופיע), ואז פותח את הקובץ
+    window.open(p.fileUrl,'_blank');
+  });
 }
 
 function printFileUndoSession(id, idx){
