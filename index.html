@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782891367';
+window.APP_VERSION = '1782892099';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -6090,6 +6090,9 @@ function saveCard() {
 function _saveCardNew() {
   const name=document.getElementById('f-name').value.trim();
   if (!name) { showToast('⚠️ חסר שם עבודה'); return; }
+  // התראה על כפילות שם — מונע שני כרטיסים באותו שם (שגורם לפרופר "להיעלם" בין עותקים)
+  var _dupCard = (cards||[]).find(function(x){ return x && x.name === name && x.status !== 'done' && x.status !== 'trash'; });
+  if (_dupCard && !confirm('⚠️ כבר קיימת עבודה פעילה בשם "' + name + '".\nלשמור עבודה נוספת עם אותו שם בכל זאת?')) return;
   if (!_confirmSheetsDeviation()) return;
   addHistory('f-name',  name);
   addHistory('f-type',  document.getElementById('f-type').value.trim());
@@ -15025,12 +15028,8 @@ function _initMachineViewMode() {
   screen.style.cssText = 'position:fixed;inset:0;background:#f1f5f9;z-index:99999;display:flex;flex-direction:column;font-family:Heebo,sans-serif;direction:rtl;overflow:hidden';
   document.body.appendChild(screen);
 
-  // Ask operator name once
-  if (!_machineViewOpName) {
-    var nm = prompt('שלום! מה שמך? (יופיע בסימון "הודפס")');
-    _machineViewOpName = (nm || '').trim() || 'מפעיל';
-    localStorage.setItem('solanOperatorName', _machineViewOpName);   // localStorage — נשמר בין רענונים, נשאל פעם אחת
-  }
+  // שם הדפס — בלי תיבה חוסמת בטעינה (הפריע כל רענון). מוגדר/משתנה דרך כפתור "שם" בכותרת.
+  if (!_machineViewOpName) _machineViewOpName = 'מפעיל';
 
   // Connect Firebase and load data
   connectFirebase();
@@ -15062,6 +15061,14 @@ function _opKeepAwake() {
   setInterval(function(){ if (!_opWakeLock && document.visibilityState === 'visible') acquire(); }, 60000);
 }
 
+// הגדרת/שינוי שם הדפס — על-פי-בקשה (לחיצה), לא חוסם בטעינה
+function _opSetName(){
+  var n = prompt('שם הדפס (יופיע בסימון "הודפס"):', (_machineViewOpName && _machineViewOpName !== 'מפעיל') ? _machineViewOpName : '');
+  if (n === null) return;
+  _machineViewOpName = (n || '').trim() || 'מפעיל';
+  try { localStorage.setItem('solanOperatorName', _machineViewOpName); } catch(e){}
+  _renderOperatorScreen();
+}
 var _opPollN = 0;
 function _opLoadAndRender() {
   if (!window._fbGet) { _renderOperatorScreen(); return; }
@@ -15253,7 +15260,7 @@ function _renderOperatorScreen() {
     ? '<button onclick="_opExitKiosk()" style="font-size:.66rem;padding:4px 11px;border:none;background:#b91c1c;color:white;border-radius:6px;cursor:pointer;font-weight:800">🔓 יציאה (קוד)</button>'
     : '<button id="op-install-btn" onclick="_opInstall()" style="font-size:.62rem;padding:3px 8px;border:none;background:#2563eb;color:white;border-radius:5px;cursor:pointer;font-weight:700">📲 הוסף לטלפון</button>'
       + '<button onclick="_opEnableKiosk()" style="font-size:.62rem;padding:3px 8px;border:none;background:#1e3a5f;color:white;border-radius:5px;cursor:pointer;font-weight:700">🔒 קיוסק</button>'
-      + '<button onclick="localStorage.removeItem(\'solanOperatorName\');sessionStorage.removeItem(\'solanOperatorName\');location.reload()" style="font-size:.62rem;padding:2px 7px;border:1px solid #e2e8f0;background:transparent;color:#94a3b8;border-radius:4px;cursor:pointer">שנה שם</button>';
+      + '<button onclick="_opSetName()" style="font-size:.62rem;padding:2px 7px;border:1px solid #e2e8f0;background:transparent;color:#94a3b8;border-radius:4px;cursor:pointer">👤 ' + escHtml(_machineViewOpName||'שם') + '</button>';
   var html = '<div style="background:white;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;box-shadow:0 1px 6px #0000001a;border-bottom:2px solid ' + (_kiosk?'#b91c1c':'#e2e8f0') + '">'
     + '<div><div style="color:#1e293b;font-size:1.15rem;font-weight:900">🏭 ' + escHtml(machine) + (_kiosk?' <span style="font-size:.62rem;background:#b91c1c;color:#fff;border-radius:5px;padding:2px 7px;vertical-align:middle">🔒 קיוסק</span>':'') + '</div>'
     + '<div style="color:#94a3b8;font-size:.73rem;margin-top:2px">' + active.length + ' בתור · ' + now + ' · ' + escHtml(_machineViewOpName) + '</div></div>'
