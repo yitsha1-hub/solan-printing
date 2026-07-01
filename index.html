@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782892952';
+window.APP_VERSION = '1782893722';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -5669,29 +5669,48 @@ function _proofExt(proof) {
   var m = /^image\/(\w+)/.exec(proof.type);
   return m ? '.' + (m[1] === 'jpeg' ? 'jpg' : m[1]) : '';
 }
-function _uploadProofToStorage(path, file, onProgress) {
+// העלאה בודדת ל-Storage. מכיל שעון-עצר: אם הגוף נשלח במלואו אבל השרת לא
+// מחזיר תשובה תוך 90ש' — הבקשה תקועה, מבטלים ודוחים (כדי ש-.catch לא יישאר תלוי לנצח).
+function _uploadProofOnce(path, file, onProgress) {
   return new Promise(function(resolve, reject){
     try {
       var xhr = new XMLHttpRequest();
+      var settled = false, respTimer = null;
+      function fin(fn, arg){ if (settled) return; settled = true; if (respTimer) { clearTimeout(respTimer); respTimer = null; } fn(arg); }
       xhr.open('POST', 'https://firebasestorage.googleapis.com/v0/b/' + _PROOF_BUCKET + '/o?name=' + encodeURIComponent(path));
-      xhr.timeout = 0; // קבצים גדולים — בלי timeout
+      xhr.timeout = 8 * 60 * 1000; // גיבוי קשיח: 8 דק' לכל הבקשה (קבצים גדולים)
       xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-      if (xhr.upload) xhr.upload.onprogress = function(e){
-        if (e.lengthComputable && onProgress) onProgress(Math.min(99, Math.round(e.loaded / e.total * 100)));
-      };
+      if (xhr.upload) {
+        xhr.upload.onprogress = function(e){
+          if (e.lengthComputable && onProgress) onProgress(Math.min(99, Math.round(e.loaded / e.total * 100)));
+        };
+        // הגוף נשלח במלואו — עכשיו מחכים לתשובת השרת. אם לא חוזרת תוך 90ש' זו העלאה תקועה.
+        xhr.upload.onload = function(){
+          if (respTimer) clearTimeout(respTimer);
+          respTimer = setTimeout(function(){ try { xhr.abort(); } catch(e){} fin(reject, new Error('stalled')); }, 90 * 1000);
+        };
+      }
       xhr.onload = function(){
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             var j = JSON.parse(xhr.responseText);
             var token = (j.downloadTokens || '').split(',')[0] || '';
             if (onProgress) onProgress(100);
-            resolve('https://firebasestorage.googleapis.com/v0/b/' + _PROOF_BUCKET + '/o/' + encodeURIComponent(path) + '?alt=media&token=' + token);
-          } catch(e){ reject(new Error('bad-response')); }
-        } else { reject(new Error('storage-' + xhr.status)); }
+            fin(resolve, 'https://firebasestorage.googleapis.com/v0/b/' + _PROOF_BUCKET + '/o/' + encodeURIComponent(path) + '?alt=media&token=' + token);
+          } catch(e){ fin(reject, new Error('bad-response')); }
+        } else { fin(reject, new Error('storage-' + xhr.status)); }
       };
-      xhr.onerror = function(){ reject(new Error('network')); };
+      xhr.onerror = function(){ fin(reject, new Error('network')); };
+      xhr.ontimeout = function(){ fin(reject, new Error('timeout')); };
       xhr.send(file);
     } catch(e) { reject(e); }
+  });
+}
+// עטיפה עם ניסיון חוזר אוטומטי אחד — להעלאות שנתקעות/כשלי רשת חולפים.
+function _uploadProofToStorage(path, file, onProgress) {
+  return _uploadProofOnce(path, file, onProgress).catch(function(err){
+    if (onProgress) onProgress(0);
+    return _uploadProofOnce(path, file, onProgress);
   });
 }
 function _deleteProofStorage(spath) {
@@ -5992,7 +6011,24 @@ function _openProofByKey(cardId, runKey) {
     if (!w0) showToast('יש לאפשר חלונות קופצים בדפדפן');
     return;
   }
-  if (uploading) { showToast('⏳ הפרופר עדיין בהעלאה — נסה שוב בעוד כמה שניות'); return; }
+  if (uploading) {
+    // אם הדגל "בהעלאה" ישן (מעל 3 דק') ואין URL — ההעלאה נתקעה/נכשלה. מנקים את הדגל
+    // התקוע כדי שלא יוצג "עדיין בהעלאה" לנצח, ומבקשים לצרף מחדש.
+    var upAge = Date.now() - ((c && c.proofUploadedAt) || 0);
+    if (upAge > 3 * 60 * 1000) {
+      c.proofUploading = false;
+      if (runKey && c.runProofs && c.runProofs[runKey] && !c.runProofs[runKey].url) {
+        delete c.runProofs[runKey];
+        if (!Object.keys(c.runProofs).length) { delete c.runProofs; c.hasProof = false; }
+      } else if (!runKey && !c.proofUrl) { c.hasProof = false; }
+      persist();
+      if (typeof renderCards === 'function') renderCards();
+      showToast('⚠️ העלאת הפרופר לא הושלמה — צריך לצרף אותו מחדש');
+      return;
+    }
+    showToast('⏳ הפרופר עדיין בהעלאה — נסה שוב בעוד כמה שניות');
+    return;
+  }
   // פרופר ישן (legacy) — base64 ב-RTDB
   var path = runKey ? 'proofs/' + cardId + '/' + runKey : 'proofs/' + cardId;
   showToast('📄 טוען פרופר...');
