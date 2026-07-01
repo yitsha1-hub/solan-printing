@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782889148';
+window.APP_VERSION = '1782889515';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -15857,17 +15857,25 @@ function _opInkFromProof(){
 function _opViewProof(cardId, runKey) {
   if (!cardId) return;
   var c = (cards||[]).find(function(x){ return String(x.id) === String(cardId); });
-  var rec = runKey ? (c && c.runProofs && c.runProofs[runKey]) : c;
-  var pagesUrl  = runKey ? (rec && rec.pagesUrl) : (c && c.proofPagesUrl);
-  var directUrl = runKey ? (rec && rec.url)      : (c && c.proofUrl);
-  var directType= runKey ? (rec && rec.type)     : (c && c.proofType);
+  // מוצאים את הפרופר הטוב ביותר לעבודה: קודם של הריצה הספציפית, אחרת פרופר יחיד של הכרטיס,
+  // אחרת הפרופר הראשון של ריצה כלשהי — כדי שגם ריצה בלי פרופר משלה תציג את פרופר הכרטיס.
+  var rec = null, legacyKey = runKey;
+  if (runKey && c && c.runProofs && c.runProofs[runKey]) { rec = c.runProofs[runKey]; }
+  else if (c && (c.proofUrl || c.proofPagesUrl)) { rec = { url: c.proofUrl, pagesUrl: c.proofPagesUrl, type: c.proofType }; legacyKey = null; }
+  else if (c && c.runProofs) { var _k = Object.keys(c.runProofs)[0]; if (_k) { rec = c.runProofs[_k]; legacyKey = _k; } }
+  var pagesUrl  = rec && rec.pagesUrl;
+  var directUrl = rec && rec.url;
+  var directType= rec && rec.type;
   // תצוגה מהירה מתמונות (אם קיים cache) — כמעט מיידי, בלי הורדת PDF כבד
   if (pagesUrl) { _opProofImagesOverlay(pagesUrl, directUrl || '', directType, runKey || 'פרופר'); return; }
   if (directUrl) { _opProofOverlay(directUrl, directType, runKey || 'פרופר', false); return; }
   // פרופר ישן (legacy) — base64 ב-RTDB
   showToast('📄 טוען פרופר...');
-  var path = runKey ? 'proofs/' + cardId + '/' + runKey : 'proofs/' + cardId;
+  var path = legacyKey ? 'proofs/' + cardId + '/' + legacyKey : 'proofs/' + cardId;
   window._fbGet(path).then(function(p) {
+    if ((!p || !p.data) && legacyKey) { path = 'proofs/' + cardId; return window._fbGet(path); }  // נסה גם את הפרופר היחיד
+    return p;
+  }).then(function(p) {
     if (!p || !p.data) { showToast('⚠️ אין פרופר מצורף'); return; }
     try { _opProofOverlay(URL.createObjectURL(_dataUrlToBlob(p.data)), p.type, runKey || 'פרופר', true); }
     catch(e) { showToast('⚠️ שגיאה בטעינת הפרופר'); }
@@ -15876,9 +15884,9 @@ function _opViewProof(cardId, runKey) {
 
 function _opRunHasProof(c, run) {
   if (!c) return false;
-  var rk = run && run.num ? 'R' + run.num : null;
-  if (rk && c.runProofs && c.runProofs[rk]) return true;
-  if (!c.runProofs || !Object.keys(c.runProofs).length) return !!c.hasProof;
+  // מציגים כפתור פרופר אם לכרטיס יש פרופר כלשהו — של הריצה הזו, פרופר יחיד, או של ריצה אחרת
+  if (c.hasProof || c.proofUrl) return true;
+  if (c.runProofs && Object.keys(c.runProofs).length) return true;
   return false;
 }
 
