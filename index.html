@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782903393';
+window.APP_VERSION = '1782906388';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -9024,31 +9024,24 @@ function printWorkList(machine, withSpacing) {
     var copiesHtml = '';
     var paperCell = escHtml(paper||'—');
     if (isGrouped) {
-      // כל ריצה: שם ריצה ··· כמות — הכל בתוך עמודת שם, עם קו מנוקד ביניהם
+      // כל ריצה: שם ריצה בלבד — בלי כמות (לא מודפסת ברשימה לדפסים)
       var runLines = g.runs.map(function(r) {
         var lbl    = r.run ? (r.run.label || ('ריצה ' + (r.run.num || (r.e.runIdx+1)))) : '';
         var tumble = r.run ? !!r.run.tumble : false;
-        var cop    = r.run ? r.run.copies : c.copies;
-        var copStr = cop ? '<b style="white-space:nowrap">' + parseInt(cop).toLocaleString() + ' גיל\'</b>' : '<b>—</b>';
-        return '<div style="display:flex;align-items:baseline;gap:3px;direction:rtl;margin-top:2px">'
+        return '<div style="direction:rtl;margin-top:2px">'
           + '<span style="white-space:nowrap;color:#2563eb;font-weight:700">↳ ' + escHtml(lbl) + (tumble ? ' 🔄' : '') + '</span>'
-          + '<span style="flex:1;border-bottom:1.5px dotted #94a3b8;margin:0 5px 3px"></span>'
-          + copStr
           + '</div>';
       }).join('');
       nameHtml += '<div style="margin-top:3px">' + runLines + '</div>';
-      copiesHtml = '&nbsp;';
     } else {
       var r0  = g.runs[0];
       var run = r0.run;
-      var cop = run ? run.copies : c.copies;
       var tumble = run ? !!run.tumble : false;
       var lbl = run ? (run.label || ('ריצה ' + (run.num || (r0.e.runIdx+1)))) : '';
       if (lbl && g.runs.length === 1 && c.runs && c.runs.length > 1)
         nameHtml += '<br><span style="font-size:11px;color:#2563eb;font-weight:700">↳ ' + escHtml(lbl) + (tumble ? ' 🔄' : '') + '</span>';
       else if (tumble)
         nameHtml += ' <span style="font-size:10px;color:#1d4ed8;font-weight:700">🔄 מתהפך</span>';
-      copiesHtml = '<b>' + (cop ? parseInt(cop).toLocaleString() : '—') + '</b>';
     }
 
     var notes = (c.notes||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
@@ -9056,7 +9049,6 @@ function printWorkList(machine, withSpacing) {
     bodyRows += '<tr style="background:' + bg + '">'
       + '<td style="text-align:center;font-weight:900;font-size:15px;color:#2d3561;padding:10px 8px;border-bottom:1px solid #ddd;width:32px">' + rowNum + '</td>'
       + '<td style="font-size:13px;padding:10px 8px;border-bottom:1px solid #ddd;border-right:1px solid #e5e7eb;line-height:1.5">' + nameHtml + '</td>'
-      + '<td style="text-align:center;font-size:13px;padding:10px 8px;border-bottom:1px solid #ddd;border-right:1px solid #e5e7eb;white-space:nowrap">' + copiesHtml + '</td>'
       + '<td style="font-size:14px;font-weight:800;color:#1a1a4e;padding:10px 8px;border-bottom:1px solid #ddd;border-right:1px solid #e5e7eb">' + paperCell + '</td>'
       + '<td style="font-size:11px;color:#444;padding:10px 8px;border-bottom:1px solid #ddd;line-height:1.55">' + (notes||'—') + '</td>'
       + '</tr>';
@@ -9064,7 +9056,7 @@ function printWorkList(machine, withSpacing) {
     // שורת רווח לכתיבה ידנית בין עבודות
     if (withSpacing) {
       bodyRows += '<tr style="background:#fff">'
-        + '<td style="border-bottom:1px dashed #ccc;height:28px;padding:0" colspan="5">'
+        + '<td style="border-bottom:1px dashed #ccc;height:28px;padding:0" colspan="4">'
         + '<span style="font-size:9px;color:#ccc;padding:0 8px">↓ הוסף עבודה ידנית</span>'
         + '</td></tr>';
     }
@@ -9100,8 +9092,7 @@ function printWorkList(machine, withSpacing) {
           + '<thead><tr>'
           + '<th style="text-align:center;width:32px">#</th>'
           + '<th style="border-right:1px solid #334">שם העבודה</th>'
-          + '<th style="text-align:center;border-right:1px solid #334;width:90px">כמות</th>'
-          + '<th style="border-right:1px solid #334;width:160px">סוג נייר</th>'
+          + '<th style="border-right:1px solid #334;width:170px">סוג נייר</th>'
           + '<th>הערות</th>'
           + '</tr></thead>'
           + '<tbody>' + bodyRows + '</tbody>'
