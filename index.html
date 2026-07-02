@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782982865';
+window.APP_VERSION = '1782983633';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -5752,10 +5752,11 @@ function _proofExt(proof) {
 }
 // העלאה בודדת ל-Storage. מכיל שעון-עצר: אם הגוף נשלח במלואו אבל השרת לא
 // מחזיר תשובה תוך 90ש' — הבקשה תקועה, מבטלים ודוחים (כדי ש-.catch לא יישאר תלוי לנצח).
-function _uploadProofOnce(path, file, onProgress) {
+function _uploadProofOnce(path, file, onProgress, onXhr) {
   return new Promise(function(resolve, reject){
     try {
       var xhr = new XMLHttpRequest();
+      if (typeof onXhr === 'function') onXhr(xhr);   // חשיפת ה-xhr כדי שאפשר יהיה לבטל את ההעלאה
       var settled = false, respTimer = null;
       function fin(fn, arg){ if (settled) return; settled = true; if (respTimer) { clearTimeout(respTimer); respTimer = null; } fn(arg); }
       xhr.open('POST', 'https://firebasestorage.googleapis.com/v0/b/' + _PROOF_BUCKET + '/o?name=' + encodeURIComponent(path));
@@ -5783,15 +5784,17 @@ function _uploadProofOnce(path, file, onProgress) {
       };
       xhr.onerror = function(){ fin(reject, new Error('network')); };
       xhr.ontimeout = function(){ fin(reject, new Error('timeout')); };
+      xhr.onabort = function(){ fin(reject, new Error('aborted')); };   // ביטול יזום ע"י המשתמש
       xhr.send(file);
     } catch(e) { reject(e); }
   });
 }
 // עטיפה עם ניסיון חוזר אוטומטי אחד — להעלאות שנתקעות/כשלי רשת חולפים.
-function _uploadProofToStorage(path, file, onProgress) {
-  return _uploadProofOnce(path, file, onProgress).catch(function(err){
+function _uploadProofToStorage(path, file, onProgress, onXhr) {
+  return _uploadProofOnce(path, file, onProgress, onXhr).catch(function(err){
+    if (err && err.message === 'aborted') throw err;   // בוטל ביודעין — לא לנסות שוב
     if (onProgress) onProgress(0);
-    return _uploadProofOnce(path, file, onProgress);
+    return _uploadProofOnce(path, file, onProgress, onXhr);
   });
 }
 function _deleteProofStorage(spath) {
@@ -5853,8 +5856,19 @@ function _proofUploadProgress(uid, pct) {
 }
 function _proofUploadEnd(uid) {
   delete _proofUploadsLocal[uid];
+  if (window._proofXhrs) delete window._proofXhrs[uid];
   if (window._fbPut) window._fbPut('proofUploads/' + uid, null);
   _renderProofUploads();
+}
+// ביטול העלאה פעילה (רק העלאה שמתבצעת מהמכשיר הזה) — עוצר את ה-xhr;
+// הניקוי (דגלי כרטיס, מחיקת שריד) מתבצע ב-.catch של _saveProofFor.
+function _cancelProofUpload(uid) {
+  if (!confirm('לבטל את העלאת הפרופר?')) return;
+  window._proofCancelled = window._proofCancelled || {};
+  window._proofCancelled[uid] = true;
+  var xhr = window._proofXhrs && window._proofXhrs[uid];
+  if (xhr) { try { xhr.abort(); } catch(e){} }
+  else { _proofUploadEnd(uid); }   // אין xhr פעיל — לפחות נסגור את המד
 }
 function _pollProofUploads() {
   if (!window._fbGet) return;
@@ -5886,11 +5900,13 @@ function _renderProofUploads() {
   }
   stack.innerHTML = uids.map(function(uid){
     var e = merged[uid], pct = Math.max(0, Math.min(100, e.pct||0));
+    var isLocal = !!_proofUploadsLocal[uid];   // כפתור ביטול רק להעלאות של המכשיר הזה
     var title = (e.cardName ? escHtml(e.cardName) : 'פרופר') + (e.fileName ? ' — ' + escHtml(e.fileName) : '');
     return '<div style="background:#1e293b;color:#fff;padding:11px 15px;border-radius:12px;box-shadow:0 6px 22px rgba(0,0,0,.32);font-family:Heebo,sans-serif;min-width:250px">'
       + '<div style="font-size:.8rem;font-weight:800;margin-bottom:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">⏳ מעלה: ' + title + ' <span style="float:left;direction:ltr">' + pct + '%</span></div>'
       + '<div style="height:8px;background:#334155;border-radius:6px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#7c3aed,#c9a84c);transition:width .25s"></div></div>'
       + (e.by ? '<div style="font-size:.68rem;color:#94a3b8;margin-top:5px">מעלה: ' + escHtml(e.by) + '</div>' : '')
+      + (isLocal && pct < 100 ? '<button onclick="_cancelProofUpload(\'' + uid + '\')" style="margin-top:9px;width:100%;background:#7f1d1d;color:#fff;border:none;border-radius:7px;padding:6px;font-family:Heebo,sans-serif;font-size:.78rem;font-weight:800;cursor:pointer">✕ בטל העלאה</button>' : '')
       + '</div>';
   }).join('');
 }
@@ -5914,7 +5930,9 @@ function _saveProofFor(cardId, runKey, proof) {
   }
   var uid = 'pu_' + cardId + '_' + (runKey || 'full') + '_' + Date.now();
   _proofUploadStart(uid, { cardName: (c && c.name) || '', fileName: proof.name });
-  _uploadProofToStorage(spath, proof.file, function(pct){ _proofUploadProgress(uid, pct); }).then(function(url){
+  _uploadProofToStorage(spath, proof.file, function(pct){ _proofUploadProgress(uid, pct); },
+    function(xhr){ window._proofXhrs = window._proofXhrs || {}; window._proofXhrs[uid] = xhr; }
+  ).then(function(url){
     _proofUploadEnd(uid);
     // חשוב: מוצאים מחדש את הכרטיס לפי id — מערך cards עלול היה להתחלף ב-poll בזמן ההעלאה,
     // ואז עדכון על ההפניה הישנה לא היה נשמר (הדגל "מעלה" נתקע וה-URL אובד).
@@ -5946,9 +5964,12 @@ function _saveProofFor(cardId, runKey, proof) {
         if (typeof renderCards === 'function') renderCards();
       });
     }
-  }).catch(function(){
+  }).catch(function(err){
     _proofUploadEnd(uid);
-    // ההעלאה נכשלה — בטל את הסימון כדי שלא יוצג פרופר שלא קיים (מוצאים מחדש לפי id)
+    var wasCancelled = (err && err.message === 'aborted') || (window._proofCancelled && window._proofCancelled[uid]);
+    if (window._proofCancelled) delete window._proofCancelled[uid];
+    if (wasCancelled) { try { _deleteProofStorage(spath); } catch(e){} }   // מחק שריד חלקי אם נוצר
+    // בטל את הסימון כדי שלא יוצג פרופר שלא קיים (מוצאים מחדש לפי id)
     var cc = (cards||[]).find(function(x){ return String(x.id) === String(cardId); });
     if (cc) {
       cc.proofUploading = false;
@@ -5960,7 +5981,7 @@ function _saveProofFor(cardId, runKey, proof) {
       persist();
       if (typeof renderCards === 'function') renderCards();
     }
-    showToast('❌ העלאת הפרופר נכשלה — נסה לצרף שוב');
+    showToast(wasCancelled ? '🚫 העלאת הפרופר בוטלה' : '❌ העלאת הפרופר נכשלה — נסה לצרף שוב');
   });
 }
 
