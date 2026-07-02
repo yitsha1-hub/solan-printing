@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782974412';
+window.APP_VERSION = '1782975053';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -1988,6 +1988,10 @@ window._fbSnapshot = {};
         <label class="btn btn-tpl" style="cursor:pointer" title="טען קובץ xlsb/xlsx חודשי">
           📥 עדכון חודשי (xlsb)
           <input type="file" accept=".xlsb,.xlsx,.xls" onchange="loadInventoryXlsb(this)" style="display:none">
+        </label>
+        <label class="btn btn-tpl" style="cursor:pointer;background:#eef7ff;border-color:#2563eb;color:#1d4ed8" title="השווה דוח מלאי מהספק למלאי באפליקציה — בלי לשנות כלום">
+          🔍 השוואת דוח ספק
+          <input type="file" accept=".xlsb,.xlsx,.xls" onchange="compareSupplierReport(this)" style="display:none">
         </label>
         <button class="btn btn-tpl" onclick="printInventoryWarehouse()" title="הורד קובץ מלאי להדפסה">⬇️ הורדה</button>
         <button class="btn btn-primary" onclick="addInventoryItem()">+ הוסף שורה</button>
@@ -11522,6 +11526,152 @@ function _parseExcelDate(val) {
     if (d) return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
   }
   return String(val).trim();
+}
+
+// ── השוואת דוח מלאי מהספק מול המלאי באפליקציה ─────────────────────────
+// קריאה בלבד — לא משנה שום נתון. מזהה עמודות כמו הייבוא החודשי, מקבץ לפי שם נייר,
+// ומשווה את הכמות בדוח לכמות הנותרת באפליקציה (_invItemTotal). בפערים מציג גם
+// פירוט לפי מספר הזמנה כדי לאתר איפה בדיוק החוסר.
+function _invNormName(s){ return String(s||'').replace(/\s+/g,' ').trim().toLowerCase(); }
+function compareSupplierReport(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array', cellDates: false });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      // זיהוי עמודות — אותה לוגיקה כמו הייבוא החודשי
+      let headerRow = -1, nameCol = -1, qtyCol = -1, orderNumCol = -1;
+      for (let r = 0; r < Math.min(10, rows.length); r++) {
+        const row = rows[r].map(c => String(c).trim());
+        for (let c = 0; c < row.length; c++) {
+          const cell = row[c].toLowerCase();
+          if (nameCol    < 0 && (cell.includes('שם') || cell.includes('פריט') || cell.includes('נייר') || cell.includes('מוצר') || cell === 'name')) nameCol = c;
+          if (qtyCol     < 0 && (cell.includes('כמות') || cell.includes('מלאי') || cell.includes('qty') || cell.includes('quantity'))) qtyCol = c;
+          if (orderNumCol< 0 && (cell.includes('הזמנה') || cell.includes('order'))) orderNumCol = c;
+        }
+        if (nameCol >= 0 && qtyCol >= 0) { headerRow = r; break; }
+      }
+      if (nameCol < 0) nameCol = 0;
+      if (qtyCol  < 0) qtyCol  = 1;
+      const dataStart = headerRow >= 0 ? headerRow + 1 : 1;
+      // קיבוץ הדוח לפי שם נייר
+      var report = {};   // normName → { name, qty, orders: {orderNum: qty} }
+      for (let r = dataStart; r < rows.length; r++) {
+        const row = rows[r];
+        const name = String(row[nameCol] || '').trim();
+        if (!name || name.includes('סה"כ') || name.includes('סהכ') || name.toLowerCase().includes('total')) continue;
+        const qty = parseFloat(String(row[qtyCol] || '0').replace(/,/g,'')) || 0;
+        if (qty <= 0) continue;
+        const orderNum = orderNumCol >= 0 ? String(row[orderNumCol] || '').trim() : '';
+        var key = _invNormName(name);
+        if (!report[key]) report[key] = { name: name, qty: 0, orders: {} };
+        report[key].qty += qty;
+        if (orderNum) report[key].orders[orderNum] = (report[key].orders[orderNum]||0) + qty;
+      }
+      if (!Object.keys(report).length) { showToast('⚠️ לא נמצאו שורות מלאי בדוח'); return; }
+      _showSupplierCompare(report, file.name);
+    } catch(err) {
+      showToast('⚠️ שגיאה בקריאת הדוח: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function _showSupplierCompare(report, fileName) {
+  // מפת המלאי באפליקציה לפי שם מנורמל
+  var appMap = {};   // normName → { item, qty }
+  (inventory||[]).forEach(function(it){
+    var key = _invNormName(it.name);
+    if (!appMap[key]) appMap[key] = { item: it, qty: 0 };
+    appMap[key].qty += _invItemTotal(it);
+  });
+  var matched = 0, diffs = 0, onlyReport = 0, onlyApp = 0;
+  var rowsHtml = '';
+  var fmt = function(n){ return parseInt(n||0).toLocaleString(); };
+  // כמות ההזמנות באפליקציה לפריט לפי מספר הזמנה — לפירוט פערים
+  var appOrderQty = function(item, orderNum){
+    return (item.invoices||[]).filter(function(v){ return String(v.orderNum||'').trim() === orderNum; })
+      .reduce(function(s,v){ return s+(v.qty||0); }, 0);
+  };
+  // שורות הדוח
+  Object.keys(report).forEach(function(key){
+    var rep = report[key];
+    var app = appMap[key];
+    if (app) {
+      var diff = rep.qty - app.qty;   // חיובי = אצל הספק יותר; שלילי = באפליקציה יותר
+      if (diff === 0) {
+        matched++;
+        rowsHtml += '<tr style="background:#f0fdf4"><td style="padding:8px 10px;font-weight:700">' + escHtml(rep.name) + '</td>'
+          + '<td style="text-align:center">' + fmt(rep.qty) + '</td><td style="text-align:center">' + fmt(app.qty) + '</td>'
+          + '<td style="text-align:center;color:#16a34a;font-weight:800">✓ תואם</td></tr>';
+      } else {
+        diffs++;
+        // פירוט לפי הזמנה — רק לשורות עם פער
+        var ordDetail = '';
+        Object.keys(rep.orders).forEach(function(on){
+          var aq = appOrderQty(app.item, on);
+          if (aq !== rep.orders[on]) {
+            ordDetail += '<div style="font-size:.74rem;color:#92400e">הזמנה ' + escHtml(on) + ': בדוח ' + fmt(rep.orders[on]) + ' · באפליקציה ' + fmt(aq) + '</div>';
+          }
+        });
+        rowsHtml += '<tr style="background:#fffbeb"><td style="padding:8px 10px;font-weight:700">' + escHtml(rep.name) + ordDetail + '</td>'
+          + '<td style="text-align:center">' + fmt(rep.qty) + '</td><td style="text-align:center">' + fmt(app.qty) + '</td>'
+          + '<td style="text-align:center;color:#b45309;font-weight:800">' + (diff > 0 ? '⚠️ חסר באפליקציה ' + fmt(diff) : '⚠️ חסר אצל הספק ' + fmt(-diff)) + '</td></tr>';
+      }
+      app._seen = true;
+    } else {
+      onlyReport++;
+      rowsHtml += '<tr style="background:#eff6ff"><td style="padding:8px 10px;font-weight:700">' + escHtml(rep.name) + '</td>'
+        + '<td style="text-align:center">' + fmt(rep.qty) + '</td><td style="text-align:center;color:#bbb">—</td>'
+        + '<td style="text-align:center;color:#1d4ed8;font-weight:800">🆕 רק בדוח הספק</td></tr>';
+    }
+  });
+  // פריטים שיש באפליקציה אך לא בדוח (רק עם כמות נותרת > 0)
+  Object.keys(appMap).forEach(function(key){
+    var app = appMap[key];
+    if (app._seen) { delete app._seen; return; }
+    if (app.qty <= 0) return;
+    onlyApp++;
+    rowsHtml += '<tr style="background:#fef2f2"><td style="padding:8px 10px;font-weight:700">' + escHtml(app.item.name) + '</td>'
+      + '<td style="text-align:center;color:#bbb">—</td><td style="text-align:center">' + fmt(app.qty) + '</td>'
+      + '<td style="text-align:center;color:#b91c1c;font-weight:800">❓ לא מופיע בדוח</td></tr>';
+  });
+  var allOk = (diffs === 0 && onlyReport === 0 && onlyApp === 0);
+  var summary = allOk
+    ? '<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:9px;padding:12px 16px;font-weight:900;color:#15803d;font-size:1rem">✅ הדוח והמלאי תואמים במלואם — ' + matched + ' סוגי נייר נבדקו, הכל תקין!</div>'
+    : '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:.85rem;font-weight:700">'
+      + '<span style="background:#f0fdf4;color:#15803d;border:1px solid #86efac;border-radius:7px;padding:5px 12px">✓ תואמים: ' + matched + '</span>'
+      + (diffs ? '<span style="background:#fffbeb;color:#b45309;border:1px solid #fcd34d;border-radius:7px;padding:5px 12px">⚠️ פערים: ' + diffs + '</span>' : '')
+      + (onlyReport ? '<span style="background:#eff6ff;color:#1d4ed8;border:1px solid #93c5fd;border-radius:7px;padding:5px 12px">🆕 רק בדוח: ' + onlyReport + '</span>' : '')
+      + (onlyApp ? '<span style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;border-radius:7px;padding:5px 12px">❓ רק באפליקציה: ' + onlyApp + '</span>' : '')
+      + '</div>';
+  var ex = document.getElementById('supplier-compare-modal'); if (ex) ex.remove();
+  var ov = document.createElement('div'); ov.id = 'supplier-compare-modal';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;display:flex;align-items:center;justify-content:center;padding:18px';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:820px;width:100%;max-height:88vh;display:flex;flex-direction:column;direction:rtl;overflow:hidden">'
+    + '<div style="background:var(--press);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center">'
+    +   '<div style="font-weight:900;font-size:1.05rem">🔍 השוואת דוח ספק מול המלאי</div>'
+    +   '<button onclick="document.getElementById(\'supplier-compare-modal\').remove()" style="background:none;border:none;color:#fff;font-size:1.4rem;cursor:pointer;line-height:1">×</button>'
+    + '</div>'
+    + '<div style="padding:14px 20px;overflow-y:auto">'
+    +   '<div style="font-size:.78rem;color:#888;margin-bottom:10px">📎 ' + escHtml(fileName||'') + ' · ההשוואה לקריאה בלבד — שום נתון לא שונה</div>'
+    +   summary
+    +   '<table style="width:100%;border-collapse:collapse;font-size:.86rem;margin-top:14px">'
+    +     '<thead><tr style="background:#1a1a2e;color:#fff">'
+    +       '<th style="padding:8px 10px;text-align:right">נייר</th>'
+    +       '<th style="padding:8px 10px;text-align:center;width:110px">בדוח הספק</th>'
+    +       '<th style="padding:8px 10px;text-align:center;width:110px">באפליקציה</th>'
+    +       '<th style="padding:8px 10px;text-align:center;width:190px">סטטוס</th>'
+    +     '</tr></thead>'
+    +     '<tbody>' + rowsHtml + '</tbody>'
+    +   '</table>'
+    + '</div></div>';
+  document.body.appendChild(ov);
 }
 
 function loadInventoryXlsb(input) {
