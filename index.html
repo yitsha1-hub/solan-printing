@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782979831';
+window.APP_VERSION = '1782982865';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -3077,8 +3077,10 @@ function persist() {
   // סמן שבוצע כתיבה מקומית עכשיו — כדי שה-poll מה-Firebase לא ידרוס אותה
   // ברגע שהיא עדיין לא הגיעה לשרת (למשל מחיקת כרטיס שמוחזרת ע"י נתון ישן)
   window._lastLocalWriteAt = Date.now();
-  // Sync to Firebase via REST API
-  if (_fbConnected) {
+  // Sync to Firebase via REST API — לא במסך הדפסים: אין לו סנכרון מלא/baseline,
+  // ודחיפה משם תדרוס אוספים ניהוליים (כרטיסים, הזמנות...) עם נתון מקומי ישן.
+  // מסך הדפסים דוחף את מה שמותר לו ישירות (machineQueue, printingState, cards ממוזג).
+  if (_fbConnected && !window._isMachineView) {
     var _paths = {
       cards: cards, newspapers: newspapers, inventory: inventory,
       inventoryPress: inventoryPress, inventoryDeductions: inventoryDeductions,
@@ -15640,6 +15642,9 @@ function _initMachineViewMode() {
   var params = new URLSearchParams(location.search);
   var mv = params.get('machineView');
   if (!mv) return false;
+  window._isMachineView = true;   // מסך הדפסים: לא מריץ סנכרון מלא ואין לו baseline —
+                                  // אסור לו לדחוף אוספים ניהוליים (cards/orders...) דרך persist,
+                                  // אחרת ידרוס כרטיסים חדשים שנוצרו במקום אחר
   var machineMap = { '4': 'מכונה 4 צבעים', '8': 'מכונה 8 צבעים' };
   _machineViewMachine = machineMap[mv] || ('מכונה ' + mv);
 
@@ -15851,10 +15856,27 @@ function _opSetPrinting(machine, qid) {
     if (window._fbPut) window._fbPut('printingState/' + key, null);      // מחיקה משותפת
   }
 }
+// דחיפת cards בטוחה ממסך הדפסים: ממזגת עם השרת לפי id, ורק הכרטיס שהמפעיל שינה
+// נלקח מהמקומי. כך כרטיסים חדשים שנוצרו במקום אחר (בין רענון ל-20ש') לא נמחקים.
+function _opPushCardsMerged(changedId) {
+  var loc = (cards||[]).find(function(c){ return c && String(c.id) === String(changedId); });
+  return window._fbGet('cards').then(function(sv){
+    var server = Array.isArray(sv) ? sv : (sv && typeof sv==='object' ? Object.values(sv) : []);
+    var byId = {};
+    server.forEach(function(c){ if (c) byId[String(c.id)] = c; });   // בסיס = השרת (הכי עדכני)
+    if (loc) byId[String(changedId)] = loc;                          // רק הכרטיס ששונה — מהמקומי
+    var merged = Object.keys(byId).map(function(k){ return byId[k]; });
+    if (typeof _filterDeleted === 'function') merged = _filterDeleted('cards', merged);
+    cards = merged;
+    localStorage.setItem('solanCards', JSON.stringify(cards));
+    if (window._fbPut) return window._fbPut('cards', cards);
+  }).catch(function(){ /* אם ההבאה נכשלה — לא דוחפים כלל, כדי לא לדרוס */ });
+}
+
 function _opStartPrinting(qid) {
   var machine = _machineViewMachine;
   var cur = _opGetPrinting(machine);
-  var _cardsChanged = false;
+  var _cardsChanged = false, _changedCardId = null;
   if (cur && cur.qid) {
     var oldE = (machineQueue||[]).find(function(x){ return String(x.qid) === String(cur.qid); });
     if (oldE && !oldE.done) {
@@ -15862,7 +15884,7 @@ function _opStartPrinting(qid) {
       oldE.doneAt = new Date().toISOString();
       if (cur.startAt) oldE.printDurationSec = Math.floor((Date.now() - cur.startAt) / 1000);
       // סנכרן את סטטוס הכרטיס ללוח הייצור (אם כל הריצות הודפסו → הושלם)
-      if (typeof _syncCardStatusFromQueue === 'function' && _syncCardStatusFromQueue(oldE.cardId)) _cardsChanged = true;
+      if (typeof _syncCardStatusFromQueue === 'function' && _syncCardStatusFromQueue(oldE.cardId)) { _cardsChanged = true; _changedCardId = oldE.cardId; }
     }
   }
   _opSetPrinting(machine, qid);
@@ -15870,7 +15892,7 @@ function _opStartPrinting(qid) {
   if (window._fbPut) window._fbPut('machineQueue', machineQueue);
   if (_cardsChanged) {
     localStorage.setItem('solanCards', JSON.stringify(cards));
-    if (window._fbPut) window._fbPut('cards', cards);
+    _opPushCardsMerged(_changedCardId);   // מיזוג עם השרת — לא דורס כרטיסים חדשים
   }
   _renderOperatorScreen();
 }
