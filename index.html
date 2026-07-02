@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782971316';
+window.APP_VERSION = '1782973822';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -1994,6 +1994,11 @@ window._fbSnapshot = {};
       </div>
     </div>
     <div id="inv-summary-wrap" style="margin-bottom:14px"></div>
+    <div style="margin-bottom:10px">
+      <input id="inv-search" type="search" autocomplete="off" placeholder="🔍 חיפוש נייר / מספר חשבונית / מספר הזמנה..."
+        oninput="_invSearchQ=this.value;renderInventory()"
+        style="width:100%;max-width:420px;padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;font-family:Heebo,sans-serif;font-size:.9rem;box-sizing:border-box">
+    </div>
     <div id="inventory-table-wrap"></div>
   </div>
 
@@ -11882,9 +11887,38 @@ function loadInventoryPressXlsx(input) {
   reader.readAsArrayBuffer(file);
 }
 
+// הוספת שורת נייר חדשה (ריקה) למילוי — הכפתור "+ הוסף שורה" קרא לפונקציה שלא הייתה קיימת
+function addInventoryItem() {
+  inventory.unshift({ name: 'נייר חדש', qty: 0, invoices: [] });
+  persist();
+  renderInventory();
+  showToast('➕ שורה נוספה — ערוך שם וכמות');
+}
+
+// פתיחת מודל "הוספת חשבונית" עם שם הנייר ממולא מראש — מאפשר להוסיף חשבונית חדשה
+// לנייר קיים גם אם השם זהה (החשבונית מתווספת לאותו נייר)
+function addInvoiceToPaper(i) {
+  var it = inventory[i]; if (!it) return;
+  openManualInvoiceModal();
+  setTimeout(function(){ var el = document.getElementById('del-paper-name'); if (el) el.value = it.name || ''; }, 60);
+}
+
+// חיפוש במלאי — לפי שם נייר / מספר חשבונית / מספר הזמנה
+var _invSearchQ = '';
+function _invItemMatchesSearch(item, q) {
+  if (!q) return true;
+  q = q.toLowerCase();
+  if ((item.name||'').toLowerCase().indexOf(q) >= 0) return true;
+  return (item.invoices||[]).some(function(inv){
+    return String(inv.inv||'').toLowerCase().indexOf(q) >= 0
+        || String(inv.orderNum||'').toLowerCase().indexOf(q) >= 0;
+  });
+}
+
 function renderInventory() {
   const wrap = document.getElementById('inventory-table-wrap');
   const sumWrap = document.getElementById('inv-summary-wrap');
+  const _q = (_invSearchQ||'').trim().toLowerCase();
 
   if (!inventory.length) {
     sumWrap.innerHTML = '';
@@ -11905,7 +11939,7 @@ function renderInventory() {
     return (item.qty||0)*(item.pricePerSheet||0);
   }
   const totalVal = inventory.reduce((s,item) => s + itemVal(item), 0);
-  const summaryCards = inventory.map((item,i) => {
+  const summaryCards = inventory.filter(item => _invItemMatchesSearch(item, _q)).map((item,i) => {
     const val = itemVal(item);
     const totalQty = (item.invoices||[]).length
       ? (item.invoices||[]).reduce((s,inv)=>s+(inv.qty||0),0)
@@ -11928,10 +11962,13 @@ function renderInventory() {
   // בניית טבלה בסגנון Excel — כל חשבונית = שורה, מקובץ לפי סוג נייר
   let rows = '';
   inventory.forEach((item, i) => {
+    if (_q && !_invItemMatchesSearch(item, _q)) return;   // סינון חיפוש (שומר על אינדקס אמיתי)
     const invList = item.invoices||[];
     const itemTotal = (item.qty||0) * lastInvPrice(item);
     const nameCell = `<input class="inv-name-edit" value="${escHtml(item.name)}"
-      onchange="inventory[${i}].name=this.value;persist();renderInventory()">`;
+      onchange="inventory[${i}].name=this.value;persist();renderInventory()">
+      <button onclick="addInvoiceToPaper(${i})" title="הוסף חשבונית לנייר זה"
+        style="margin-top:5px;background:#eaf5ea;border:1px solid #a5d6a7;color:#2e7d32;border-radius:6px;padding:3px 9px;font-family:Heebo,sans-serif;font-size:.74rem;font-weight:700;cursor:pointer;white-space:nowrap">➕ חשבונית</button>`;
 
     if (!invList.length) {
       // פריט ללא חשבוניות
