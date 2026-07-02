@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782977542';
+window.APP_VERSION = '1782979351';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -10715,6 +10715,7 @@ function renderPrintFiles(){
       +     (done
              ? '<button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;border:1.5px solid #c7d2fe" onclick="printFileTake('+p.id+')">🖨️ הדפס שוב</button>'
              : '<button class="btn btn-sm btn-primary" onclick="printFileTake('+p.id+')">📥 הורד והדפס</button>')
+      +     (p.fileUrl ? '<span draggable="true" ondragstart="_pfDragStart(event,'+p.id+')" title="גרור אל שולחן העבודה / לתיקייה כדי להדפיס משם" style="display:inline-flex;align-items:center;gap:5px;background:#f1f5f9;border:1.5px solid #cbd5e1;color:#334155;border-radius:6px;padding:5px 10px;font-size:.82rem;font-weight:700;cursor:grab;user-select:none">⠿ גרור</span>' : '')
       +     '<button class="btn btn-sm" style="background:#fee2e2;color:#b91c1c;border:1.5px solid #fecaca" onclick="printFileDelete('+p.id+')">🗑️</button>'
       +   '</div>'
       + '</div>'
@@ -10770,6 +10771,18 @@ function addPrintFile(){
     if (status){ status.textContent='❌ העלאת הקובץ נכשלה — נסה שוב'; }
     showToast('❌ העלאת הקובץ נכשלה');
   });
+}
+
+// גרירת הקובץ החוצה (לשולחן העבודה / לתיקייה / לחלון תוכנה) — דרך DownloadURL.
+// דפדפן לא יכול לגרור ישר למדפסת, אבל אפשר לגרור את הקובץ החוצה ומשם להדפיס.
+function _pfDragStart(ev, id){
+  var p=(printFiles||[]).find(function(x){ return String(x.id)===String(id); });
+  if (!p || !p.fileUrl || !ev.dataTransfer) return;
+  var fname = p.fileName || ((p.name||'קובץ')+'.pdf');
+  var mime = /\.pdf$/i.test(fname) ? 'application/pdf' : 'application/octet-stream';
+  try { ev.dataTransfer.setData('DownloadURL', mime + ':' + fname + ':' + p.fileUrl); } catch(e){}
+  try { ev.dataTransfer.setData('text/uri-list', p.fileUrl); ev.dataTransfer.setData('text/plain', p.fileUrl); } catch(e){}
+  try { ev.dataTransfer.effectAllowed = 'copy'; } catch(e){}
 }
 
 function printFileTake(id){
