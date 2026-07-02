@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782913035';
+window.APP_VERSION = '1782971316';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -15864,19 +15864,22 @@ function _opSpinStyle() {
   if (!document.getElementById('op-spin-style')) {
     var st = document.createElement('style'); st.id = 'op-spin-style';
     st.textContent = '@keyframes opspin{to{transform:rotate(360deg)}}'
-      // מסך מלא: הפרופר ימלא את כל המסך כמה שאפשר — מבטלים ריווח, צל וסרגל דחוס,
-      // כדי שהתמונה תשתמש בכל הגובה (object-fit:contain שומר שלא ייחתך)
+      // מסך מלא: הפרופר נמתח למלא את כל המסך — גם ברוחב (הצדדים) וגם בגובה.
+      // עמוד בודד נמתח למילוי מלא (object-fit:fill — מעט עיוות, לפי בחירת המשתמש);
+      // בתצוגת כפולה משאירים אותם ליד זה בלי מתיחה מלאה.
       + '#op-proof-overlay:fullscreen{background:#000}'
-      + '#op-proof-overlay:fullscreen #op-pv-viewport{padding:0!important}'
-      + '#op-proof-overlay:fullscreen .op-pv-stage{padding:0!important;gap:2px!important}'
+      + '#op-proof-overlay:fullscreen #op-pv-viewport{padding:0!important;overflow:hidden!important}'
+      + '#op-proof-overlay:fullscreen .op-pv-stage{padding:0!important;gap:0!important;width:100%!important;height:100%!important}'
       + '#op-proof-overlay:fullscreen .op-pv-img{box-shadow:none!important}'
+      + '#op-proof-overlay:fullscreen .op-pv-img:only-child{width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;object-fit:fill!important}'
       // סרגל דחוס במסך מלא — כפתורים קטנים יותר, פחות גובה, יותר מקום לתמונה
       + '#op-proof-overlay:fullscreen>div:first-child{padding:4px 8px!important;gap:4px!important}'
       + '#op-proof-overlay:fullscreen>div:first-child button{padding:5px 9px!important;font-size:.8rem!important}'
       + '#op-proof-overlay:-webkit-full-screen{background:#000}'
-      + '#op-proof-overlay:-webkit-full-screen #op-pv-viewport{padding:0!important}'
-      + '#op-proof-overlay:-webkit-full-screen .op-pv-stage{padding:0!important}'
-      + '#op-proof-overlay:-webkit-full-screen .op-pv-img{box-shadow:none!important}';
+      + '#op-proof-overlay:-webkit-full-screen #op-pv-viewport{padding:0!important;overflow:hidden!important}'
+      + '#op-proof-overlay:-webkit-full-screen .op-pv-stage{padding:0!important;gap:0!important;width:100%!important;height:100%!important}'
+      + '#op-proof-overlay:-webkit-full-screen .op-pv-img{box-shadow:none!important}'
+      + '#op-proof-overlay:-webkit-full-screen .op-pv-img:only-child{width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;object-fit:fill!important}';
     document.head.appendChild(st);
   }
 }
