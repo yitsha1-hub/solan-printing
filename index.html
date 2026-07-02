@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782979351';
+window.APP_VERSION = '1782979831';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -10716,12 +10716,13 @@ function renderPrintFiles(){
              ? '<button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;border:1.5px solid #c7d2fe" onclick="printFileTake('+p.id+')">🖨️ הדפס שוב</button>'
              : '<button class="btn btn-sm btn-primary" onclick="printFileTake('+p.id+')">📥 הורד והדפס</button>')
       +     (p.fileUrl ? '<span draggable="true" ondragstart="_pfDragStart(event,'+p.id+')" title="גרור אל שולחן העבודה / לתיקייה כדי להדפיס משם" style="display:inline-flex;align-items:center;gap:5px;background:#f1f5f9;border:1.5px solid #cbd5e1;color:#334155;border-radius:6px;padding:5px 10px;font-size:.82rem;font-weight:700;cursor:grab;user-select:none">⠿ גרור</span>' : '')
+      +     '<button class="btn btn-sm" style="background:#fef9c3;color:#854d0e;border:1.5px solid #fde047" onclick="printFileLogQty('+p.id+')" title="רשום כמות שהודפסה (בלי הורדה)">✏️ עדכן כמות</button>'
       +     '<button class="btn btn-sm" style="background:#fee2e2;color:#b91c1c;border:1.5px solid #fecaca" onclick="printFileDelete('+p.id+')">🗑️</button>'
       +   '</div>'
       + '</div>'
       + '<div style="margin-top:12px">'
       +   '<div style="display:flex;justify-content:space-between;font-size:.85rem;font-weight:700;margin-bottom:4px">'
-      +     '<span style="color:#2563eb">הודפס: '+printed.toLocaleString()+' / '+total.toLocaleString()+'</span>'
+      +     '<span style="color:#2563eb;cursor:pointer;border-bottom:1px dashed #2563eb" onclick="printFileSetTotalPrinted('+p.id+')" title="לחץ לעדכון סך שהודפס">הודפס: '+printed.toLocaleString()+' / '+total.toLocaleString()+' ✏️</span>'
       +     '<span style="color:'+(done?'#16a34a':'#b45309')+'">'+(done?'הושלם ✔':'נותרו: '+remaining.toLocaleString())+'</span>'
       +   '</div>'
       +   '<div style="height:12px;background:#eef2f7;border-radius:7px;overflow:hidden">'
@@ -10785,24 +10786,44 @@ function _pfDragStart(ev, id){
   try { ev.dataTransfer.effectAllowed = 'copy'; } catch(e){}
 }
 
+// רישום כמות שהודפסה (סבב) — ידני, בלי הורדה. משמש גם את "הורד והדפס" וגם כפתור "עדכן כמות".
+function printFileLogQty(id){
+  var p=(printFiles||[]).find(function(x){ return String(x.id)===String(id); });
+  if (!p) return;
+  var remaining=_pfRemaining(p), total=parseInt(p.totalQty)||0;
+  var ans=prompt('כמה עותקים הדפסת?\n(נותרו '+remaining.toLocaleString()+' מתוך '+total.toLocaleString()+')','');
+  if (ans===null) return;                        // ביטול — לא רושם כלום
+  var q=parseInt(String(ans).replace(/[^\d]/g,''))||0;
+  if (q<=0){ showToast('לא נרשמה כמות'); return; }
+  p.sessions=p.sessions||[];
+  p.sessions.push({ at:new Date().toISOString(), qty:q, by:((currentUser&&currentUser.name)||'') });
+  p.printedQty=(parseInt(p.printedQty)||0)+q;
+  persist(); renderPrintFiles();
+  if (_pfDone(p)) showToast('🎉 "'+(p.name||'')+'" — הודפס במלואו!');
+  else showToast('✅ נרשמו '+q.toLocaleString()+' · נותרו '+_pfRemaining(p).toLocaleString());
+}
+
+// עריכת סה"כ שהודפס — קובע ישירות כמה הודפס עד כה (תיקון/כיול), בלי להוסיף סבב
+function printFileSetTotalPrinted(id){
+  var p=(printFiles||[]).find(function(x){ return String(x.id)===String(id); });
+  if (!p) return;
+  var cur=parseInt(p.printedQty)||0, total=parseInt(p.totalQty)||0;
+  var ans=prompt('עדכן את סך העותקים שהודפסו עד כה (מתוך '+total.toLocaleString()+'):', cur);
+  if (ans===null) return;
+  var q=parseInt(String(ans).replace(/[^\d]/g,''));
+  if (isNaN(q) || q<0){ showToast('מספר לא תקין'); return; }
+  p.printedQty=q;
+  // תיעוד התיקון בטבלת הסבבים כדי שיישאר עקבי
+  p.sessions=p.sessions||[];
+  p.sessions.push({ at:new Date().toISOString(), qty:(q-cur), by:((currentUser&&currentUser.name)||''), manual:true });
+  persist(); renderPrintFiles();
+  showToast('✅ עודכן: הודפסו '+q.toLocaleString()+' · נותרו '+_pfRemaining(p).toLocaleString());
+}
+
 function printFileTake(id){
   var p=(printFiles||[]).find(function(x){ return String(x.id)===String(id); });
   if (!p) return;
-  // רישום סבב הדפסה: חלון שאלת כמות ועדכון הטבלה
-  var _logQty=function(){
-    var remaining=_pfRemaining(p), total=parseInt(p.totalQty)||0;
-    var ans=prompt('כמה עותקים הדפסת עכשיו?\n(נותרו '+remaining.toLocaleString()+' מתוך '+total.toLocaleString()+')','');
-    if (ans===null) return;                      // ביטול — לא רושם כלום
-    var q=parseInt(String(ans).replace(/[^\d]/g,''))||0;
-    if (q<=0){ showToast('לא נרשמה כמות'); return; }
-    p.sessions=p.sessions||[];
-    p.sessions.push({ at:new Date().toISOString(), qty:q, by:((currentUser&&currentUser.name)||'') });
-    p.printedQty=(parseInt(p.printedQty)||0)+q;
-    persist(); renderPrintFiles();
-    if (_pfDone(p)) showToast('🎉 "'+(p.name||'')+'" — הודפס במלואו!');
-    else showToast('✅ נרשמו '+q.toLocaleString()+' · נותרו '+_pfRemaining(p).toLocaleString());
-  };
-  if (!p.fileUrl){ _logQty(); return; }
+  if (!p.fileUrl){ printFileLogQty(id); return; }
   // הורדה רגילה של הקובץ (לא פתיחה בטאב צפייה) ואז חלון השאלה — כך החלון מופיע על המסך
   // ולא נעלם מאחורי טאב ה-PDF. משתמשים ב-blob כדי לכפות הורדה במקום צפייה.
   showToast('⬇️ מוריד את הקובץ…');
@@ -10811,9 +10832,9 @@ function printFileTake(id){
     var a=document.createElement('a'); a.href=u; a.download=p.fileName||((p.name||'קובץ')+'.pdf');
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function(){ URL.revokeObjectURL(u); }, 15000);
-    _logQty();
+    printFileLogQty(id);
   }).catch(function(){
-    _logQty();                                   // שואל קודם (שהחלון יופיע), ואז פותח את הקובץ
+    printFileLogQty(id);                          // שואל קודם (שהחלון יופיע), ואז פותח את הקובץ
     window.open(p.fileUrl,'_blank');
   });
 }
