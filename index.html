@@ -15,7 +15,7 @@
 // fetched with a cache-bust query (always fresh); when its value differs
 // from the version baked into this file, we reload with a ?_v= query that
 // bypasses the CDN and pulls the new HTML immediately.
-window.APP_VERSION = '1782973822';
+window.APP_VERSION = '1782974412';
 (function(){
   if (String(window.APP_VERSION).indexOf('APP_VERSION') > -1) return; // dev/local — not deployed
   function checkVersion(){
@@ -7087,7 +7087,7 @@ function confirmDeduct() {
     _matchedInvNum = _inv2.inv || "";
   }
   // חשב מחדש סה"כ מלאי
-  item2.qty = (item2.invoices||[]).reduce(function(s,x){ return s+(x.qty||0); }, 0);
+  _invRecalcQty(item2);
   var _now = new Date();
   var _timeStr = _now.toLocaleTimeString("he-IL", {hour:"2-digit",minute:"2-digit"});
   inventoryDeductions.push({
@@ -7245,7 +7245,7 @@ function confirmOrderDeduct() {
     var inv = it.invoices[invIdx];
     if (qty > (inv.qty||0)) { showToast("⚠️ כמות גדולה מהזמין עבור " + paperName); return; }
     inv.qty = (inv.qty||0) - qty;
-    it.qty = (it.invoices||[]).reduce(function(s,x){ return s+(x.qty||0); }, 0);
+    _invRecalcQty(it);
     inventoryDeductions.push({
       id: Date.now() + count, date: date, time: _timeStr, paperName: paperName, qty: qty,
       orderNum: inv.orderNum || orderNumUsed || "", invNum: inv.inv || "",
@@ -7324,7 +7324,7 @@ function restoreFromHistory(idx) {
       var dup = existing.invoices && existing.invoices.find(function(x){ return x.inv === inv.inv && x.date === inv.date; });
       if (!dup && existing.invoices) existing.invoices.push(inv);
     });
-    existing.qty = (existing.invoices||[]).reduce(function(s,x){ return s+(x.qty||0); }, 0);
+    _invRecalcQty(existing);
   } else {
     var clone = Object.assign({}, it);
     delete clone.archivedDate;
@@ -7401,7 +7401,7 @@ function returnDeduction(idx) {
   } else {
     item.qty = (item.qty||0) + (d.qty||0);
   }
-  item.qty = (item.invoices||[]).reduce(function(s,x){ return s+(x.qty||0); }, 0);
+  _invRecalcQty(item);
   inventoryDeductions.splice(idx, 1);
   persist();
   renderInventory();
@@ -7531,6 +7531,7 @@ function switchToManual() {
 function openManualInvoiceModal() {
   _deliveryMode = "add";
   _deliveryImageB64 = null;
+  window._invoiceTargetIdx = undefined;   // איפוס יעד — נקבע רק בלחיצה על "➕ חשבונית" של פריט ספציפי
   var modalTitle = document.querySelector("#delivery-modal .modal-header h3");
   if (modalTitle) modalTitle.textContent = "📄 חשבונית — הוספה למלאי";
   document.getElementById("delivery-modal").classList.add("open");
@@ -7650,7 +7651,7 @@ function confirmDelivery() {
       _matchedInvNum = inv.inv || "";
     }
     // חשב מחדש סה"כ מלאי
-    item.qty = (item.invoices||[]).reduce(function(s,x){ return s+(x.qty||0); }, 0);
+    _invRecalcQty(item);
     // שמור היסטוריה
     inventoryDeductions.push({
       id: Date.now(), date: date, time: _timeStr, paperName: item.name, qty: qty,
@@ -7669,6 +7670,13 @@ function confirmDelivery() {
     var priceEl = document.getElementById("del-price");
     var priceK  = priceEl ? (parseFloat(priceEl.value) || 0) : 0;
     var price   = priceK / 1000;
+    // אם נפתח מכפתור "➕ חשבונית" של פריט ספציפי — השתמש בו (ולא בפריט הראשון
+    // שנושא את אותו השם), כדי שחשבונית תגיע לנייר הנכון גם כשיש שמות כפולים
+    var _tIdx = window._invoiceTargetIdx;
+    if (_tIdx !== undefined && inventory[_tIdx] && inventory[_tIdx].name === _pname) {
+      item = inventory[_tIdx];
+    }
+    window._invoiceTargetIdx = undefined;
     if (!item && _pname) {
       item = { name: _pname, qty: 0, invoices: [] };
       inventory.push(item);
@@ -7680,7 +7688,7 @@ function confirmDelivery() {
     if (!item) { showToast("⚠️ בחר נייר"); return; }
     if (!item.invoices) item.invoices = [];
     item.invoices.push({ date: date, time: _timeStr, inv: docNum, orderNum: orderNum, qty: qty, origQty: qty, price: price });
-    item.qty = item.invoices.reduce(function(s,x){ return s+(x.qty||0); }, 0);
+    _invRecalcQty(item);
     persist();
     closeDeliveryModal();
     renderInventory();
@@ -10999,10 +11007,7 @@ function saveWeeklyJobEdit(id) {
 function checkLowInventory() {
   const low = (inventory||[]).filter(it => {
     if (!it.minQty) return false;
-    const qty = (it.invoices&&it.invoices.length)
-      ? it.invoices.reduce((s,inv)=>s+(inv.qty||0),0)
-      : (it.qty||0);
-    return qty < it.minQty;
+    return _invItemTotal(it) < it.minQty;
   });
   const existing = document.getElementById('low-inv-banner');
   if (existing) existing.remove();
@@ -11895,11 +11900,68 @@ function addInventoryItem() {
   showToast('➕ שורה נוספה — ערוך שם וכמות');
 }
 
+// ── חישוב אחיד של כמות נותרת לפריט מלאי ─────────────────────────────
+// המקור היחיד לאמת: סכום כמויות החשבוניות פחות הורדות הסוכן (item.deductions).
+// הורדות ידניות/תעודות משלוח כבר מופחתות ישירות מכמות החשבונית עצמה.
+// (לפני התיקון: הטבלה התעלמה מהורדות הסוכן, וכל הורדה ידנית "מחקה" אותן מהסה"כ.)
+function _invItemTotal(item) {
+  var tin = (item.invoices && item.invoices.length)
+    ? item.invoices.reduce(function(s,x){ return s+(x.qty||0); }, 0)
+    : (item.qty||0);
+  var tout = (item.deductions||[]).reduce(function(s,x){ return s+(x.qty||0); }, 0);
+  return Math.max(0, tin - tout);
+}
+// עדכון item.qty מהחישוב האחיד — לקרוא אחרי כל שינוי בחשבוניות/הורדות
+function _invRecalcQty(item) {
+  if (!item) return;
+  if ((item.invoices && item.invoices.length) || (item.deductions && item.deductions.length)) {
+    item.qty = _invItemTotal(item);
+  }
+}
+
+// עריכה ידנית של סה"כ הכמות: כשיש חשבוניות — מתאימים את החשבוניות (מהאחרונה אחורה)
+// כך שהסכום ישתווה לערך החדש. בלי זה, הערך הידני נדרס בחישוב הבא ולא השפיע על התצוגה.
+function setItemTotalManual(i, val) {
+  var item = inventory[i]; if (!item) return;
+  var target = Math.max(0, parseInt(val)||0);
+  if (!item.invoices || !item.invoices.length) {
+    item.qty = target;
+  } else {
+    var delta = target - _invItemTotal(item);
+    if (delta > 0) {
+      // הוספה — לחשבונית האחרונה
+      item.invoices[item.invoices.length-1].qty = (item.invoices[item.invoices.length-1].qty||0) + delta;
+    } else if (delta < 0) {
+      // הפחתה — מהחשבונית האחרונה אחורה
+      var left = -delta;
+      for (var j = item.invoices.length-1; j >= 0 && left > 0; j--) {
+        var take = Math.min(left, item.invoices[j].qty||0);
+        item.invoices[j].qty = (item.invoices[j].qty||0) - take;
+        left -= take;
+      }
+    }
+    _invRecalcQty(item);
+  }
+  persist();
+  renderInventory();
+}
+
+// סידור ידני — החלפת מקום פריט במלאי (מעלה/מטה)
+function moveInventoryItem(i, dir) {
+  var j = i + dir;
+  if (j < 0 || j >= inventory.length) return;
+  var tmp = inventory[i]; inventory[i] = inventory[j]; inventory[j] = tmp;
+  persist();
+  renderInventory();
+}
+
 // פתיחת מודל "הוספת חשבונית" עם שם הנייר ממולא מראש — מאפשר להוסיף חשבונית חדשה
-// לנייר קיים גם אם השם זהה (החשבונית מתווספת לאותו נייר)
+// לנייר קיים גם אם השם זהה. שומרים את האינדקס המדויק כדי שהחשבונית תגיע לפריט
+// שנלחץ, ולא לפריט הראשון שנושא את אותו השם.
 function addInvoiceToPaper(i) {
   var it = inventory[i]; if (!it) return;
   openManualInvoiceModal();
+  window._invoiceTargetIdx = i;
   setTimeout(function(){ var el = document.getElementById('del-paper-name'); if (el) el.value = it.name || ''; }, 60);
 }
 
@@ -11941,9 +12003,7 @@ function renderInventory() {
   const totalVal = inventory.reduce((s,item) => s + itemVal(item), 0);
   const summaryCards = inventory.filter(item => _invItemMatchesSearch(item, _q)).map((item,i) => {
     const val = itemVal(item);
-    const totalQty = (item.invoices||[]).length
-      ? (item.invoices||[]).reduce((s,inv)=>s+(inv.qty||0),0)
-      : (item.qty||0);
+    const totalQty = _invItemTotal(item);   // חישוב אחיד — כולל הפחתת הורדות הסוכן
     return `<div class="inv-summary-card">
       <div class="inv-summary-name">${item.name}</div>
       <div class="inv-summary-qty">${parseInt(totalQty).toLocaleString()} גיל'</div>
@@ -11977,15 +12037,23 @@ function renderInventory() {
         <td style="color:#bbb;text-align:center">—</td>
         <td style="color:#bbb;text-align:center">—</td>
         <td style="color:#bbb;text-align:center">—</td>
+        <td style="color:#bbb;text-align:center">—</td>
+        <td></td>
         <td class="inv-qty ${(item.qty||0)<5000?'low':''}" style="text-align:center">${parseInt(item.qty||0).toLocaleString()}</td>
         <td><input class="inv-edit" type="number" value="${item.qty||0}"
-          onchange="inventory[${i}].qty=parseInt(this.value)||0;persist();renderInventory()"></td>
-        <td style="vertical-align:middle"><button class="btn btn-sm btn-danger" onclick="deleteInventoryItem(${i})">✕</button></td>
+          onchange="setItemTotalManual(${i},this.value)"></td>
+        <td style="vertical-align:middle;white-space:nowrap">
+          ${_q ? '' : `<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:4px">
+            <button onclick="moveInventoryItem(${i},-1)" ${i===0?'disabled':''} title="הזז למעלה" style="background:#f0f4ff;border:1px solid #c0ccf0;color:#2d3561;border-radius:5px;padding:1px 7px;cursor:pointer;font-size:.75rem;${i===0?'opacity:.3;cursor:default':''}">▲</button>
+            <button onclick="moveInventoryItem(${i},1)" ${i===inventory.length-1?'disabled':''} title="הזז למטה" style="background:#f0f4ff;border:1px solid #c0ccf0;color:#2d3561;border-radius:5px;padding:1px 7px;cursor:pointer;font-size:.75rem;${i===inventory.length-1?'opacity:.3;cursor:default':''}">▼</button>
+          </div>`}
+          <button class="btn btn-sm btn-danger" onclick="deleteInventoryItem(${i})">✕</button>
+        </td>
       </tr>`;
       return;
     }
 
-    const totalInvQty = invList.reduce((s,inv)=>s+(inv.qty||0), 0);
+    const totalInvQty = _invItemTotal(item);   // חישוב אחיד — כולל הפחתת הורדות הסוכן
     invList.forEach((inv, j) => {
       const isFirst = j === 0;
       const isLast  = j === invList.length - 1;
@@ -12046,10 +12114,14 @@ function renderInventory() {
           </td>
           <td rowspan="${invList.length}" style="vertical-align:middle">
             <input class="inv-edit" type="number" value="${totalInvQty}"
-              title="ערוך כמות ידנית"
-              onchange="inventory[${i}].qty=parseInt(this.value)||0;persist();renderInventory()">
+              title="ערוך כמות ידנית — מתאים את החשבוניות בהתאם"
+              onchange="setItemTotalManual(${i},this.value)">
           </td>
-          <td rowspan="${invList.length}" style="vertical-align:middle">
+          <td rowspan="${invList.length}" style="vertical-align:middle;white-space:nowrap">
+            ${_q ? '' : `<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:4px">
+              <button onclick="moveInventoryItem(${i},-1)" ${i===0?'disabled':''} title="הזז למעלה" style="background:#f0f4ff;border:1px solid #c0ccf0;color:#2d3561;border-radius:5px;padding:1px 7px;cursor:pointer;font-size:.75rem;${i===0?'opacity:.3;cursor:default':''}">▲</button>
+              <button onclick="moveInventoryItem(${i},1)" ${i===inventory.length-1?'disabled':''} title="הזז למטה" style="background:#f0f4ff;border:1px solid #c0ccf0;color:#2d3561;border-radius:5px;padding:1px 7px;cursor:pointer;font-size:.75rem;${i===inventory.length-1?'opacity:.3;cursor:default':''}">▼</button>
+            </div>`}
             <button class="btn btn-sm btn-danger" onclick="deleteInventoryItem(${i})">✕</button>
           </td>`;
       }
@@ -12058,10 +12130,7 @@ function renderInventory() {
     });
   });
 
-  const totalSheets = inventory.reduce((s, item) => {
-    const invs = item.invoices||[];
-    return s + (invs.length ? invs.reduce((a,inv)=>a+(inv.qty||0),0) : (item.qty||0));
-  }, 0);
+  const totalSheets = inventory.reduce((s, item) => s + _invItemTotal(item), 0);
   const totalRow = `
     <tfoot><tr style="background:#f5f0e8;font-weight:900;border-top:2px solid #c0b090">
       <td colspan="4" style="padding:10px 14px;color:var(--gray);font-size:.82rem">${inventory.length} סוגי נייר</td>
@@ -12186,6 +12255,7 @@ function deleteInventoryItem(i) {
 function deleteInvoiceEntry(i, j) {
   if (!confirm('למחוק חשבונית זו?')) return;
   inventory[i].invoices.splice(j, 1);
+  _invRecalcQty(inventory[i]);   // בלי זה סה"כ הפריט (item.qty) נשאר עם הכמות הישנה
   persist();
   renderInventory();
   showToast('🗑️ חשבונית נמחקה');
@@ -12211,6 +12281,7 @@ function editInvoiceQty(i, j) {
   if (isNaN(num)) { alert('מספר לא תקין'); return; }
   inventory[i].invoices[j].qty = num;
   inventory[i].invoices[j].origQty = num; // תיקון ידני של כמות החשבונית = עדכון הכמות שנוספה במקור
+  _invRecalcQty(inventory[i]);
   persist();
   renderInventory();
 }
@@ -12229,6 +12300,7 @@ function addManualInvoice(i) {
   const price = priceStr ? ((parseFloat(priceStr.replace(/,/g,''))||0) / 1000) : 0;
   const timeStr = new Date().toLocaleTimeString('he-IL', {hour:'2-digit', minute:'2-digit'});
   inventory[i].invoices.push({ date: dateStr, time: timeStr, inv, orderNum, qty, origQty: qty, price });
+  _invRecalcQty(inventory[i]);
   persist();
   renderInventory();
   showToast('✅ חשבונית נוספה');
